@@ -19,10 +19,8 @@ auto drawFpsOverlay() -> bool
   unsigned long now = millis();
   if (!fpsLabelDrawn)
   {
-    // 表示領域を初期化してラベルを描画
-    mainCanvas.fillRect(0, FPS_Y, 20, 16, COLOR_BLACK);
-    mainCanvas.setCursor(5, FPS_Y);
-    mainCanvas.println("FPS:");
+    // 数字のみ描画するため領域を初期化
+    mainCanvas.fillRect(0, FPS_Y, 35, 16, COLOR_BLACK);
     fpsLabelDrawn = true;
     lastFpsDrawTime = 0;  // 初回はすぐ更新するため0に設定
   }
