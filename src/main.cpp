@@ -11,7 +11,8 @@
 unsigned long lastFpsSecond = 0;  // 直近1秒判定用
 int fpsFrameCounter = 0;
 int currentFps = 0;
-unsigned long lastDebugPrint = 0;  // デバッグ表示用タイマー
+unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
+unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -85,6 +86,14 @@ void setup()
 void loop()
 {
   static unsigned long lastAlsMeasurementTime = 0;
+  unsigned long nowUs = micros();
+  // 前のフレームから16.6ms未満なら待機
+  if (lastFrameTimeUs != 0 && nowUs - lastFrameTimeUs < FRAME_INTERVAL_US)
+  {
+    delayMicroseconds(FRAME_INTERVAL_US - (nowUs - lastFrameTimeUs));
+    nowUs = micros();
+  }
+  lastFrameTimeUs = nowUs;
   unsigned long now = millis();
 
   if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
