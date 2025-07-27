@@ -102,11 +102,11 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   const int TOPBAR_H = 50;
   const int GAUGE_H = 170;
 
-  // 温度は0.1度以上、油圧は0.05以上変化したら更新する
+  // 水温は0.05度以上、油温は0.1度以上、油圧は0.05bar以上変化したら更新する
   bool oilChanged = std::isnan(displayCache.oilTemp) || fabs(oilTemp - displayCache.oilTemp) >= 0.1F ||
                     (maxOilTemp != displayCache.maxOilTemp);
   bool pressureChanged = std::isnan(displayCache.pressureAvg) || fabs(pressureAvg - displayCache.pressureAvg) >= 0.05F;
-  bool waterChanged = std::isnan(displayCache.waterTempAvg) || fabs(waterTempAvg - displayCache.waterTempAvg) >= 0.1F;
+  bool waterChanged = std::isnan(displayCache.waterTempAvg) || fabs(waterTempAvg - displayCache.waterTempAvg) >= 0.05F;
 
   mainCanvas.setTextColor(COLOR_WHITE);
 
