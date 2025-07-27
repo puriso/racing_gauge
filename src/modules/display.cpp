@@ -104,7 +104,15 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   if (oilChanged)
   {
     mainCanvas.fillRect(0, TOPBAR_Y, LCD_WIDTH, TOPBAR_H, COLOR_BLACK);
-    maxOilTemp = std::max<float>(oilTemp, maxOilTemp);
+    if (oilTemp >= 199.0F)
+    {
+      // センサー異常時は最大値も 0 扱いにする
+      maxOilTemp = 0;
+    }
+    else
+    {
+      maxOilTemp = std::max<float>(oilTemp, maxOilTemp);
+    }
     drawOilTemperatureTopBar(mainCanvas, oilTemp, maxOilTemp);
     displayCache.oilTemp = oilTemp;
     displayCache.maxOilTemp = maxOilTemp;
@@ -156,6 +164,12 @@ void updateGauges()
   pressureAvg = std::min(pressureAvg, MAX_OIL_PRESSURE_DISPLAY);
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
   float targetOilTemp = calculateAverage(oilTemperatureSamples);
+  if (targetOilTemp >= 199.0F)
+  {
+    // 199℃以上はセンサー異常として 0 扱いにする
+    targetOilTemp = 0.0F;
+    recordedMaxOilTempTop = 0;
+  }
 
   if (std::isnan(smoothWaterTemp))
   {
@@ -184,10 +198,7 @@ void updateGauges()
 
   recordedMaxOilPressure = std::max(recordedMaxOilPressure, pressureAvg);
   recordedMaxWaterTemp = std::max(recordedMaxWaterTemp, smoothWaterTemp);
-  if (targetOilTemp < 199.0F)
-  {
-    recordedMaxOilTempTop = std::max(recordedMaxOilTempTop, static_cast<int>(targetOilTemp));
-  }
+  recordedMaxOilTempTop = std::max(recordedMaxOilTempTop, static_cast<int>(targetOilTemp));
 
   renderDisplayAndLog(pressureValue, smoothWaterTemp, oilTempValue, recordedMaxOilTempTop);
 }
