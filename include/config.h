@@ -72,7 +72,8 @@ constexpr uint8_t LUX_THRESHOLD_DUSK = 10;
 
 constexpr uint8_t BACKLIGHT_DAY = 255;
 constexpr uint8_t BACKLIGHT_DUSK = 200;
-constexpr uint8_t BACKLIGHT_NIGHT = 60;
+// 夜間時の輝度を80に調整し、明るすぎないようにする
+constexpr uint8_t BACKLIGHT_NIGHT = 80;
 
 constexpr int MEDIAN_BUFFER_SIZE = 10;
 
