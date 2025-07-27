@@ -79,7 +79,7 @@ void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
   canvas.printf("OIL.T / Celsius,  MAX:%03d", maxOilTemp);
   // snprintf でバッファサイズを指定し、
   // 安全に文字列化する
-  int displayOilTemp = oilTemp >= 199.0F ? 0 : static_cast<int>(oilTemp);
+  int displayOilTemp = oilTemp >= INVALID_OIL_TEMP_THRESHOLD ? 0 : static_cast<int>(oilTemp);
   char tempStr[8];
   snprintf(tempStr, sizeof(tempStr), "%d", displayOilTemp);
   canvas.setFont(&FreeSansBold24pt7b);
