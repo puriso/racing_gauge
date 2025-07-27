@@ -79,6 +79,9 @@ constexpr int MEDIAN_BUFFER_SIZE = 10;
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
 
+// 最大60FPSに制御するためのフレーム間隔 [us]
+constexpr unsigned long FRAME_INTERVAL_US = 1000000UL / 60;
+
 // ── ADS1015 のチャンネル定義 ──
 constexpr uint8_t ADC_CH_WATER_TEMP = 1;
 constexpr uint8_t ADC_CH_OIL_PRESSURE = 2;

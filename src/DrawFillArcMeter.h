@@ -193,16 +193,7 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
   char errorLine2[8];
   bool isErrorText = false;
   // 文字列比較は strcmp を使用する
-  if (strcmp(unit, "x100kPa") == 0 && value >= 11.0f)
-  {
-    // 12bar 以上のショートエラー表示
-    // "Short circuit\nError" を表示
-    snprintf(errorLine1, sizeof(errorLine1), "Short circuit");
-    snprintf(errorLine2, sizeof(errorLine2), "Error");
-    isErrorText = true;
-  }
-  // 199℃以上でも特別な文字列は表示しない
-  else if (useDecimal)
+  if (useDecimal)
   {
     snprintf(valueText, sizeof(valueText), "%.1f", value);
   }
