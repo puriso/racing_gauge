@@ -162,6 +162,12 @@ void updateGauges()
 
   float pressureAvg = calculateAverage(oilPressureSamples);
   pressureAvg = std::min(pressureAvg, MAX_OIL_PRESSURE_DISPLAY);
+  if (pressureAvg >= 11.0F)
+  {
+    // ショートエラー時は 0 として扱い、最大値もリセット
+    pressureAvg = 0.0F;
+    recordedMaxOilPressure = 0.0F;
+  }
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
   float targetOilTemp = calculateAverage(oilTemperatureSamples);
   if (targetOilTemp >= 199.0F)
