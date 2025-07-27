@@ -187,20 +187,14 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
     canvas.print(combinedLabel);
   }
 
-  // 値を右下に表示
-  char valueText[10];
-  // 文字列比較は strcmp を使用する
-  if (strcmp(unit, "x100kPa") == 0 && value >= 11.0f)
-  {
-    // 12bar 以上は異常値として 0 扱い
-    value = 0.0f;
-  }
-  else if (strcmp(unit, "Celsius") == 0 && value >= 199.0f)
+
+  if (strcmp(unit, "Celsius") == 0 && value >= 199.0f)
   {
     // 199℃以上は異常値として 0 扱い
     value = 0.0f;
   }
-
+  // 値を右下に表示
+  char valueText[10];
   if (isUseDecimal)
   {
     snprintf(valueText, sizeof(valueText), "%.1f", value);
