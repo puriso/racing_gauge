@@ -201,13 +201,7 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
     snprintf(errorLine2, sizeof(errorLine2), "Error");
     isErrorText = true;
   }
-  else if (strcmp(unit, "Celsius") == 0 && value >= 199.0f)
-  {
-    // 199℃以上は "Disconnection\nError" を表示
-    snprintf(errorLine1, sizeof(errorLine1), "Disconnection");
-    snprintf(errorLine2, sizeof(errorLine2), "Error");
-    isErrorText = true;
-  }
+  // 199℃以上でも特別な文字列は表示しない
   else if (useDecimal)
   {
     snprintf(valueText, sizeof(valueText), "%.1f", value);

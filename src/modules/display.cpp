@@ -79,20 +79,11 @@ void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
   canvas.printf("OIL.T / Celsius,  MAX:%03d", maxOilTemp);
   // snprintf でバッファサイズを指定し、
   // 安全に文字列化する
-  if (oilTemp >= 199.0F)
-  {
-    // 199℃以上は "Disconnection" と "Error" を小さなフォントで表示
-    canvas.setFont(&fonts::Font0);
-    canvas.drawRightString("Disconnection", LCD_WIDTH - 1, 2);
-    canvas.drawRightString("Error", LCD_WIDTH - 1, 2 + canvas.fontHeight());
-  }
-  else
-  {
-    char tempStr[8];
-    snprintf(tempStr, sizeof(tempStr), "%d", static_cast<int>(oilTemp));
-    canvas.setFont(&FreeSansBold24pt7b);
-    canvas.drawRightString(tempStr, LCD_WIDTH - 1, 2);
-  }
+  int displayOilTemp = oilTemp >= 199.0F ? 0 : static_cast<int>(oilTemp);
+  char tempStr[8];
+  snprintf(tempStr, sizeof(tempStr), "%d", displayOilTemp);
+  canvas.setFont(&FreeSansBold24pt7b);
+  canvas.drawRightString(tempStr, LCD_WIDTH - 1, 2);
 }
 
 // ────────────────────── 画面更新＋ログ ──────────────────────
