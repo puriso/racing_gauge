@@ -50,7 +50,9 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
   if (drawStatic || std::isnan(previousValue))
   {
     canvas.fillArc(CENTER_X_CORRECTED, CENTER_Y_CORRECTED, RADIUS - ARC_WIDTH, RADIUS, -270, 0, INACTIVE_COLOR);
-    previousValue = clampedValue;
+    // 初期値を0にして次の処理でバーを全描画
+    // 温度や油圧の初期表示を0とするため
+    previousValue = 0.0f;
   }
 
   if (drawStatic)
