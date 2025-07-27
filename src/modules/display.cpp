@@ -166,6 +166,21 @@ void updateGauges()
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
   float targetOilTemp = calculateAverage(oilTemperatureSamples);
 
+  // 199℃以上はセンサー異常として扱い、値と最大値をリセットする
+  if (targetWaterTemp >= 199.0F)
+  {
+    targetWaterTemp = 0.0F;
+    smoothWaterTemp = 0.0F;
+    recordedMaxWaterTemp = 0.0F;
+  }
+
+  if (targetOilTemp >= 199.0F)
+  {
+    targetOilTemp = 0.0F;
+    smoothOilTemp = 0.0F;
+    recordedMaxOilTempTop = 0;
+  }
+
   if (std::isnan(smoothWaterTemp))
   {
     smoothWaterTemp = targetWaterTemp;
