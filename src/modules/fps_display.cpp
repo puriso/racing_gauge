@@ -20,7 +20,7 @@ auto drawFpsOverlay() -> bool
   if (!fpsLabelDrawn)
   {
     // 数値表示用に領域を初期化
-    mainCanvas.fillRect(0, FPS_Y, 30, 16, COLOR_BLACK);
+    mainCanvas.fillRect(0, FPS_Y, 16, 16, COLOR_BLACK);
     fpsLabelDrawn = true;
     lastFpsDrawTime = 0;  // 初回はすぐ更新するため0に設定
   }
