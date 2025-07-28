@@ -117,6 +117,10 @@ graph TD
 1. [PlatformIO](https://platformio.org/) をインストール (VS Code 推奨)
 2. `platformio run` でビルドし、`platformio upload` で書き込み
 
+### キャリブレーション手順
+1. ボードを暗所で起動し、`calibrateScreenComp()` を実行
+2. 測定後、係数が NVS に保存され次回起動時に自動読み込みされます
+
 ---
 
 ## English README
@@ -192,6 +196,10 @@ The temperature sensor is a thermistor; typical resistance values are shown belo
 ### Build Instructions
 1. Install [PlatformIO](https://platformio.org/) (VS Code recommended)
 2. Build with `platformio run` and flash with `platformio upload`
+
+### Calibration
+1. Boot the board in a dark room and run `calibrateScreenComp()`
+2. The coefficient is stored in NVS and loaded automatically at the next boot
 
 ---
 

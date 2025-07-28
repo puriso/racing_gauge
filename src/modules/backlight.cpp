@@ -1,5 +1,7 @@
 #include "backlight.h"
 
+#include <Preferences.h>
+
 #include <algorithm>
 #include <cstring>
 
@@ -8,63 +10,106 @@
 // ────────────────────── グローバル変数 ──────────────────────
 // 現在の輝度モード
 BrightnessMode currentBrightnessMode = BrightnessMode::Day;
-// ALS サンプルバッファ
-uint16_t luxSamples[MEDIAN_BUFFER_SIZE] = {};
-int luxSampleIndex = 0;  // 次に書き込むインデックス
+Preferences backlightPrefs;
 
-// ────────────────────── 輝度測定 ──────────────────────
-// バックライトを消して輝度を測定
-static auto measureLuxWithoutBacklight() -> uint16_t
+float kScreen = DEFAULT_K_SCREEN;
+static float prevSmoothedLux = 0.0F;
+static uint8_t currentBrightness = BACKLIGHT_DAY;
+static unsigned long lastAlsTime = 0;
+
+// ────────────────────── 輝度変換テーブル ──────────────────────
+// lux から PWM 値 (0-255) へ変換
+static auto luxToBrightness(uint32_t lux) -> uint8_t
 {
-  uint8_t prevBrightness = display.getBrightness();
-  display.setBrightness(0);
-  delayMicroseconds(500);
-  uint16_t lux = CoreS3.Ltr553.getAlsValue();
-  display.setBrightness(prevBrightness);
-  return lux;
+  if (lux < 10)
+  {
+    return 51;  // 20 %
+  }
+  if (lux < 50)
+  {
+    return 102;  // 40 %
+  }
+  if (lux < 200)
+  {
+    return 153;  // 60 %
+  }
+  if (lux < 800)
+  {
+    return 204;  // 80 %
+  }
+  return 255;
 }
 
-// ────────────────────── 中央値計算 ──────────────────────
-// サンプル配列から中央値を計算する
-static auto calculateMedian(const uint16_t *samples) -> uint16_t
+// ────────────────────── 初期化 ──────────────────────
+void initBacklight()
 {
-  uint16_t sortedSamples[MEDIAN_BUFFER_SIZE];
-  memcpy(sortedSamples, samples, sizeof(sortedSamples));
-  std::nth_element(sortedSamples, sortedSamples + MEDIAN_BUFFER_SIZE / 2, sortedSamples + MEDIAN_BUFFER_SIZE);
-  return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
+  backlightPrefs.begin("backlight", false);
+  kScreen = backlightPrefs.getFloat("k_screen", DEFAULT_K_SCREEN);
+  backlightPrefs.end();
+  currentBrightness = BACKLIGHT_DAY;
+  prevSmoothedLux = 0.0F;
+  lastAlsTime = 0;
+}
+
+// ────────────────────── キャリブレーション ──────────────────────
+void calibrateScreenComp()
+{
+  uint8_t prev = display.getBrightness();
+  display.setBrightness(0);
+  delay(300);
+  uint16_t lux0 = CoreS3.Ltr553.getAlsValue();
+  display.setBrightness(255);
+  delay(300);
+  uint16_t lux100 = CoreS3.Ltr553.getAlsValue();
+  display.setBrightness(prev);
+
+  kScreen = static_cast<float>(lux100 - lux0) / 255.0F;
+  backlightPrefs.begin("backlight", false);
+  backlightPrefs.putFloat("k_screen", kScreen);
+  backlightPrefs.end();
 }
 
 // ────────────────────── 輝度更新 ──────────────────────
 void updateBacklightLevel()
 {
+  unsigned long now = millis();
+  if (now - lastAlsTime < ALS_SAMPLE_INTERVAL_MS)
+  {
+    return;  // サンプリング間隔未満なら何もしない
+  }
+  lastAlsTime = now;
+
   if (!SENSOR_AMBIENT_LIGHT_PRESENT)
   {
-    if (currentBrightnessMode != BrightnessMode::Day)
+    if (currentBrightness != BACKLIGHT_DAY)
     {
-      currentBrightnessMode = BrightnessMode::Day;
-      display.setBrightness(BACKLIGHT_DAY);
+      currentBrightness = BACKLIGHT_DAY;
+      display.setBrightness(currentBrightness);
     }
     return;
   }
 
-  uint16_t measuredLux = measureLuxWithoutBacklight();
+  uint32_t rawLux = CoreS3.Ltr553.getAlsValue();
 
-  // サンプルをリングバッファへ格納
-  luxSamples[luxSampleIndex] = measuredLux;
-  luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
+  float screenComp = kScreen * static_cast<float>(currentBrightness);
+  float envLux = (rawLux > screenComp) ? static_cast<float>(rawLux) - screenComp : 0.0F;
 
-  uint16_t medianLux = calculateMedian(luxSamples);
+  float smoothed = ALS_EWMA_ALPHA * envLux + (1.0F - ALS_EWMA_ALPHA) * prevSmoothedLux;
+  prevSmoothedLux = smoothed;
 
-  BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
-                           : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
-                                                               : BrightnessMode::Night;
+  uint8_t target = luxToBrightness(static_cast<uint32_t>(smoothed));
 
-  if (newMode != currentBrightnessMode)
+  float upper = static_cast<float>(currentBrightness) * (1.0F + ALS_HYST_MARGIN_RATIO);
+  float lower = static_cast<float>(currentBrightness) * (1.0F - ALS_HYST_MARGIN_RATIO);
+
+  if (target > upper)
   {
-    currentBrightnessMode = newMode;
-    uint8_t targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                               : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                                   : BACKLIGHT_NIGHT;
-    display.setBrightness(targetBrightness);
+    currentBrightness = std::min<uint8_t>(currentBrightness + BRIGHTNESS_STEP, 255);
   }
+  else if (target < lower)
+  {
+    currentBrightness = (currentBrightness > BRIGHTNESS_STEP) ? currentBrightness - BRIGHTNESS_STEP : 0;
+  }
+
+  display.setBrightness(currentBrightness);
 }

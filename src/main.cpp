@@ -45,6 +45,7 @@ void setup()
   display.setRotation(3);
   display.setColorDepth(DISPLAY_COLOR_DEPTH);
   display.setBrightness(BACKLIGHT_DAY);
+  initBacklight();
 
   mainCanvas.setColorDepth(DISPLAY_COLOR_DEPTH);
   mainCanvas.setTextSize(1);
@@ -96,7 +97,7 @@ void loop()
   lastFrameTimeUs = nowUs;
   unsigned long now = millis();
 
-  if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  if (now - lastAlsMeasurementTime >= ALS_SAMPLE_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;

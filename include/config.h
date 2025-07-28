@@ -77,6 +77,13 @@ constexpr uint8_t BACKLIGHT_NIGHT = 60;
 
 constexpr int MEDIAN_BUFFER_SIZE = 10;
 
+// ── ALS 制御パラメータ ──
+constexpr uint16_t ALS_SAMPLE_INTERVAL_MS = 200;
+constexpr float ALS_EWMA_ALPHA = 0.20f;
+constexpr float ALS_HYST_MARGIN_RATIO = 0.10f;
+constexpr uint8_t BRIGHTNESS_STEP = 13;  // 約5 %
+constexpr float DEFAULT_K_SCREEN = 0.0f;
+
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
 
