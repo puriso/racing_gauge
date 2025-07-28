@@ -1,5 +1,5 @@
-# M5Stack CoreS3 Multi-Gauge
-# M5Stack CoreS3 マルチメーター
+#M5Stack CoreS3 Multi - Gauge
+#M5Stack CoreS3 マルチメーター
 
 [![PlatformIO Build](https://github.com/puriso/racing_gauge/actions/workflows/pio-build.yml/badge.svg?branch=main)](https://github.com/puriso/racing_gauge/actions/workflows/pio-build.yml)
 
@@ -24,7 +24,7 @@ A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays
 - 油温 / 水温 (–40–150 °C) デジタル数値＋バー表示  
 - 各種設定は `include/config.h` の定数で変更可能
 - 水温・油温は500ms間隔で取得し、2サンプル平均を1秒ごとに更新
-- 周囲光センサーによる自動調光（デフォルト無効）
+- カメラ画像による自動調光（デフォルト無効）
 - デモモードでセンサー無しでも動作確認可能
 
 ### ハードウェア構成
@@ -45,8 +45,12 @@ A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays
 ```mermaid
 graph TD
     subgraph "M5Stack CoreS3"
-        V5{{5V}}
-        GND{{GND}}
+        V5{
+{5V}}
+        GND{
+  {
+    GND
+  }}
     end
     ADS[ADS1015]
 

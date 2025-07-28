@@ -15,8 +15,10 @@ constexpr bool SENSOR_OIL_PRESSURE_PRESENT = true;
 constexpr bool SENSOR_WATER_TEMP_PRESENT = true;
 // 油温センサーを使用するかどうか
 constexpr bool SENSOR_OIL_TEMP_PRESENT = true;
+// カメラを使った輝度調整を行う場合は true
+constexpr bool SENSOR_CAMERA_PRESENT = true;
 // 照度センサーを使用する場合は true
-constexpr bool SENSOR_AMBIENT_LIGHT_PRESENT = true;
+constexpr bool SENSOR_AMBIENT_LIGHT_PRESENT = false;
 
 // ── 電圧降下補正 ──
 // 0.3sq ケーブル往復14mで約0.137Vの降下を想定

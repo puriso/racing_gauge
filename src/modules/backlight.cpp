@@ -1,5 +1,7 @@
 #include "backlight.h"
 
+#include <esp_camera.h>
+
 #include <algorithm>
 #include <cstring>
 
@@ -13,15 +15,21 @@ uint16_t luxSamples[MEDIAN_BUFFER_SIZE] = {};
 int luxSampleIndex = 0;  // 次に書き込むインデックス
 
 // ────────────────────── 輝度測定 ──────────────────────
-// バックライトを消して輝度を測定
-static auto measureLuxWithoutBacklight() -> uint16_t
+// カメラ画像から輝度を測定
+static auto measureBrightnessWithCamera() -> uint16_t
 {
-  uint8_t prevBrightness = display.getBrightness();
-  display.setBrightness(0);
-  delayMicroseconds(500);
-  uint16_t lux = CoreS3.Ltr553.getAlsValue();
-  display.setBrightness(prevBrightness);
-  return lux;
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (fb == nullptr)
+  {
+    return 0;
+  }
+  uint32_t sum = 0;
+  for (size_t i = 0; i < fb->len; ++i)
+  {
+    sum += fb->buf[i];
+  }
+  esp_camera_fb_return(fb);
+  return static_cast<uint16_t>(sum / fb->len);
 }
 
 // ────────────────────── 中央値計算 ──────────────────────
@@ -37,7 +45,7 @@ static auto calculateMedian(const uint16_t *samples) -> uint16_t
 // ────────────────────── 輝度更新 ──────────────────────
 void updateBacklightLevel()
 {
-  if (!SENSOR_AMBIENT_LIGHT_PRESENT)
+  if (!SENSOR_CAMERA_PRESENT)
   {
     if (currentBrightnessMode != BrightnessMode::Day)
     {
@@ -47,7 +55,7 @@ void updateBacklightLevel()
     return;
   }
 
-  uint16_t measuredLux = measureLuxWithoutBacklight();
+  uint16_t measuredLux = measureBrightnessWithCamera();
 
   // サンプルをリングバッファへ格納
   luxSamples[luxSampleIndex] = measuredLux;
