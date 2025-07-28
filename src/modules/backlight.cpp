@@ -18,7 +18,8 @@ static auto measureLuxWithoutBacklight() -> uint16_t
 {
   uint8_t prevBrightness = display.getBrightness();
   display.setBrightness(0);
-  delayMicroseconds(500);
+  // センサーの積分時間分待機
+  delay(ALS_INTEGRATION_TIME_MS);
   uint16_t lux = CoreS3.Ltr553.getAlsValue();
   display.setBrightness(prevBrightness);
   return lux;
