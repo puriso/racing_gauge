@@ -21,7 +21,7 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
                       uint16_t overThresholdColor, const char *unit, const char *label, float &maxRecordedValue,
                       float &previousValue,  // 前回描画した値
                       float tickStep,        // 目盛の間隔（細かい目盛り）
-                      bool useDecimal,       // 小数点を表示するかどうか
+                      bool isUseDecimal,     // 小数点を表示するかどうか
                       int x, int y, bool drawStatic,
                       float majorTickStep = -1.0f,  // 数字を表示する目盛間隔（負なら旧仕様）
                       float labelStart = 0.0f)      // ラベル描画を開始する値
@@ -38,6 +38,16 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
   const uint16_t ACTIVE_COLOR = COLOR_WHITE;      // 現在の値の色
   const uint16_t INACTIVE_COLOR = 0x18E3;         // メーター全体の背景色
   const uint16_t TEXT_COLOR = COLOR_WHITE;        // テキストの色
+
+  // 単位に応じて異常値を0として扱う
+  if (strcmp(unit, "x100kPa") == 0 && value >= 11.0f)
+  {
+    value = 0.0f;
+  }
+  else if (strcmp(unit, "Celsius") == 0 && value >= 199.0f)
+  {
+    value = 0.0f;
+  }
 
   // 値を範囲内に収める
   float clampedValue = value;
@@ -189,26 +199,8 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
 
   // 値を右下に表示
   char valueText[10];
-  char errorLine1[20];
-  char errorLine2[8];
-  bool isErrorText = false;
-  // 文字列比較は strcmp を使用する
-  if (strcmp(unit, "x100kPa") == 0 && value >= 11.0f)
-  {
-    // 12bar 以上のショートエラー表示
-    // "Short circuit\nError" を表示
-    snprintf(errorLine1, sizeof(errorLine1), "Short circuit");
-    snprintf(errorLine2, sizeof(errorLine2), "Error");
-    isErrorText = true;
-  }
-  else if (strcmp(unit, "Celsius") == 0 && value >= 199.0f)
-  {
-    // 199℃以上は "Disconnection\nError" を表示
-    snprintf(errorLine1, sizeof(errorLine1), "Disconnection");
-    snprintf(errorLine2, sizeof(errorLine2), "Error");
-    isErrorText = true;
-  }
-  else if (useDecimal)
+
+  if (isUseDecimal)
   {
     snprintf(valueText, sizeof(valueText), "%.1f", value);
   }
@@ -220,27 +212,11 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
   int valueX = VALUE_BASE_X;  // 数字は固定位置に表示
   int valueY = CENTER_Y_CORRECTED + RADIUS - 20;
 
-  if (isErrorText)
-  {
-    // エラー表示用フォントを小さく設定
-    canvas.setFont(&fonts::Font0);
-    int rectHeight = canvas.fontHeight() * 2 + 4;
-    canvas.fillRect(valueX - 75, valueY - canvas.fontHeight() - 2, 75, rectHeight, BACKGROUND_COLOR);
-    int line1Y = valueY - canvas.fontHeight();
-    canvas.setCursor(valueX - canvas.textWidth(errorLine1), line1Y);
-    canvas.print(errorLine1);
-    int line2Y = line1Y + canvas.fontHeight();
-    canvas.setCursor(valueX - canvas.textWidth(errorLine2), line2Y);
-    canvas.print(errorLine2);
-  }
-  else
-  {
-    canvas.setFont(&FreeSansBold24pt7b);
-    // 数字描画領域のみを毎回黒で塗りつぶす
-    canvas.fillRect(valueX - 75, valueY - canvas.fontHeight() / 2 - 2, 75, canvas.fontHeight() + 4, BACKGROUND_COLOR);
-    canvas.setCursor(valueX - canvas.textWidth(valueText), valueY - (canvas.fontHeight() / 2));
-    canvas.print(valueText);
-  }
+  canvas.setFont(&FreeSansBold24pt7b);
+  // 数字描画領域のみを毎回黒で塗りつぶす
+  canvas.fillRect(valueX - 75, valueY - canvas.fontHeight() / 2 - 2, 75, canvas.fontHeight() + 4, BACKGROUND_COLOR);
+  canvas.setCursor(valueX - canvas.textWidth(valueText), valueY - (canvas.fontHeight() / 2));
+  canvas.print(valueText);
 }
 
 #endif  // DRAW_FILL_ARC_METER_H
