@@ -1,16 +1,17 @@
 #include "backlight.h"
 
 #include <algorithm>
-#include <cstring>
+#include <cmath>
 
 #include "display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
-// 現在の輝度モード
-BrightnessMode currentBrightnessMode = BrightnessMode::Day;
-// ALS サンプルバッファ
-uint16_t luxSamples[MEDIAN_BUFFER_SIZE] = {};
-int luxSampleIndex = 0;  // 次に書き込むインデックス
+// 現在の輝度[%]
+uint8_t currentBrightnessPercent = 100;
+// EWMA フィルタ後の照度値
+static float filteredLux = 0.0F;
+// 画面由来光補正用係数（キャリブレーションで決定）
+static float kScreen = 0.0F;
 
 // ────────────────────── 輝度測定 ──────────────────────
 // バックライトを消して輝度を測定
@@ -24,47 +25,48 @@ static auto measureLuxWithoutBacklight() -> uint16_t
   return lux;
 }
 
-// ────────────────────── 中央値計算 ──────────────────────
-// サンプル配列から中央値を計算する
-static auto calculateMedian(const uint16_t *samples) -> uint16_t
-{
-  uint16_t sortedSamples[MEDIAN_BUFFER_SIZE];
-  memcpy(sortedSamples, samples, sizeof(sortedSamples));
-  std::nth_element(sortedSamples, sortedSamples + MEDIAN_BUFFER_SIZE / 2, sortedSamples + MEDIAN_BUFFER_SIZE);
-  return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
-}
-
 // ────────────────────── 輝度更新 ──────────────────────
 void updateBacklightLevel()
 {
   if (!SENSOR_AMBIENT_LIGHT_PRESENT)
   {
-    if (currentBrightnessMode != BrightnessMode::Day)
-    {
-      currentBrightnessMode = BrightnessMode::Day;
-      display.setBrightness(BACKLIGHT_DAY);
-    }
+    // センサー未接続時は常に最大輝度
+    display.setBrightness(255);
+    currentBrightnessPercent = 100;
     return;
   }
 
   uint16_t measuredLux = measureLuxWithoutBacklight();
 
-  // サンプルをリングバッファへ格納
-  luxSamples[luxSampleIndex] = measuredLux;
-  luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
+  // 画面由来光の差分補正
+  float envLux = static_cast<float>(measuredLux) - kScreen * currentBrightnessPercent;
+  envLux = std::max(envLux, 0.0F);
 
-  uint16_t medianLux = calculateMedian(luxSamples);
+  // EWMA で平滑化
+  filteredLux = ALS_EWMA_ALPHA * envLux + (1.0F - ALS_EWMA_ALPHA) * filteredLux;
 
-  BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
-                           : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
-                                                               : BrightnessMode::Night;
+  // 照度を0-100%に単純マッピング
+  float targetPercent = std::clamp(filteredLux, 0.0F, 100.0F);
 
-  if (newMode != currentBrightnessMode)
+  // ヒステリシス判定
+  float margin = ALS_HYST_MARGIN_RATIO * static_cast<float>(currentBrightnessPercent);
+  if (std::fabs(targetPercent - static_cast<float>(currentBrightnessPercent)) <= margin)
   {
-    currentBrightnessMode = newMode;
-    uint8_t targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                               : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                                   : BACKLIGHT_NIGHT;
-    display.setBrightness(targetBrightness);
+    return;  // 変化が小さければ無視
   }
+
+  // ステップ変化で滑らかに調整
+  if (targetPercent > static_cast<float>(currentBrightnessPercent))
+  {
+    currentBrightnessPercent =
+        static_cast<uint8_t>(std::min<float>(100.0F, currentBrightnessPercent + BRIGHTNESS_STEP_PERCENT));
+  }
+  else
+  {
+    currentBrightnessPercent =
+        static_cast<uint8_t>(std::max<float>(0.0F, currentBrightnessPercent - BRIGHTNESS_STEP_PERCENT));
+  }
+
+  // PWM同期読み取りを行えば更に精度向上可能（仮設）
+  display.setBrightness(static_cast<uint8_t>((currentBrightnessPercent * 255) / 100));
 }
