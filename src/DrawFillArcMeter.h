@@ -39,6 +39,12 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
   const uint16_t INACTIVE_COLOR = 0x18E3;         // メーター全体の背景色
   const uint16_t TEXT_COLOR = COLOR_WHITE;        // テキストの色
 
+  // 温度が199℃以上ならセンサー異常として扱う
+  if (strcmp(unit, "Celsius") == 0 && value >= 199.0f)
+  {
+    value = 0.0f;
+  }
+
   // 値を範囲内に収める
   float clampedValue = value;
   if (clampedValue < minValue)
@@ -187,12 +193,6 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
     canvas.print(combinedLabel);
   }
 
-
-  if (strcmp(unit, "Celsius") == 0 && value >= 199.0f)
-  {
-    // 199℃以上は異常値として 0 扱い
-    value = 0.0f;
-  }
   // 値を右下に表示
   char valueText[10];
   if (isUseDecimal)
