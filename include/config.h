@@ -75,8 +75,6 @@ constexpr uint8_t BACKLIGHT_DAY = 255;
 constexpr uint8_t BACKLIGHT_DUSK = 200;
 constexpr uint8_t BACKLIGHT_NIGHT = 60;
 
-constexpr int MEDIAN_BUFFER_SIZE = 10;
-
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
 

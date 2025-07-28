@@ -1,16 +1,13 @@
 #include "backlight.h"
 
-#include <algorithm>
-#include <cstring>
-
 #include "display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 // 現在の輝度モード
 BrightnessMode currentBrightnessMode = BrightnessMode::Day;
-// ALS サンプルバッファ
-uint16_t luxSamples[MEDIAN_BUFFER_SIZE] = {};
-int luxSampleIndex = 0;  // 次に書き込むインデックス
+// 照度の指数移動平均値
+static float filteredLux = 0.0f;
+static bool isLuxInitialized = false;
 
 // ────────────────────── 輝度測定 ──────────────────────
 // バックライトを消して輝度を測定
@@ -22,16 +19,6 @@ static auto measureLuxWithoutBacklight() -> uint16_t
   uint16_t lux = CoreS3.Ltr553.getAlsValue();
   display.setBrightness(prevBrightness);
   return lux;
-}
-
-// ────────────────────── 中央値計算 ──────────────────────
-// サンプル配列から中央値を計算する
-static auto calculateMedian(const uint16_t *samples) -> uint16_t
-{
-  uint16_t sortedSamples[MEDIAN_BUFFER_SIZE];
-  memcpy(sortedSamples, samples, sizeof(sortedSamples));
-  std::nth_element(sortedSamples, sortedSamples + MEDIAN_BUFFER_SIZE / 2, sortedSamples + MEDIAN_BUFFER_SIZE);
-  return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
 }
 
 // ────────────────────── 輝度更新 ──────────────────────
@@ -49,15 +36,21 @@ void updateBacklightLevel()
 
   uint16_t measuredLux = measureLuxWithoutBacklight();
 
-  // サンプルをリングバッファへ格納
-  luxSamples[luxSampleIndex] = measuredLux;
-  luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
+  if (!isLuxInitialized)
+  {
+    filteredLux = static_cast<float>(measuredLux);
+    isLuxInitialized = true;
+  }
+  else
+  {
+    filteredLux = filteredLux * (1.0f - LUX_FILTER_ALPHA) + static_cast<float>(measuredLux) * LUX_FILTER_ALPHA;
+  }
 
-  uint16_t medianLux = calculateMedian(luxSamples);
+  float useLux = filteredLux;
 
-  BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
-                           : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
-                                                               : BrightnessMode::Night;
+  BrightnessMode newMode = (useLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
+                           : (useLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
+                                                            : BrightnessMode::Night;
 
   if (newMode != currentBrightnessMode)
   {
