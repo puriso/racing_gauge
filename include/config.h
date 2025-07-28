@@ -15,8 +15,6 @@ constexpr bool SENSOR_OIL_PRESSURE_PRESENT = true;
 constexpr bool SENSOR_WATER_TEMP_PRESENT = true;
 // 油温センサーを使用するかどうか
 constexpr bool SENSOR_OIL_TEMP_PRESENT = true;
-// 照度センサーを使用する場合は true
-constexpr bool SENSOR_AMBIENT_LIGHT_PRESENT = true;
 
 // ── 電圧降下補正 ──
 // 0.3sq ケーブル往復14mで約0.137Vの降下を想定
@@ -59,23 +57,14 @@ constexpr float WATER_TEMP_METER_MAX = 105.0f;
 constexpr int LCD_WIDTH = 320;
 constexpr int LCD_HEIGHT = 240;
 
-// ── ALS/輝度自動制御 ──
-enum class BrightnessMode
-{
-  Day,
-  Dusk,
-  Night
-};
-
-// ALS の輝度判定閾値
-constexpr uint8_t LUX_THRESHOLD_DAY = 15;
-constexpr uint8_t LUX_THRESHOLD_DUSK = 10;
-
-constexpr uint8_t BACKLIGHT_DAY = 255;
-constexpr uint8_t BACKLIGHT_DUSK = 200;
-constexpr uint8_t BACKLIGHT_NIGHT = 60;
-
-constexpr int MEDIAN_BUFFER_SIZE = 10;
+// ── 照度設定 ──
+constexpr uint8_t BRIGHTNESS_DEFAULT = 128;
+constexpr uint8_t BRIGHTNESS_MIN = 10;
+constexpr uint8_t BRIGHTNESS_MAX = 255;
+constexpr uint8_t BRIGHTNESS_PWM_CHANNEL = 0;
+constexpr uint8_t BRIGHTNESS_PWM_PIN = 38;
+constexpr uint32_t BRIGHTNESS_PWM_FREQ = 5000;
+constexpr uint8_t BRIGHTNESS_PWM_RES = 8;
 
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
