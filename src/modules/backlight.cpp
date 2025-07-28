@@ -1,70 +1,76 @@
 #include "backlight.h"
 
-#include <algorithm>
-#include <cstring>
-
 #include "display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
-// 現在の輝度モード
 BrightnessMode currentBrightnessMode = BrightnessMode::Day;
-// ALS サンプルバッファ
-uint16_t luxSamples[MEDIAN_BUFFER_SIZE] = {};
-int luxSampleIndex = 0;  // 次に書き込むインデックス
-
-// ────────────────────── 輝度測定 ──────────────────────
-// バックライトを消して輝度を測定
-static auto measureLuxWithoutBacklight() -> uint16_t
-{
-  uint8_t prevBrightness = display.getBrightness();
-  display.setBrightness(0);
-  delayMicroseconds(500);
-  uint16_t lux = CoreS3.Ltr553.getAlsValue();
-  display.setBrightness(prevBrightness);
-  return lux;
-}
-
-// ────────────────────── 中央値計算 ──────────────────────
-// サンプル配列から中央値を計算する
-static auto calculateMedian(const uint16_t *samples) -> uint16_t
-{
-  uint16_t sortedSamples[MEDIAN_BUFFER_SIZE];
-  memcpy(sortedSamples, samples, sizeof(sortedSamples));
-  std::nth_element(sortedSamples, sortedSamples + MEDIAN_BUFFER_SIZE / 2, sortedSamples + MEDIAN_BUFFER_SIZE);
-  return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
-}
+static uint8_t targetBrightness = BACKLIGHT_DAY;
+static uint8_t currentBrightness = BACKLIGHT_DAY;
+static float smoothedLux = -1.0F;  // 初期化未完了を示す
 
 // ────────────────────── 輝度更新 ──────────────────────
 void updateBacklightLevel()
 {
   if (!SENSOR_AMBIENT_LIGHT_PRESENT)
   {
+    // ALS が無い場合は常に昼モード
     if (currentBrightnessMode != BrightnessMode::Day)
     {
       currentBrightnessMode = BrightnessMode::Day;
-      display.setBrightness(BACKLIGHT_DAY);
+      targetBrightness = BACKLIGHT_DAY;
     }
-    return;
+  }
+  else
+  {
+    uint16_t rawLux = CoreS3.Ltr553.getAlsValue();
+    if (smoothedLux < 0.0F)
+    {
+      // 初回のみ即座に設定
+      smoothedLux = static_cast<float>(rawLux);
+    }
+    else
+    {
+      // 平滑化して急激な変化を抑える
+      smoothedLux = smoothedLux * (1.0F - LUX_SMOOTHING_ALPHA) + static_cast<float>(rawLux) * LUX_SMOOTHING_ALPHA;
+    }
+
+    BrightnessMode newMode = BrightnessMode::Night;
+    if (smoothedLux >= static_cast<float>(LUX_THRESHOLD_DAY))
+    {
+      newMode = BrightnessMode::Day;
+    }
+    else if (smoothedLux >= static_cast<float>(LUX_THRESHOLD_DUSK))
+    {
+      newMode = BrightnessMode::Dusk;
+    }
+
+    if (newMode != currentBrightnessMode)
+    {
+      currentBrightnessMode = newMode;
+      if (newMode == BrightnessMode::Day)
+      {
+        targetBrightness = BACKLIGHT_DAY;
+      }
+      else if (newMode == BrightnessMode::Dusk)
+      {
+        targetBrightness = BACKLIGHT_DUSK;
+      }
+      else
+      {
+        targetBrightness = BACKLIGHT_NIGHT;
+      }
+    }
   }
 
-  uint16_t measuredLux = measureLuxWithoutBacklight();
-
-  // サンプルをリングバッファへ格納
-  luxSamples[luxSampleIndex] = measuredLux;
-  luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
-
-  uint16_t medianLux = calculateMedian(luxSamples);
-
-  BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
-                           : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
-                                                               : BrightnessMode::Night;
-
-  if (newMode != currentBrightnessMode)
+  // 現在の輝度を目標に徐々に近づける
+  if (currentBrightness < targetBrightness)
   {
-    currentBrightnessMode = newMode;
-    uint8_t targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                               : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                                   : BACKLIGHT_NIGHT;
-    display.setBrightness(targetBrightness);
+    ++currentBrightness;
+    display.setBrightness(currentBrightness);
+  }
+  else if (currentBrightness > targetBrightness)
+  {
+    --currentBrightness;
+    display.setBrightness(currentBrightness);
   }
 }
