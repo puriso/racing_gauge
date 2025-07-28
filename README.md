@@ -24,7 +24,7 @@ A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays
 - 油温 / 水温 (–40–150 °C) デジタル数値＋バー表示  
 - 各種設定は `include/config.h` の定数で変更可能
 - 水温・油温は500ms間隔で取得し、2サンプル平均を1秒ごとに更新
-- 周囲光センサーによる自動調光（デフォルト無効）
+- カメラ画像による自動調光（デフォルト無効）
 - デモモードでセンサー無しでも動作確認可能
 
 ### ハードウェア構成
@@ -135,7 +135,7 @@ Perfect for vintage cars lacking modern instrumentation or for lightweight track
 - Digital + bar graph temperature display
 - Most settings are in `include/config.h`
 - Water and oil temperatures are sampled every 500 ms and averaged over 2 samples (updated every second)
-- Automatic backlight brightness using the ambient light sensor (disabled by default)
+ - Automatic backlight brightness using the camera image (disabled by default)
 - Demo mode lets you test without sensors connected
 
 ### Hardware Configuration

@@ -1,6 +1,7 @@
 #include <M5CoreS3.h>
 #include <WiFi.h>  // WiFi 無効化用
 #include <Wire.h>
+#include <esp_camera.h>
 
 #include "config.h"
 #include "modules/backlight.h"
@@ -71,7 +72,12 @@ void setup()
   }
   adsConverter.setDataRate(RATE_ADS1015_1600SPS);
 
-  if (SENSOR_AMBIENT_LIGHT_PRESENT)
+  if (SENSOR_CAMERA_PRESENT)
+  {
+    camera_config_t cfg = {};
+    esp_camera_init(&cfg);
+  }
+  else if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // ALS のゲインと積分時間を設定してから初期化
     Ltr5xx_Init_Basic_Para ltr553Params = LTR5XX_BASE_PARA_CONFIG_DEFAULT;
@@ -85,7 +91,7 @@ void setup()
 // ────────────────────── loop() ──────────────────────
 void loop()
 {
-  static unsigned long lastAlsMeasurementTime = 0;
+  static unsigned long lastBrightnessMeasurement = 0;  // 自動調光用タイマー
   unsigned long nowUs = micros();
   // 前のフレームから16.6ms未満なら待機
   if (lastFrameTimeUs != 0 && nowUs - lastFrameTimeUs < FRAME_INTERVAL_US)
@@ -96,10 +102,11 @@ void loop()
   lastFrameTimeUs = nowUs;
   unsigned long now = millis();
 
-  if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  uint16_t interval = SENSOR_CAMERA_PRESENT ? CAMERA_MEASUREMENT_INTERVAL_MS : ALS_MEASUREMENT_INTERVAL_MS;
+  if (now - lastBrightnessMeasurement >= interval)
   {
     updateBacklightLevel();
-    lastAlsMeasurementTime = now;
+    lastBrightnessMeasurement = now;
   }
 
   acquireSensorData();
