@@ -16,16 +16,8 @@ static unsigned long updateInterval = ALS_FIRST_INTERVAL_MS;  // 判定間隔
 static bool initialized = false;                              // 初回更新済みか
 
 // ────────────────────── 輝度測定 ──────────────────────
-// バックライトを消して輝度を測定
-static auto measureLuxWithoutBacklight() -> uint16_t
-{
-  uint8_t prevBrightness = display.getBrightness();
-  display.setBrightness(0);
-  delayMicroseconds(500);
-  uint16_t lux = CoreS3.Ltr553.getAlsValue();
-  display.setBrightness(prevBrightness);
-  return lux;
-}
+// 画面輝度を変更せずそのまま照度を取得
+static auto measureLux() -> uint16_t { return CoreS3.Ltr553.getAlsValue(); }
 
 // ────────────────────── 輝度更新 ──────────────────────
 void updateBacklightLevel()
@@ -40,7 +32,7 @@ void updateBacklightLevel()
     return;
   }
 
-  uint16_t measuredLux = measureLuxWithoutBacklight();
+  uint16_t measuredLux = measureLux();
 
   // 画面光補正
   float screenComp = kScreen * (static_cast<float>(currentBrightness) / 2.55F);
