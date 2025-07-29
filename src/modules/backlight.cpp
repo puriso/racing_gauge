@@ -20,7 +20,6 @@ static auto measureLuxWithoutBacklight() -> uint16_t
   display.setBrightness(0);
   // ALS を有効化して測定する
   CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_ACTIVE_MODE);
-  delay(100);  // 積分時間分だけ待機
   uint16_t lux = CoreS3.Ltr553.getAlsValue();
   CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_STAND_BY_MODE);
   display.setBrightness(prevBrightness);
