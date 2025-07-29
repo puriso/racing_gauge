@@ -79,7 +79,8 @@ void setup()
     ltr553Params.als_gain = LTR5XX_ALS_GAIN_1X;
     ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_100MS;
     CoreS3.Ltr553.begin(&ltr553Params);
-    CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_ACTIVE_MODE);
+    // 通常はスタンバイにしておき、測定時のみアクティブにする
+    CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_STANDBY_MODE);
   }
 }
 
