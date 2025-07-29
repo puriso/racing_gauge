@@ -5,9 +5,15 @@
 #include "display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
-float kScreen = 0.0F;                              // 画面寄与補正係数
-static float prevSmoothedLux = 0.0F;               // EWMA 用前回値
-static uint8_t currentBrightness = BACKLIGHT_DAY;  // 現在の輝度
+float kScreen = 0.0F;                                         // 画面寄与補正係数
+BrightnessMode currentBrightnessMode = BrightnessMode::Day;   // 現在のモード
+static float prevSmoothedLux = 0.0F;                          // EWMA 用前回値
+static uint8_t currentBrightness = BACKLIGHT_DAY;             // 出力中の輝度
+static float luxSamples[MEDIAN_BUFFER_SIZE] = {};             // ルクスサンプル
+static int luxSampleIndex = 0;                                // 書き込み位置
+static unsigned long lastUpdateTime = 0;                      // 最終更新時刻
+static unsigned long updateInterval = ALS_FIRST_INTERVAL_MS;  // 判定間隔
+static bool initialized = false;                              // 初回更新済みか
 
 // ────────────────────── 輝度測定 ──────────────────────
 // バックライトを消して輝度を測定
@@ -19,20 +25,6 @@ static auto measureLuxWithoutBacklight() -> uint16_t
   uint16_t lux = CoreS3.Ltr553.getAlsValue();
   display.setBrightness(prevBrightness);
   return lux;
-}
-
-// ────────────────────── 辞書関数 ──────────────────────
-// パーセンテージから輝度値(0-255)へ変換
-static auto percentToBrightness(uint8_t percent) -> uint8_t { return static_cast<uint8_t>(percent * 255 / 100); }
-
-// ルクスから輝度値(0-255)を求める
-static auto luxToBrightness(float lux) -> uint8_t
-{
-  if (lux < 10.0F) return percentToBrightness(20);
-  if (lux < 50.0F) return percentToBrightness(40);
-  if (lux < 200.0F) return percentToBrightness(60);
-  if (lux < 800.0F) return percentToBrightness(80);
-  return percentToBrightness(100);
 }
 
 // ────────────────────── 輝度更新 ──────────────────────
@@ -64,26 +56,54 @@ void updateBacklightLevel()
     Serial.printf("RAW:%u COMP:%.1f ENV:%.1f SMOOTH:%.1f\n", measuredLux, screenComp, envLux, smoothed);
   }
 
-  uint8_t target = luxToBrightness(smoothed);
-
-  uint8_t upper = static_cast<uint8_t>(currentBrightness * (1.0F + ALS_HYST_MARGIN_RATIO));
-  uint8_t lower = static_cast<uint8_t>(currentBrightness * (1.0F - ALS_HYST_MARGIN_RATIO));
-
-  if (target > upper)
+  // サンプルをバッファへ保存
+  luxSamples[luxSampleIndex] = smoothed;
+  luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
+  static int filledSamples = 0;
+  if (filledSamples < MEDIAN_BUFFER_SIZE)
   {
-    currentBrightness = std::min<uint8_t>(static_cast<uint8_t>(currentBrightness + ALS_BRIGHTNESS_STEP), 255);
+    filledSamples++;
+  }
+
+  unsigned long now = millis();
+  if (now - lastUpdateTime < updateInterval)
+  {
+    return;
+  }
+  lastUpdateTime = now;
+
+  int requiredSamples = updateInterval / ALS_MEASUREMENT_INTERVAL_MS;
+  if (filledSamples < requiredSamples)
+  {
+    return;
+  }
+
+  float temp[MEDIAN_BUFFER_SIZE];
+  for (int i = 0; i < requiredSamples; ++i)
+  {
+    int idx = (luxSampleIndex - 1 - i + MEDIAN_BUFFER_SIZE) % MEDIAN_BUFFER_SIZE;
+    temp[i] = luxSamples[idx];
+  }
+  std::nth_element(temp, temp + requiredSamples / 2, temp + requiredSamples);
+  float medianLux = temp[requiredSamples / 2];
+
+  BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
+                           : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
+                                                               : BrightnessMode::Night;
+
+  if (newMode != currentBrightnessMode)
+  {
+    currentBrightnessMode = newMode;
+    uint8_t targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
+                               : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
+                                                                   : BACKLIGHT_NIGHT;
+    currentBrightness = targetBrightness;
     display.setBrightness(currentBrightness);
   }
-  else if (target < lower)
+
+  if (!initialized)
   {
-    if (currentBrightness > ALS_BRIGHTNESS_STEP)
-    {
-      currentBrightness = static_cast<uint8_t>(currentBrightness - ALS_BRIGHTNESS_STEP);
-    }
-    else
-    {
-      currentBrightness = 0;
-    }
-    display.setBrightness(currentBrightness);
+    updateInterval = ALS_UPDATE_INTERVAL_MS;
+    initialized = true;
   }
 }

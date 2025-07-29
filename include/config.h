@@ -75,7 +75,15 @@ constexpr uint8_t BACKLIGHT_DAY = 255;
 constexpr uint8_t BACKLIGHT_DUSK = 200;
 constexpr uint8_t BACKLIGHT_NIGHT = 60;
 
-constexpr int MEDIAN_BUFFER_SIZE = 10;
+// ALS 取得間隔 [ms]
+constexpr uint16_t ALS_MEASUREMENT_INTERVAL_MS = 500;
+
+// 初回は5秒分のデータで中央値を計算
+constexpr unsigned long ALS_FIRST_INTERVAL_MS = 5000UL;
+// 2回目以降は10秒ごとに中央値を計算
+constexpr unsigned long ALS_UPDATE_INTERVAL_MS = 10000UL;
+// 10秒分のサンプルを保持するためバッファサイズを計算
+constexpr int MEDIAN_BUFFER_SIZE = ALS_UPDATE_INTERVAL_MS / ALS_MEASUREMENT_INTERVAL_MS;
 
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
