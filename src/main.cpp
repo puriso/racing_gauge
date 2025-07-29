@@ -75,8 +75,9 @@ void setup()
   {
     // ALS のゲインと積分時間を設定してから初期化
     Ltr5xx_Init_Basic_Para ltr553Params = LTR5XX_BASE_PARA_CONFIG_DEFAULT;
-    ltr553Params.als_gain = LTR5XX_ALS_GAIN_48X;
-    ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_300MS;
+    // 感度(als_gain)を 1X に設定し、積分時間を 100ms に短縮
+    ltr553Params.als_gain = LTR5XX_ALS_GAIN_1X;
+    ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_100MS;
     CoreS3.Ltr553.begin(&ltr553Params);
     CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_ACTIVE_MODE);
   }

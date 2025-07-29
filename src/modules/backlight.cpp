@@ -1,16 +1,13 @@
 #include "backlight.h"
 
 #include <algorithm>
-#include <cstring>
 
 #include "display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
-// 現在の輝度モード
-BrightnessMode currentBrightnessMode = BrightnessMode::Day;
-// ALS サンプルバッファ
-uint16_t luxSamples[MEDIAN_BUFFER_SIZE] = {};
-int luxSampleIndex = 0;  // 次に書き込むインデックス
+float kScreen = 0.0F;                              // 画面寄与補正係数
+static float prevSmoothedLux = 0.0F;               // EWMA 用前回値
+static uint8_t currentBrightness = BACKLIGHT_DAY;  // 現在の輝度
 
 // ────────────────────── 輝度測定 ──────────────────────
 // バックライトを消して輝度を測定
@@ -24,14 +21,18 @@ static auto measureLuxWithoutBacklight() -> uint16_t
   return lux;
 }
 
-// ────────────────────── 中央値計算 ──────────────────────
-// サンプル配列から中央値を計算する
-static auto calculateMedian(const uint16_t *samples) -> uint16_t
+// ────────────────────── 辞書関数 ──────────────────────
+// パーセンテージから輝度値(0-255)へ変換
+static auto percentToBrightness(uint8_t percent) -> uint8_t { return static_cast<uint8_t>(percent * 255 / 100); }
+
+// ルクスから輝度値(0-255)を求める
+static auto luxToBrightness(float lux) -> uint8_t
 {
-  uint16_t sortedSamples[MEDIAN_BUFFER_SIZE];
-  memcpy(sortedSamples, samples, sizeof(sortedSamples));
-  std::nth_element(sortedSamples, sortedSamples + MEDIAN_BUFFER_SIZE / 2, sortedSamples + MEDIAN_BUFFER_SIZE);
-  return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
+  if (lux < 10.0F) return percentToBrightness(20);
+  if (lux < 50.0F) return percentToBrightness(40);
+  if (lux < 200.0F) return percentToBrightness(60);
+  if (lux < 800.0F) return percentToBrightness(80);
+  return percentToBrightness(100);
 }
 
 // ────────────────────── 輝度更新 ──────────────────────
@@ -39,32 +40,50 @@ void updateBacklightLevel()
 {
   if (!SENSOR_AMBIENT_LIGHT_PRESENT)
   {
-    if (currentBrightnessMode != BrightnessMode::Day)
+    if (currentBrightness != BACKLIGHT_DAY)
     {
-      currentBrightnessMode = BrightnessMode::Day;
-      display.setBrightness(BACKLIGHT_DAY);
+      currentBrightness = BACKLIGHT_DAY;
+      display.setBrightness(currentBrightness);
     }
     return;
   }
 
   uint16_t measuredLux = measureLuxWithoutBacklight();
 
-  // サンプルをリングバッファへ格納
-  luxSamples[luxSampleIndex] = measuredLux;
-  luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
+  // 画面光補正
+  float screenComp = kScreen * (static_cast<float>(currentBrightness) / 2.55F);
+  float envLux = (measuredLux > screenComp) ? measuredLux - screenComp : 0.0F;
 
-  uint16_t medianLux = calculateMedian(luxSamples);
+  // EWMA で平滑化
+  float smoothed = ALS_SMOOTHING_ALPHA * envLux + (1.0F - ALS_SMOOTHING_ALPHA) * prevSmoothedLux;
+  prevSmoothedLux = smoothed;
 
-  BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
-                           : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
-                                                               : BrightnessMode::Night;
-
-  if (newMode != currentBrightnessMode)
+  // デバッグ表示
+  if (DEBUG_MODE_ENABLED)
   {
-    currentBrightnessMode = newMode;
-    uint8_t targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                               : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                                   : BACKLIGHT_NIGHT;
-    display.setBrightness(targetBrightness);
+    Serial.printf("RAW:%u COMP:%.1f ENV:%.1f SMOOTH:%.1f\n", measuredLux, screenComp, envLux, smoothed);
+  }
+
+  uint8_t target = luxToBrightness(smoothed);
+
+  uint8_t upper = static_cast<uint8_t>(currentBrightness * (1.0F + ALS_HYST_MARGIN_RATIO));
+  uint8_t lower = static_cast<uint8_t>(currentBrightness * (1.0F - ALS_HYST_MARGIN_RATIO));
+
+  if (target > upper)
+  {
+    currentBrightness = std::min<uint8_t>(static_cast<uint8_t>(currentBrightness + ALS_BRIGHTNESS_STEP), 255);
+    display.setBrightness(currentBrightness);
+  }
+  else if (target < lower)
+  {
+    if (currentBrightness > ALS_BRIGHTNESS_STEP)
+    {
+      currentBrightness = static_cast<uint8_t>(currentBrightness - ALS_BRIGHTNESS_STEP);
+    }
+    else
+    {
+      currentBrightness = 0;
+    }
+    display.setBrightness(currentBrightness);
   }
 }
