@@ -17,7 +17,17 @@ static bool initialized = false;                              // 初回更新済
 
 // ────────────────────── 輝度測定 ──────────────────────
 // 画面輝度を変更せずそのまま照度を取得
-static auto measureLux() -> uint16_t { return CoreS3.Ltr553.getAlsValue(); }
+// 輝度を一瞬だけ下げて照度を取得する
+static auto measureLux() -> uint16_t
+{
+  uint8_t prev = currentBrightness;
+  uint8_t dim = static_cast<uint8_t>(prev * ALS_DIM_PERCENT / 100.0F);
+  display.setBrightness(dim);
+  delay(ALS_DIM_DURATION_MS);
+  uint16_t lux = CoreS3.Ltr553.getAlsValue();
+  display.setBrightness(prev);
+  return lux;
+}
 
 // ────────────────────── 輝度更新 ──────────────────────
 void updateBacklightLevel()

@@ -85,6 +85,11 @@ constexpr unsigned long ALS_UPDATE_INTERVAL_MS = 10000UL;
 // 10秒分のサンプルを保持するためバッファサイズを計算
 constexpr int MEDIAN_BUFFER_SIZE = ALS_UPDATE_INTERVAL_MS / ALS_MEASUREMENT_INTERVAL_MS;
 
+// 測定時に輝度を落とす割合(%)
+constexpr uint8_t ALS_DIM_PERCENT = 30;
+// 測定のため減光する時間 [ms]
+constexpr uint16_t ALS_DIM_DURATION_MS = 10;
+
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
 
