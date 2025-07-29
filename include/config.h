@@ -75,8 +75,8 @@ constexpr uint8_t BACKLIGHT_DAY = 255;
 constexpr uint8_t BACKLIGHT_DUSK = 200;
 constexpr uint8_t BACKLIGHT_NIGHT = 60;
 
-// ALS 取得間隔 [ms]
-constexpr uint16_t ALS_MEASUREMENT_INTERVAL_MS = 500;
+// ALS 取得間隔 [ms] - 1 秒ごとに測定
+constexpr uint16_t ALS_MEASUREMENT_INTERVAL_MS = 1000;
 
 // 初回は5秒分のデータで中央値を計算
 constexpr unsigned long ALS_FIRST_INTERVAL_MS = 5000UL;
