@@ -3,7 +3,7 @@
 #include <Wire.h>
 
 #include "config.h"
-#include "modules/backlight.h"
+#include "modules/brightness.h"
 #include "modules/display.h"
 #include "modules/sensor.h"
 
@@ -44,7 +44,6 @@ void setup()
   display.initDMA();
   display.setRotation(3);
   display.setColorDepth(DISPLAY_COLOR_DEPTH);
-  display.setBrightness(BACKLIGHT_DAY);
 
   mainCanvas.setColorDepth(DISPLAY_COLOR_DEPTH);
   mainCanvas.setTextSize(1);
@@ -71,21 +70,12 @@ void setup()
   }
   adsConverter.setDataRate(RATE_ADS1015_1600SPS);
 
-  if (SENSOR_AMBIENT_LIGHT_PRESENT)
-  {
-    // ALS のゲインと積分時間を設定してから初期化
-    Ltr5xx_Init_Basic_Para ltr553Params = LTR5XX_BASE_PARA_CONFIG_DEFAULT;
-    ltr553Params.als_gain = LTR5XX_ALS_GAIN_48X;
-    ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_300MS;
-    CoreS3.Ltr553.begin(&ltr553Params);
-    CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_ACTIVE_MODE);
-  }
+  loadBrightness();
 }
 
 // ────────────────────── loop() ──────────────────────
 void loop()
 {
-  static unsigned long lastAlsMeasurementTime = 0;
   unsigned long nowUs = micros();
   // 前のフレームから16.6ms未満なら待機
   if (lastFrameTimeUs != 0 && nowUs - lastFrameTimeUs < FRAME_INTERVAL_US)
@@ -96,14 +86,9 @@ void loop()
   lastFrameTimeUs = nowUs;
   unsigned long now = millis();
 
-  if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
-  {
-    updateBacklightLevel();
-    lastAlsMeasurementTime = now;
-  }
-
   acquireSensorData();
   updateGauges();
+  handleTouchMenu();
 
   fpsFrameCounter++;
   if (now - lastFpsSecond >= FPS_INTERVAL_MS)
