@@ -80,7 +80,7 @@ void setup()
     ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_100MS;
     CoreS3.Ltr553.begin(&ltr553Params);
     // 通常はスタンバイにしておき、測定時のみアクティブにする
-    CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_STANDBY_MODE);
+    CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_STAND_BY_MODE);
   }
 }
 
