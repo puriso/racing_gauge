@@ -70,3 +70,31 @@ void updateBacklightLevel()
     display.setBrightness(targetBrightness);
   }
 }
+
+// ────────────────────── 初期輝度設定 ──────────────────────
+void initializeBacklight()
+{
+  if (!SENSOR_AMBIENT_LIGHT_PRESENT)
+  {
+    currentBrightnessMode = BrightnessMode::Day;
+    display.setBrightness(BACKLIGHT_DAY);
+    return;
+  }
+
+  // 初回測定を行い、バッファを同値で埋める
+  uint16_t lux = measureLuxWithoutBacklight();
+  for (int i = 0; i < MEDIAN_BUFFER_SIZE; ++i)
+  {
+    luxSamples[i] = lux;
+  }
+  luxSampleIndex = 0;
+
+  BrightnessMode mode = (lux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
+                        : (lux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
+                                                      : BrightnessMode::Night;
+  currentBrightnessMode = mode;
+  uint8_t targetBrightness = (mode == BrightnessMode::Day)    ? BACKLIGHT_DAY
+                             : (mode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
+                                                              : BACKLIGHT_NIGHT;
+  display.setBrightness(targetBrightness);
+}

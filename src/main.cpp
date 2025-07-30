@@ -13,6 +13,7 @@ int fpsFrameCounter = 0;
 int currentFps = 0;
 unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
 unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
+unsigned long initialAlsTime = 0;   // ALS 初期化時刻
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -81,13 +82,20 @@ void setup()
     CoreS3.Ltr553.begin(&ltr553Params);
     // 通常はスタンバイにしておき、測定時のみアクティブにする
     CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_STAND_BY_MODE);
+    initializeBacklight();
+    initialAlsTime = millis();
+  }
+  else
+  {
+    initializeBacklight();
+    initialAlsTime = millis();
   }
 }
 
 // ────────────────────── loop() ──────────────────────
 void loop()
 {
-  static unsigned long lastAlsMeasurementTime = 0;
+  static unsigned long lastAlsMeasurementTime = initialAlsTime;
   unsigned long nowUs = micros();
   // 前のフレームから16.6ms未満なら待機
   if (lastFrameTimeUs != 0 && nowUs - lastFrameTimeUs < FRAME_INTERVAL_US)
