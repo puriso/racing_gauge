@@ -11,6 +11,10 @@ BrightnessMode currentBrightnessMode = BrightnessMode::Day;
 // ALS サンプルバッファ
 uint16_t luxSamples[MEDIAN_BUFFER_SIZE] = {};
 int luxSampleIndex = 0;  // 次に書き込むインデックス
+// 直近の有効な照度値
+static uint16_t lastValidLux = 0;
+// 異常とみなす照度変化の閾値
+constexpr uint16_t LUX_JUMP_THRESHOLD = 1000;
 
 // ────────────────────── 輝度測定 ──────────────────────
 // バックライトを消して輝度を測定
@@ -50,6 +54,15 @@ void updateBacklightLevel()
   }
 
   uint16_t measuredLux = measureLuxWithoutBacklight();
+
+  // 急激に上昇した場合のみ異常値として無視する
+  if (lastValidLux != 0 && measuredLux > lastValidLux && measuredLux - lastValidLux > LUX_JUMP_THRESHOLD)
+  {
+    // サンプルバッファを更新せずリターン
+    return;
+  }
+
+  lastValidLux = measuredLux;
 
   // サンプルをリングバッファへ格納
   luxSamples[luxSampleIndex] = measuredLux;
