@@ -20,7 +20,9 @@ static void printSensorDebugInfo()
   float pressure = calculateAverage(oilPressureSamples);
   float water = calculateAverage(waterTemperatureSamples);
   float oil = calculateAverage(oilTemperatureSamples);
-  Serial.printf("Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", pressure, water, oil);
+  // 追加で照度をシリアル出力
+  uint16_t lux = SENSOR_AMBIENT_LIGHT_PRESENT ? CoreS3.Ltr553.getAlsValue() : 0;
+  Serial.printf("Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C, Lux:%d lx\n", pressure, water, oil, lux);
 }
 
 // ────────────────────── setup() ──────────────────────
