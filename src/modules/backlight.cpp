@@ -55,6 +55,12 @@ void updateBacklightLevel()
 
   uint16_t medianLux = calculateMedian(luxSamples);
 
+  // デバッグモードでは照度を出力
+  if (DEBUG_MODE_ENABLED)
+  {
+    Serial.printf("[ALS] lux:%u, median:%u\n", measuredLux, medianLux);
+  }
+
   BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
                            : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
                                                                : BrightnessMode::Night;
