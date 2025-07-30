@@ -12,6 +12,7 @@ Adafruit_ADS1015 adsConverter;
 float oilPressureSamples[PRESSURE_SAMPLE_SIZE] = {};
 float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE] = {};
 float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE] = {};
+bool oilPressureOverVoltage = false;
 static int oilPressureIndex = 0;
 static int waterTempIndex = 0;
 static int oilTempIndex = 0;
@@ -39,6 +40,12 @@ static auto convertAdcToVoltage(int16_t rawAdc) -> float { return (rawAdc * 6.14
 
 static auto convertVoltageToOilPressure(float voltage) -> float
 {
+  // 4.9V 以上はショートエラーとみなし 0 扱い
+  if (voltage >= 4.9F)
+  {
+    return 0.0F;
+  }
+
   voltage *= CORRECTION_FACTOR;
   // 電源電圧近くまで上昇してもそのまま変換し、
   // 12bar 以上かどうかは呼び出し側で判断する
@@ -176,12 +183,15 @@ void acquireSensorData()
   if (SENSOR_OIL_PRESSURE_PRESENT)
   {
     int16_t rawAdc = readAdcWithSettling(ADC_CH_OIL_PRESSURE);  // CH1: 油圧
-    float pressureValue = convertVoltageToOilPressure(convertAdcToVoltage(rawAdc));
+    float voltage = convertAdcToVoltage(rawAdc);
+    oilPressureOverVoltage = voltage >= 4.9F;
+    float pressureValue = oilPressureOverVoltage ? 0.0F : convertVoltageToOilPressure(voltage);
     oilPressureSamples[oilPressureIndex] = pressureValue;
   }
   else
   {
     oilPressureSamples[oilPressureIndex] = 0.0F;
+    oilPressureOverVoltage = false;
   }
   oilPressureIndex = (oilPressureIndex + 1) % PRESSURE_SAMPLE_SIZE;
 

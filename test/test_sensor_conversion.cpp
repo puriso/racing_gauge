@@ -21,6 +21,10 @@ void test_convert_voltage_to_oil_pressure()
   result = convertVoltageToOilPressure(0.25f);
   // 0.5V 未満は0として扱う
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, result);
+
+  result = convertVoltageToOilPressure(4.9f);
+  // 4.9V 以上はショートエラーとして0扱い
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, result);
 }
 
 // 温度変換のテスト
