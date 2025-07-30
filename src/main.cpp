@@ -20,7 +20,9 @@ static void printSensorDebugInfo()
   float pressure = calculateAverage(oilPressureSamples);
   float water = calculateAverage(waterTemperatureSamples);
   float oil = calculateAverage(oilTemperatureSamples);
-  Serial.printf("Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", pressure, water, oil);
+  // 追加で照度をシリアル出力
+  uint16_t lux = SENSOR_AMBIENT_LIGHT_PRESENT ? CoreS3.Ltr553.getAlsValue() : 0;
+  Serial.printf("Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C, Lux:%d lx\n", pressure, water, oil, lux);
 }
 
 // ────────────────────── setup() ──────────────────────
@@ -73,11 +75,15 @@ void setup()
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
-    // ALS のゲインと積分時間を設定してから初期化
+    // ALS と PS のパラメータを設定してから初期化
     Ltr5xx_Init_Basic_Para ltr553Params = LTR5XX_BASE_PARA_CONFIG_DEFAULT;
-    ltr553Params.als_gain = LTR5XX_ALS_GAIN_48X;
-    ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_300MS;
+    ltr553Params.ps_led_pulse_freq = LTR5XX_LED_PULSE_FREQ_40KHZ;
+    ltr553Params.ps_measurement_rate = LTR5XX_PS_MEASUREMENT_RATE_50MS;
+    // 車内設置のためゲインは1倍
+    ltr553Params.als_gain = LTR5XX_ALS_GAIN_1X;
     CoreS3.Ltr553.begin(&ltr553Params);
+    // PS と ALS を有効化
+    CoreS3.Ltr553.setPsMode(LTR5XX_PS_ACTIVE_MODE);
     CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_ACTIVE_MODE);
   }
 }
