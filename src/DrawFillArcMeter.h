@@ -187,8 +187,8 @@ void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, 
     char combinedLabel[30];
     snprintf(combinedLabel, sizeof(combinedLabel), "%s / %s", label, unit);
     canvas.setFont(&fonts::Font0);
-    int labelX = CENTER_X_CORRECTED;
-    int labelY = CENTER_Y_CORRECTED + RADIUS + 15;
+    int labelX = CENTER_X_CORRECTED + 8;
+    int labelY = CENTER_Y_CORRECTED + RADIUS + 12;
     canvas.setCursor(labelX - (canvas.textWidth(combinedLabel) / 2), labelY);
     canvas.print(combinedLabel);
   }
