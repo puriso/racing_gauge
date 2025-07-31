@@ -9,26 +9,14 @@
 // 現在の輝度モード
 BrightnessMode currentBrightnessMode = BrightnessMode::Day;
 // ALS サンプルバッファ
-uint16_t luxSamples[MEDIAN_BUFFER_SIZE] = {};
+int luxSamples[MEDIAN_BUFFER_SIZE] = {};
 int luxSampleIndex = 0;  // 次に書き込むインデックス
-
-// ────────────────────── 輝度測定 ──────────────────────
-// バックライトを消して輝度を測定
-static auto measureLuxWithoutBacklight() -> uint16_t
-{
-  uint8_t prevBrightness = display.getBrightness();
-  display.setBrightness(0);
-  delayMicroseconds(500);
-  uint16_t lux = CoreS3.Ltr553.getAlsValue();
-  display.setBrightness(prevBrightness);
-  return lux;
-}
 
 // ────────────────────── 中央値計算 ──────────────────────
 // サンプル配列から中央値を計算する
-static auto calculateMedian(const uint16_t *samples) -> uint16_t
+static auto calculateMedian(const int *samples) -> int
 {
-  uint16_t sortedSamples[MEDIAN_BUFFER_SIZE];
+  int sortedSamples[MEDIAN_BUFFER_SIZE];
   memcpy(sortedSamples, samples, sizeof(sortedSamples));
   std::nth_element(sortedSamples, sortedSamples + MEDIAN_BUFFER_SIZE / 2, sortedSamples + MEDIAN_BUFFER_SIZE);
   return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
@@ -47,18 +35,18 @@ void updateBacklightLevel()
     return;
   }
 
-  uint16_t measuredLux = measureLuxWithoutBacklight();
+  int currentLux = CoreS3.Ltr553.getAlsValue();
 
   // サンプルをリングバッファへ格納
-  luxSamples[luxSampleIndex] = measuredLux;
+  luxSamples[luxSampleIndex] = currentLux;
   luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
 
-  uint16_t medianLux = calculateMedian(luxSamples);
+  int medianLux = calculateMedian(luxSamples);
 
   // デバッグモードでは照度を出力
   if (DEBUG_MODE_ENABLED)
   {
-    Serial.printf("[ALS] lux:%u, median:%u\n", measuredLux, medianLux);
+    Serial.printf("[ALS] lux:%u, median:%u\n", currentLux, medianLux);
   }
 
   BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
@@ -68,7 +56,7 @@ void updateBacklightLevel()
   if (newMode != currentBrightnessMode)
   {
     currentBrightnessMode = newMode;
-    uint8_t targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
+    int targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
                                : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
                                                                    : BACKLIGHT_NIGHT;
     display.setBrightness(targetBrightness);
