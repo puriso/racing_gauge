@@ -5,6 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/menu.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
