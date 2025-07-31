@@ -22,11 +22,11 @@ static bool isFirstWaterTempSample = true;
 static bool isFirstOilTempSample = true;
 
 // ADC セトリング待ち時間 [us]
-constexpr uint16_t ADC_SETTLING_US = 50;
+constexpr int ADC_SETTLING_US = 50;
 
 // 温度サンプリング間隔 [ms]
 // 500msごとに取得し、10サンプルで約5秒平均となる
-constexpr uint16_t TEMP_SAMPLE_INTERVAL_MS = 500;
+constexpr int TEMP_SAMPLE_INTERVAL_MS = 500;
 constexpr float SUPPLY_VOLTAGE = 5.0f;
 // 電圧降下は config で設定
 constexpr float CORRECTION_FACTOR = SUPPLY_VOLTAGE / (SUPPLY_VOLTAGE - VOLTAGE_DROP);
