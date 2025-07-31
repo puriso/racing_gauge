@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "DrawFillArcMeter.h"
+#include "backlight.h"
 #include "fps_display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
@@ -212,22 +213,32 @@ void updateGauges()
 void drawMenuScreen()
 {
   mainCanvas.fillScreen(COLOR_BLACK);
-  mainCanvas.setFont(&fonts::Font0);
-  mainCanvas.setTextSize(1);
+  mainCanvas.setFont(&fonts::FreeMonoOblique18pt7b);
+  mainCanvas.setTextSize(0);
   mainCanvas.setTextColor(COLOR_WHITE);
 
-  mainCanvas.setCursor(10, 30);
+  int y = 30;
+  mainCanvas.setCursor(10, y);
   mainCanvas.printf("OIL.P MAX: %.1f bar", recordedMaxOilPressure);
+  y += mainCanvas.fontHeight() + 4;
 
-  mainCanvas.setCursor(10, 60);
+  mainCanvas.setCursor(10, y);
   mainCanvas.printf("WATER.T MAX: %.1f C", recordedMaxWaterTemp);
+  y += mainCanvas.fontHeight() + 4;
 
-  mainCanvas.setCursor(10, 90);
+  mainCanvas.setCursor(10, y);
   mainCanvas.printf("OIL.T MAX: %d C", recordedMaxOilTempTop);
+  y += mainCanvas.fontHeight() + 4;
 
-  int lux = SENSOR_AMBIENT_LIGHT_PRESENT ? CoreS3.Ltr553.getAlsValue() : 0;
-  mainCanvas.setCursor(10, 120);
-  mainCanvas.printf("LUX: %d", lux);
+  int luxCurrent = SENSOR_AMBIENT_LIGHT_PRESENT ? currentLuxValue : 0;
+  int luxMedian = SENSOR_AMBIENT_LIGHT_PRESENT ? medianLuxValue : 0;
+  mainCanvas.setCursor(10, y);
+  mainCanvas.printf("LUX:%d MED:%d", luxCurrent, luxMedian);
+  y += mainCanvas.fontHeight() + 4;
+
+  unsigned long overMinutes = oilTempOver120TimeMs / 60000UL;
+  mainCanvas.setCursor(10, y);
+  mainCanvas.printf("OIL.T>120:%lu min", overMinutes);
 
   mainCanvas.pushSprite(0, 0);
 }
