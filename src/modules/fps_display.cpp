@@ -13,6 +13,8 @@ auto drawFpsOverlay() -> bool
 {
   mainCanvas.setFont(&fonts::Font0);
   mainCanvas.setTextSize(0);
+  // FPS表示を目立たせないよう文字色をグレーに設定
+  mainCanvas.setTextColor(COLOR_GRAY);
 
   // ラベルがメーターに重ならないよう画面最下部へ配置
   constexpr int FPS_Y = LCD_HEIGHT - 16;  // 下端に合わせる
@@ -32,7 +34,11 @@ auto drawFpsOverlay() -> bool
     mainCanvas.setCursor(0, FPS_Y + 8);
     mainCanvas.printf("%d", currentFps);
     lastFpsDrawTime = now;
+    // 元の色に戻しておく
+    mainCanvas.setTextColor(COLOR_WHITE);
     return true;
   }
+  // 更新が無い場合も色を戻す
+  mainCanvas.setTextColor(COLOR_WHITE);
   return false;
 }
