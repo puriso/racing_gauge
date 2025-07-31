@@ -11,6 +11,9 @@ BrightnessMode currentBrightnessMode = BrightnessMode::Day;
 // ALS サンプルバッファ
 int luxSamples[MEDIAN_BUFFER_SIZE] = {};
 int luxSampleIndex = 0;  // 次に書き込むインデックス
+// 現在の照度と中央値を保持
+static int lastLux = 0;
+static int lastMedianLux = 0;
 
 // ────────────────────── 中央値計算 ──────────────────────
 // サンプル配列から中央値を計算する
@@ -36,11 +39,13 @@ void updateBacklightLevel()
   }
 
   int currentLux = CoreS3.Ltr553.getAlsValue();
+  lastLux = currentLux;
   // サンプルをリングバッファへ格納
   luxSamples[luxSampleIndex] = currentLux;
   luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
 
   int medianLux = calculateMedian(luxSamples);
+  lastMedianLux = medianLux;
 
   // デバッグモードでは照度を出力
   if (DEBUG_MODE_ENABLED)
@@ -61,3 +66,8 @@ void updateBacklightLevel()
     display.setBrightness(targetBrightness);
   }
 }
+
+// ────────────────────── 照度取得 ──────────────────────
+auto getCurrentLux() -> int { return lastLux; }
+
+auto getMedianLux() -> int { return lastMedianLux; }

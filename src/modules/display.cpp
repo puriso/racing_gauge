@@ -1,5 +1,7 @@
 #include "display.h"
 
+#include <Fonts/FreeMonoOblique18pt7b.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -18,6 +20,10 @@ static bool waterGaugeInitialized = false;
 float recordedMaxOilPressure = 0.0F;
 float recordedMaxWaterTemp = 0.0F;
 int recordedMaxOilTempTop = 0;
+
+// 油温が120℃を超えた累積時間 [ms]
+static unsigned long oilOverTempDuration = 0;
+static unsigned long lastOilTempCheck = 0;
 
 // 前回描画したゲージ値
 static float prevPressureValue = std::numeric_limits<float>::quiet_NaN();
@@ -177,6 +183,17 @@ void updateGauges()
     recordedMaxOilTempTop = 0;
   }
 
+  unsigned long now = millis();
+  if (lastOilTempCheck == 0)
+  {
+    lastOilTempCheck = now;
+  }
+  if (targetOilTemp >= 120.0F)
+  {
+    oilOverTempDuration += now - lastOilTempCheck;
+  }
+  lastOilTempCheck = now;
+
   if (std::isnan(smoothWaterTemp))
   {
     smoothWaterTemp = targetWaterTemp;
@@ -212,8 +229,8 @@ void updateGauges()
 void drawMenuScreen()
 {
   mainCanvas.fillScreen(COLOR_BLACK);
-  mainCanvas.setFont(&fonts::Font0);
-  mainCanvas.setTextSize(1);
+  mainCanvas.setFont(&FreeMonoOblique18pt7b);
+  mainCanvas.setTextSize(0);
   mainCanvas.setTextColor(COLOR_WHITE);
 
   mainCanvas.setCursor(10, 30);
@@ -225,9 +242,14 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, 90);
   mainCanvas.printf("OIL.T MAX: %d C", recordedMaxOilTempTop);
 
-  int lux = SENSOR_AMBIENT_LIGHT_PRESENT ? CoreS3.Ltr553.getAlsValue() : 0;
+  int lux = SENSOR_AMBIENT_LIGHT_PRESENT ? getCurrentLux() : 0;
+  int median = SENSOR_AMBIENT_LIGHT_PRESENT ? getMedianLux() : 0;
   mainCanvas.setCursor(10, 120);
-  mainCanvas.printf("LUX: %d", lux);
+  mainCanvas.printf("LUX:%d MED:%d", lux, median);
+
+  int overMinutes = static_cast<int>(oilOverTempDuration / 60000UL);
+  mainCanvas.setCursor(10, 150);
+  mainCanvas.printf("OIL.T>120: %d min", overMinutes);
 
   mainCanvas.pushSprite(0, 0);
 }

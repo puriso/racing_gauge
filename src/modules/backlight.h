@@ -10,4 +10,10 @@ constexpr int ALS_MEASUREMENT_INTERVAL_MS = 8000;
 
 void updateBacklightLevel();
 
+// 現在の照度を取得
+auto getCurrentLux() -> int;
+
+// 中央値の照度を取得
+auto getMedianLux() -> int;
+
 #endif  // BACKLIGHT_H
