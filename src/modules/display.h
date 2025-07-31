@@ -13,5 +13,7 @@ extern int currentFps;
 void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp);
 void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, int16_t maxOilTemp);
 void updateGauges();
+void drawMenuScreen();
+void resetGaugeState();
 
 #endif  // DISPLAY_H
