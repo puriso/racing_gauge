@@ -15,6 +15,8 @@ unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
 unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
 bool isMenuVisible = false;         // メニュー表示中かどうか
 static bool wasTouched = false;     // 前回タッチされていたか
+// 油温が120度を超えていた累積時間 [ms]
+unsigned long oilTempOver120TimeMs = 0;
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -91,6 +93,7 @@ void setup()
 void loop()
 {
   static unsigned long lastAlsMeasurementTime = 0;
+  static unsigned long lastOilTempCheck = 0;
   unsigned long nowUs = micros();
   // 前のフレームから16.6ms未満なら待機
   if (lastFrameTimeUs != 0 && nowUs - lastFrameTimeUs < FRAME_INTERVAL_US)
@@ -100,6 +103,16 @@ void loop()
   }
   lastFrameTimeUs = nowUs;
   unsigned long now = millis();
+  if (lastOilTempCheck == 0)
+  {
+    lastOilTempCheck = now;
+  }
+  float currentOilTemp = calculateAverage(oilTemperatureSamples);
+  if (currentOilTemp >= 120.0F)
+  {
+    oilTempOver120TimeMs += now - lastOilTempCheck;
+  }
+  lastOilTempCheck = now;
 
   M5.update();
 
