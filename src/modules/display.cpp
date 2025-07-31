@@ -53,16 +53,17 @@ struct DisplayCache
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
 
 // ────────────────────── 油温バー描画 ──────────────────────
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
 {
   constexpr int MIN_TEMP = 80;
   constexpr int MAX_TEMP = 130;
   constexpr int ALERT_TEMP = 120;
 
-  constexpr int X = 20;
-  constexpr int Y = 15;
-  constexpr int W = 210;
-  constexpr int H = 20;
+  constexpr int X = 20;   // NOLINT(readability-identifier-length)
+  constexpr int Y = 15;   // NOLINT(readability-identifier-length)
+  constexpr int W = 210;  // NOLINT(readability-identifier-length)
+  constexpr int H = 20;   // NOLINT(readability-identifier-length)
   constexpr float RANGE = MAX_TEMP - MIN_TEMP;
 
   canvas.fillRect(X + 1, Y + 1, W - 2, H - 2, 0x18E3);
