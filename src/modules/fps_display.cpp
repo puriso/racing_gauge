@@ -2,6 +2,7 @@
 
 #include <M5CoreS3.h>
 
+#include "backlight.h"
 #include "display.h"
 
 // FPSラベルが描画済みかどうかを保持
@@ -20,7 +21,7 @@ auto drawFpsOverlay() -> bool
   if (!fpsLabelDrawn)
   {
     // 数値表示用に領域を初期化
-    mainCanvas.fillRect(0, FPS_Y, 16, 16, COLOR_BLACK);
+    mainCanvas.fillRect(0, FPS_Y, 60, 16, COLOR_BLACK);
     fpsLabelDrawn = true;
     lastFpsDrawTime = 0;  // 初回はすぐ更新するため0に設定
   }
@@ -28,9 +29,9 @@ auto drawFpsOverlay() -> bool
   if (now - lastFpsDrawTime >= 1000UL)
   {
     // 数値表示部のみ塗り直して更新
-    mainCanvas.fillRect(0, FPS_Y + 8, 30, 8, COLOR_BLACK);
+    mainCanvas.fillRect(0, FPS_Y + 8, 60, 8, COLOR_BLACK);
     mainCanvas.setCursor(0, FPS_Y + 8);
-    mainCanvas.printf("%d", currentFps);
+    mainCanvas.printf("L%d F%d", lastLuxValue, currentFps);
     lastFpsDrawTime = now;
     return true;
   }

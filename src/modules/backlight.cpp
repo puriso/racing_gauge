@@ -8,6 +8,8 @@
 // ────────────────────── グローバル変数 ──────────────────────
 // 現在の輝度モード
 BrightnessMode currentBrightnessMode = BrightnessMode::Day;
+// 最新の照度値を保持
+int lastLuxValue = 0;
 // ALS サンプルバッファ
 int luxSamples[MEDIAN_BUFFER_SIZE] = {};
 int luxSampleIndex = 0;  // 次に書き込むインデックス
@@ -36,6 +38,7 @@ void updateBacklightLevel()
   }
 
   int currentLux = CoreS3.Ltr553.getAlsValue();
+  lastLuxValue = currentLux;
 
   // サンプルをリングバッファへ格納
   luxSamples[luxSampleIndex] = currentLux;
@@ -57,8 +60,8 @@ void updateBacklightLevel()
   {
     currentBrightnessMode = newMode;
     int targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                               : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                                   : BACKLIGHT_NIGHT;
+                           : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
+                                                               : BACKLIGHT_NIGHT;
     display.setBrightness(targetBrightness);
   }
 }
