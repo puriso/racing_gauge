@@ -4,6 +4,8 @@
 #include <Adafruit_ADS1X15.h>
 #include <stdint.h>
 
+#include <cstddef>
+
 #include "config.h"
 
 extern Adafruit_ADS1015 adsConverter;

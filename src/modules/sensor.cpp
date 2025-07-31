@@ -6,6 +6,8 @@
 #include <cmath>
 #include <numeric>
 
+#include "Serial.h"
+
 // ────────────────────── グローバル変数 ──────────────────────
 Adafruit_ADS1015 adsConverter;
 

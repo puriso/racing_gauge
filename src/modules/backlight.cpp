@@ -1,15 +1,16 @@
 #include "backlight.h"
 
 #include <algorithm>
-#include <cstring>
+#include <array>
 
+#include "Serial.h"
 #include "display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 // 現在の輝度モード
 BrightnessMode currentBrightnessMode = BrightnessMode::Day;
 // ALS サンプルバッファ
-int luxSamples[MEDIAN_BUFFER_SIZE] = {};
+std::array<int, MEDIAN_BUFFER_SIZE> luxSamples{};
 int luxSampleIndex = 0;  // 次に書き込むインデックス
 // 現在の照度と中央値を保持
 static int lastLux = 0;
@@ -17,11 +18,11 @@ static int lastMedianLux = 0;
 
 // ────────────────────── 中央値計算 ──────────────────────
 // サンプル配列から中央値を計算する
-static auto calculateMedian(const int *samples) -> int
+static auto calculateMedian(const std::array<int, MEDIAN_BUFFER_SIZE> &samples) -> int
 {
-  int sortedSamples[MEDIAN_BUFFER_SIZE];
-  memcpy(sortedSamples, samples, sizeof(sortedSamples));
-  std::nth_element(sortedSamples, sortedSamples + MEDIAN_BUFFER_SIZE / 2, sortedSamples + MEDIAN_BUFFER_SIZE);
+  std::array<int, MEDIAN_BUFFER_SIZE> sortedSamples{};
+  std::copy(samples.begin(), samples.end(), sortedSamples.begin());
+  std::nth_element(sortedSamples.begin(), sortedSamples.begin() + (MEDIAN_BUFFER_SIZE / 2), sortedSamples.end());
   return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
 }
 
@@ -53,16 +54,36 @@ void updateBacklightLevel()
     Serial.printf("[ALS] lux:%u, median:%u\n", currentLux, medianLux);
   }
 
-  BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
-                           : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk
-                                                               : BrightnessMode::Night;
+  BrightnessMode newMode;
+  if (medianLux >= LUX_THRESHOLD_DAY)
+  {
+    newMode = BrightnessMode::Day;
+  }
+  else if (medianLux >= LUX_THRESHOLD_DUSK)
+  {
+    newMode = BrightnessMode::Dusk;
+  }
+  else
+  {
+    newMode = BrightnessMode::Night;
+  }
 
   if (newMode != currentBrightnessMode)
   {
     currentBrightnessMode = newMode;
-    int targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                           : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                               : BACKLIGHT_NIGHT;
+    int targetBrightness;
+    if (newMode == BrightnessMode::Day)
+    {
+      targetBrightness = BACKLIGHT_DAY;
+    }
+    else if (newMode == BrightnessMode::Dusk)
+    {
+      targetBrightness = BACKLIGHT_DUSK;
+    }
+    else
+    {
+      targetBrightness = BACKLIGHT_NIGHT;
+    }
     display.setBrightness(targetBrightness);
   }
 }

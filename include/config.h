@@ -77,6 +77,9 @@ constexpr uint8_t BACKLIGHT_NIGHT = 60;
 
 constexpr int MEDIAN_BUFFER_SIZE = 6;
 
+// 温度の平滑化係数
+constexpr float TEMP_SMOOTHING_ALPHA = 0.1f;
+
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
 

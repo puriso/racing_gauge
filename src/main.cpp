@@ -2,6 +2,7 @@
 #include <WiFi.h>  // WiFi 無効化用
 #include <Wire.h>
 
+#include "Serial.h"
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"

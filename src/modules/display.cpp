@@ -14,6 +14,20 @@
 M5GFX display;
 M5Canvas mainCanvas(&display);
 
+namespace
+{
+// メニュー表示位置定数
+constexpr int MENU_TEXT_X = 10;
+constexpr int MENU_Y_OILP = 30;
+constexpr int MENU_Y_WATERT = 60;
+constexpr int MENU_Y_OILT = 90;
+constexpr int MENU_Y_LUX = 120;
+constexpr int MENU_Y_OVERTEMP = 150;
+
+// 1分のミリ秒
+constexpr unsigned long MINUTE_MILLIS = 60000UL;
+}  // namespace
+
 static bool pressureGaugeInitialized = false;
 static bool waterGaugeInitialized = false;
 
@@ -207,8 +221,8 @@ void updateGauges()
     smoothOilPressure = pressureAvg;
   }
 
-  smoothWaterTemp += 0.1F * (targetWaterTemp - smoothWaterTemp);
-  smoothOilTemp += 0.1F * (targetOilTemp - smoothOilTemp);
+  smoothWaterTemp += TEMP_SMOOTHING_ALPHA * (targetWaterTemp - smoothWaterTemp);
+  smoothOilTemp += TEMP_SMOOTHING_ALPHA * (targetOilTemp - smoothOilTemp);
   smoothOilPressure += OIL_PRESSURE_SMOOTHING_ALPHA * (pressureAvg - smoothOilPressure);
 
   float oilTempValue = smoothOilTemp;
@@ -222,7 +236,7 @@ void updateGauges()
   recordedMaxOilPressure = std::max(recordedMaxOilPressure, pressureAvg);
   recordedMaxWaterTemp = std::max(recordedMaxWaterTemp, smoothWaterTemp);
   recordedMaxOilTempTop = std::max(recordedMaxOilTempTop, static_cast<int>(targetOilTemp));
-  renderDisplayAndLog(pressureValue, smoothWaterTemp, oilTempValue, recordedMaxOilTempTop);
+  renderDisplayAndLog(pressureValue, smoothWaterTemp, oilTempValue, static_cast<int16_t>(recordedMaxOilTempTop));
 }
 
 // ────────────────────── メニュー画面描画 ──────────────────────
@@ -233,22 +247,22 @@ void drawMenuScreen()
   mainCanvas.setTextSize(0);
   mainCanvas.setTextColor(COLOR_WHITE);
 
-  mainCanvas.setCursor(10, 30);
+  mainCanvas.setCursor(MENU_TEXT_X, MENU_Y_OILP);
   mainCanvas.printf("OIL.P MAX: %.1f bar", recordedMaxOilPressure);
 
-  mainCanvas.setCursor(10, 60);
+  mainCanvas.setCursor(MENU_TEXT_X, MENU_Y_WATERT);
   mainCanvas.printf("WATER.T MAX: %.1f C", recordedMaxWaterTemp);
 
-  mainCanvas.setCursor(10, 90);
+  mainCanvas.setCursor(MENU_TEXT_X, MENU_Y_OILT);
   mainCanvas.printf("OIL.T MAX: %d C", recordedMaxOilTempTop);
 
   int lux = SENSOR_AMBIENT_LIGHT_PRESENT ? getCurrentLux() : 0;
   int median = SENSOR_AMBIENT_LIGHT_PRESENT ? getMedianLux() : 0;
-  mainCanvas.setCursor(10, 120);
+  mainCanvas.setCursor(MENU_TEXT_X, MENU_Y_LUX);
   mainCanvas.printf("LUX:%d MED:%d", lux, median);
 
-  int overMinutes = static_cast<int>(oilOverTempDuration / 60000UL);
-  mainCanvas.setCursor(10, 150);
+  int overMinutes = static_cast<int>(oilOverTempDuration / MINUTE_MILLIS);
+  mainCanvas.setCursor(MENU_TEXT_X, MENU_Y_OVERTEMP);
   mainCanvas.printf("OIL.T>120: %d min", overMinutes);
 
   mainCanvas.pushSprite(0, 0);
