@@ -36,7 +36,6 @@ void updateBacklightLevel()
   }
 
   int currentLux = CoreS3.Ltr553.getAlsValue();
-
   // サンプルをリングバッファへ格納
   luxSamples[luxSampleIndex] = currentLux;
   luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
