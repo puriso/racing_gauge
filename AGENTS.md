@@ -7,4 +7,4 @@
 - コード中のコメントは日本語で記述してください。/ Write code comments in Japanese.
 - コミットする前に `.clang-format` と `.clang-tidy` を実行してください。/ Run `.clang-format` and `.clang-tidy` before committing.
 - 二回目以降のコード作成を行う場合、`git pull && git merge main` を実行して競合を解決してください。/ When working on code again, run `git pull && git merge main` to resolve conflicts.
-- コードを変更したら `act -j build` でCIを実行し、失敗した場合は修正して再度実行してください。プッシュした後は GitHub Actions が完了するまで待ち、失敗したら修正して再度プッシュしてください。/ After modifying code, run `act -j build` to execute CI locally. If it fails, fix the issues and rerun. After pushing, wait for the GitHub Actions run to finish. If it fails, fix the issues and push again.
+- コードを変更したら `act -j build` を実行してCIを確認し、プッシュ後は GitHub Actions の終了を待ち、エラーがあれば修正して再度プッシュしてください。/ After modifying code, run `act -j build` to check CI locally. After pushing, wait for GitHub Actions to finish and push again if errors occur.
