@@ -1,5 +1,5 @@
-# M5Stack CoreS3 Multi-Gauge
-# M5Stack CoreS3 マルチメーター
+#M5Stack CoreS3 Multi - Gauge
+#M5Stack CoreS3 マルチメーター
 
 [![PlatformIO Build](https://github.com/puriso/racing_gauge/actions/workflows/pio-build.yml/badge.svg?branch=main)](https://github.com/puriso/racing_gauge/actions/workflows/pio-build.yml)
 
@@ -45,8 +45,12 @@ A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays
 ```mermaid
 graph TD
     subgraph "M5Stack CoreS3"
-        V5{{5V}}
-        GND{{GND}}
+        V5{
+{5V}}
+        GND{
+  {
+    GND
+  }}
     end
     ADS[ADS1015]
 
@@ -116,6 +120,8 @@ graph TD
 ### ビルド方法
 1. [PlatformIO](https://platformio.org/) をインストール (VS Code 推奨)
 2. `platformio run` でビルドし、`platformio upload` で書き込み
+   - 本プロジェクトでは `M5Unified` ライブラリ **0.2.7** を使用しています。
+     2系 (0.2.x) へ更新することで、古いボード定義に関する警告が解消されます。
 
 ---
 
@@ -192,6 +198,8 @@ The temperature sensor is a thermistor; typical resistance values are shown belo
 ### Build Instructions
 1. Install [PlatformIO](https://platformio.org/) (VS Code recommended)
 2. Build with `platformio run` and flash with `platformio upload`
+   - This project uses `M5Unified` library version **0.2.7**.
+     Updating to the 0.2.x series clears warnings related to deprecated board definitions.
 
 ---
 
