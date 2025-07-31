@@ -80,6 +80,8 @@ void setup()
     ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_100MS;
     CoreS3.Ltr553.begin(&ltr553Params);
     CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_ACTIVE_MODE);
+    // 初回起動時に照度を取得して輝度を決定
+    updateBacklightLevel();
   }
 }
 

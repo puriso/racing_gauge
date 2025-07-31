@@ -36,7 +36,6 @@ void updateBacklightLevel()
   }
 
   int currentLux = CoreS3.Ltr553.getAlsValue();
-
   // サンプルをリングバッファへ格納
   luxSamples[luxSampleIndex] = currentLux;
   luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
@@ -57,8 +56,8 @@ void updateBacklightLevel()
   {
     currentBrightnessMode = newMode;
     int targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                               : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                                   : BACKLIGHT_NIGHT;
+                           : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
+                                                               : BACKLIGHT_NIGHT;
     display.setBrightness(targetBrightness);
   }
 }
