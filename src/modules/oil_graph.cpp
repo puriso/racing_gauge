@@ -41,7 +41,7 @@ int getOilGraphCount()
 
 void drawOilPressureGraph(int index)
 {
-  if (index < 0 || index >= GRAPH_MINUTES)
+  if (index < 0 || index >= GRAPH_MINUTES || getOilGraphCount() == 0)
   {
     return;
   }
