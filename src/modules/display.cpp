@@ -20,6 +20,11 @@ float recordedMaxOilPressure = 0.0F;
 float recordedMaxWaterTemp = 0.0F;
 int recordedMaxOilTempTop = 0;
 
+// OIL.Pが120以上だった累積時間 [ms]
+unsigned long oilPressureHighDurationMs = 0;
+// 前回の油圧測定時刻
+static unsigned long lastPressureCheckMs = 0;
+
 // 前回描画したゲージ値
 static float prevPressureValue = std::numeric_limits<float>::quiet_NaN();
 static float prevWaterTempValue = std::numeric_limits<float>::quiet_NaN();
@@ -160,6 +165,13 @@ void updateGauges()
   static float smoothWaterTemp = std::numeric_limits<float>::quiet_NaN();
   static float smoothOilTemp = std::numeric_limits<float>::quiet_NaN();
   static float smoothOilPressure = std::numeric_limits<float>::quiet_NaN();
+  unsigned long nowMs = millis();
+  if (lastPressureCheckMs == 0)
+  {
+    lastPressureCheckMs = nowMs;
+  }
+  unsigned long deltaMs = nowMs - lastPressureCheckMs;
+  lastPressureCheckMs = nowMs;
 
   float pressureAvg = calculateAverage(oilPressureSamples);
   pressureAvg = std::min(pressureAvg, MAX_OIL_PRESSURE_DISPLAY);
@@ -168,6 +180,11 @@ void updateGauges()
     // ショートエラー時は 0 として扱い、最大値もリセット
     pressureAvg = 0.0F;
     recordedMaxOilPressure = 0.0F;
+  }
+  else if (pressureAvg >= 1.2F)
+  {
+    // 1.2bar(=120kPa)以上なら経過時間を加算
+    oilPressureHighDurationMs += deltaMs;
   }
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
   float targetOilTemp = calculateAverage(oilTemperatureSamples);
@@ -239,6 +256,12 @@ void drawMenuScreen()
   mainCanvas.printf("OIL.T MAX: %6d", recordedMaxOilTempTop);
 
   mainCanvas.setCursor(10, 120);
+  unsigned long totalSec = oilPressureHighDurationMs / 1000UL;
+  unsigned int min = totalSec / 60U;
+  unsigned int sec = totalSec % 60U;
+  // OIL.Pが120以上だった時間を分秒で表示
+  mainCanvas.printf("OIL.P>120: %02u min %02u sec", min, sec);
+  mainCanvas.setCursor(10, 150);
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
