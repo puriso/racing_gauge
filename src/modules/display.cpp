@@ -8,6 +8,7 @@
 #include "DrawFillArcMeter.h"
 #include "backlight.h"
 #include "fps_display.h"
+#include "oil_graph.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 M5GFX display;
@@ -224,6 +225,14 @@ void updateGauges()
   recordedMaxWaterTemp = std::max(recordedMaxWaterTemp, smoothWaterTemp);
   recordedMaxOilTempTop = std::max(recordedMaxOilTempTop, static_cast<int>(targetOilTemp));
   renderDisplayAndLog(pressureValue, smoothWaterTemp, oilTempValue, recordedMaxOilTempTop);
+
+  static unsigned long lastHistoryMs = 0;
+  if (millis() - lastHistoryMs >= 1000UL)
+  {
+    // 1秒ごとの油圧を記録
+    addOilPressureHistory(pressureValue);
+    lastHistoryMs = millis();
+  }
 }
 
 // ────────────────────── メニュー画面描画 ──────────────────────

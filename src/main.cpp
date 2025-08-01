@@ -5,6 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/oil_graph.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -13,8 +14,18 @@ int fpsFrameCounter = 0;
 int currentFps = 0;
 unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
 unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
-bool isMenuVisible = false;         // メニュー表示中かどうか
-static bool wasTouched = false;     // 前回タッチされていたか
+
+enum class ScreenState
+{
+  Gauge,
+  Menu,
+  Graph
+};
+
+static ScreenState screenState = ScreenState::Gauge;  // 現在の画面
+static bool wasTouched = false;                       // 前回タッチされていたか
+static int touchStartX = 0;                           // スワイプ判定用
+static int currentGraphIndex = 0;                     // 表示中のグラフ番号
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -58,6 +69,8 @@ void setup()
 
   M5.Lcd.clear();
   M5.Lcd.fillScreen(COLOR_BLACK);
+
+  initOilPressureHistory();
 
   // M5.Speaker.begin();  // スピーカーを使用しないため無効化
   // M5.Imu.begin();      // IMU を使用しないため無効化
@@ -110,22 +123,71 @@ void loop()
   }
 
   bool touched = M5.Touch.getCount() > 0;
+  TouchPoint_t detail{};
+  if (touched)
+  {
+    detail = M5.Touch.getDetail();
+  }
+
   if (touched && !wasTouched)
   {
-    isMenuVisible = !isMenuVisible;
-    if (isMenuVisible)
+    // タッチ開始座標を保存
+    touchStartX = detail.x;
+  }
+  else if (!touched && wasTouched)
+  {
+    // タッチ終了時にスワイプかタップか判定
+    int deltaX = detail.x - touchStartX;
+    if (abs(deltaX) > 20)
     {
-      drawMenuScreen();
+      // スワイプ処理
+      if (screenState == ScreenState::Menu && deltaX < 0)
+      {
+        screenState = ScreenState::Graph;
+        currentGraphIndex = 0;
+        drawOilPressureGraph(currentGraphIndex);
+      }
+      else if (screenState == ScreenState::Graph)
+      {
+        if (deltaX < 0 && currentGraphIndex < getOilGraphCount() - 1)
+        {
+          currentGraphIndex++;
+          drawOilPressureGraph(currentGraphIndex);
+        }
+        else if (deltaX > 0)
+        {
+          if (currentGraphIndex > 0)
+          {
+            currentGraphIndex--;
+            drawOilPressureGraph(currentGraphIndex);
+          }
+          else
+          {
+            screenState = ScreenState::Menu;
+            drawMenuScreen();
+          }
+        }
+      }
     }
     else
     {
-      resetGaugeState();
+      // スワイプでなければタップとして扱う
+      if (screenState == ScreenState::Gauge)
+      {
+        screenState = ScreenState::Menu;
+        drawMenuScreen();
+      }
+      else
+      {
+        screenState = ScreenState::Gauge;
+        resetGaugeState();
+      }
     }
   }
   wasTouched = touched;
 
   acquireSensorData();
-  if (!isMenuVisible)
+  if (screenState == ScreenState::Gauge)
   {
     updateGauges();
   }
