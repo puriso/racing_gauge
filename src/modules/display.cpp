@@ -286,11 +286,18 @@ void drawMenuScreen()
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
-    // 直近の照度と中央値を表示
-    mainCanvas.print("LUX:");
-    char valStr[16];
-    snprintf(valStr, sizeof(valStr), "%6d [ Median: %d ]", latestLux, medianLuxValue);
+    // 現在値を表示
+    mainCanvas.print("LUX CURR:");
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6d", latestLux);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+
+    y += 30;
+    mainCanvas.setCursor(10, y);
+    mainCanvas.print("LUX MEDIAN:");
+    char medStr[8];
+    snprintf(medStr, sizeof(medStr), "%6d", medianLuxValue);
+    mainCanvas.drawRightString(medStr, LCD_WIDTH - 10, y);
   }
   else
   {
