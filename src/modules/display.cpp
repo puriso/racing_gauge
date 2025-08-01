@@ -217,17 +217,21 @@ void drawMenuScreen()
   mainCanvas.setTextColor(COLOR_WHITE);
 
   mainCanvas.setCursor(10, 30);
-  mainCanvas.printf("OIL.P MAX: %.1f", recordedMaxOilPressure);
+  // 数値部分を右寄せにし、インデントを揃える
+  mainCanvas.printf("OIL.P MAX: %6.1f", recordedMaxOilPressure);
 
   mainCanvas.setCursor(10, 60);
-  mainCanvas.printf("WATER.T MAX: %.1f", recordedMaxWaterTemp);
+  // こちらも同様に右寄せ表示
+  mainCanvas.printf("WATER.T MAX: %6.1f", recordedMaxWaterTemp);
 
   mainCanvas.setCursor(10, 90);
-  mainCanvas.printf("OIL.T MAX: %d", recordedMaxOilTempTop);
+  // 最大油温値を右寄せで表示
+  mainCanvas.printf("OIL.T MAX: %6d", recordedMaxOilTempTop);
 
   int lux = SENSOR_AMBIENT_LIGHT_PRESENT ? CoreS3.Ltr553.getAlsValue() : 0;
   mainCanvas.setCursor(10, 120);
-  mainCanvas.printf("LUX: %d", lux);
+  // 照度の表示も他と幅を合わせる
+  mainCanvas.printf("LUX: %6d", lux);
 
   mainCanvas.pushSprite(0, 0);
 }
