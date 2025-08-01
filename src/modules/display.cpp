@@ -190,6 +190,13 @@ void updateGauges()
     oilPressureHighDurationMs += deltaMs;
   }
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
+  if (targetWaterTemp >= 199.0F)
+  {
+    // 199℃以上ならセンサー異常として扱い0を返す
+    targetWaterTemp = 0.0F;
+    recordedMaxWaterTemp = 0.0F;
+  }
+
   float targetOilTemp = calculateAverage(oilTemperatureSamples);
   if (targetOilTemp >= 199.0F)
   {
