@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "DrawFillArcMeter.h"
+#include "backlight.h"
 #include "fps_display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
@@ -237,10 +238,17 @@ void drawMenuScreen()
   // 最大油温値を右寄せで表示
   mainCanvas.printf("OIL.T MAX: %6d", recordedMaxOilTempTop);
 
-  int lux = SENSOR_AMBIENT_LIGHT_PRESENT ? CoreS3.Ltr553.getAlsValue() : 0;
   mainCanvas.setCursor(10, 120);
-  // 照度の表示も他と幅を合わせる
-  mainCanvas.printf("LUX: %6d", lux);
+
+  if (SENSOR_AMBIENT_LIGHT_PRESENT)
+  {
+    // 直近の照度と中央値を表示
+    mainCanvas.printf("LUX:%6d [ Median: %d ]", latestLux, medianLuxValue);
+  }
+  else
+  {
+    mainCanvas.printf("LUX: Disabled");
+  }
 
   // 戻る案内を左下へ配置
   mainCanvas.setCursor(10, LCD_HEIGHT - 20);
