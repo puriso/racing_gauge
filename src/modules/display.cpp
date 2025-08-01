@@ -212,7 +212,7 @@ void updateGauges()
 void drawMenuScreen()
 {
   mainCanvas.fillScreen(COLOR_BLACK);
-  mainCanvas.setFont(&fonts::FreeSansBold9pt7b);
+  mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
   mainCanvas.setTextSize(1);
   mainCanvas.setTextColor(COLOR_WHITE);
 
@@ -222,7 +222,7 @@ void drawMenuScreen()
 
   mainCanvas.setCursor(10, 60);
   // こちらも同様に右寄せ表示
-  mainCanvas.printf("WATER.T MAX: %6.1f", recordedMaxWaterTemp);
+  mainCanvas.printf("WATER.T MAX: %6d", recordedMaxWaterTemp);
 
   mainCanvas.setCursor(10, 90);
   // 最大油温値を右寄せで表示
