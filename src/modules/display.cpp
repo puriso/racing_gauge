@@ -303,6 +303,10 @@ void drawMenuScreen()
 // ────────────────────── ゲージ状態リセット ──────────────────────
 void resetGaugeState()
 {
+  // メニュー画面の残像を防ぐため一度画面をクリアする
+  mainCanvas.fillScreen(COLOR_BLACK);
+  mainCanvas.pushSprite(0, 0);
+
   pressureGaugeInitialized = false;
   waterGaugeInitialized = false;
   prevPressureValue = std::numeric_limits<float>::quiet_NaN();
