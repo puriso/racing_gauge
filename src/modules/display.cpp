@@ -20,6 +20,9 @@ float recordedMaxOilPressure = 0.0F;
 float recordedMaxWaterTemp = 0.0F;
 int recordedMaxOilTempTop = 0;
 
+// OIL.Tが120度以上だった累積時間 [ms]
+unsigned long oilTempHighDurationMs = 0;
+
 // OIL.Pが120以上だった累積時間 [ms]
 unsigned long oilPressureHighDurationMs = 0;
 // 前回の油圧測定時刻
@@ -194,6 +197,11 @@ void updateGauges()
     targetOilTemp = 0.0F;
     recordedMaxOilTempTop = 0;
   }
+  else if (targetOilTemp >= 120.0F)
+  {
+    // 120℃以上なら経過時間を加算
+    oilTempHighDurationMs += deltaMs;
+  }
 
   if (std::isnan(smoothWaterTemp))
   {
@@ -280,7 +288,13 @@ void drawMenuScreen()
   unsigned int sec = totalSec % 60U;
   // OIL.Pが120以上だった時間を分秒で表示
   mainCanvas.printf("OIL.P>120: %02u min %02u sec", min, sec);
+
   mainCanvas.setCursor(10, 150);
+  // 油温120度以上での経過時間を秒表示
+  unsigned long oilTempSec = oilTempHighDurationMs / 1000UL;
+  mainCanvas.printf("OIL.T Over 120 Sec: %lu", oilTempSec);
+
+  mainCanvas.setCursor(10, 180);
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
