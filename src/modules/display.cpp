@@ -217,14 +217,9 @@ void drawMenuScreen()
   mainCanvas.setTextSize(1);
   mainCanvas.setTextColor(COLOR_WHITE);
 
-  // 3D風の突き立てているような枠を描く
-  constexpr uint16_t BORDER_LIGHT = rgb565(80, 80, 80);
-  constexpr uint16_t BORDER_DARK = rgb565(20, 20, 20);
-  mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_DARK);
-  mainCanvas.drawLine(1, 1, LCD_WIDTH - 2, 1, BORDER_LIGHT);
-  mainCanvas.drawLine(1, 1, 1, LCD_HEIGHT - 2, BORDER_LIGHT);
-  mainCanvas.drawLine(1, LCD_HEIGHT - 2, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
-  mainCanvas.drawLine(LCD_WIDTH - 2, 1, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
+  // フラットデザインの枠を描く
+  constexpr uint16_t BORDER_COLOR = rgb565(80, 80, 80);
+  mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
   mainCanvas.setCursor(10, 30);
   // 数値部分を右寄せにし、インデントを揃える
