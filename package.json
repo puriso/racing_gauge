@@ -1,0 +1,7 @@
+{
+  "name": "racing_gauge",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  }
+}
