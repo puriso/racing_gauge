@@ -116,10 +116,14 @@ void loop()
     if (isMenuVisible)
     {
       drawMenuScreen();
+      // メニュー表示中は輝度を最大にする
+      display.setBrightness(BACKLIGHT_DAY);
     }
     else
     {
       resetGaugeState();
+      // メニュー終了後は照度センサーで再調整
+      updateBacklightLevel();
     }
   }
   wasTouched = touched;
