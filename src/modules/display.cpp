@@ -226,19 +226,20 @@ void drawMenuScreen()
   mainCanvas.drawLine(1, LCD_HEIGHT - 2, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
   mainCanvas.drawLine(LCD_WIDTH - 2, 1, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
 
+  // 行間を広げるために表示位置を調整
   mainCanvas.setCursor(10, 30);
   // 数値部分を右寄せにし、インデントを揃える
   mainCanvas.printf("OIL.P MAX: %6.1f", recordedMaxOilPressure);
 
-  mainCanvas.setCursor(10, 60);
+  mainCanvas.setCursor(10, 70);
   // こちらも同様に右寄せ表示
   mainCanvas.printf("WATER.T MAX: %6.1f", recordedMaxWaterTemp);
 
-  mainCanvas.setCursor(10, 90);
+  mainCanvas.setCursor(10, 110);
   // 最大油温値を右寄せで表示
   mainCanvas.printf("OIL.T MAX: %6d", recordedMaxOilTempTop);
 
-  mainCanvas.setCursor(10, 120);
+  mainCanvas.setCursor(10, 150);
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
