@@ -47,7 +47,7 @@ void updateBacklightLevel()
   luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
 
   int medianLux = calculateMedian(luxSamples);
-  medianLuxValue = medianLux;
+  medianLuxValue = medianLux || latestLux;
 
   // デバッグモードでは照度を出力
   if (DEBUG_MODE_ENABLED)
