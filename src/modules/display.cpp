@@ -242,60 +242,89 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");
+  if (SENSOR_OIL_PRESSURE_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+  }
 
   y += 30;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.P CURR:");
+  if (SENSOR_OIL_PRESSURE_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.pressureAvg);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+  }
 
   y += 30;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
+  if (SENSOR_WATER_TEMP_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+  }
 
   y += 30;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T CURR:");
+  if (SENSOR_WATER_TEMP_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.waterTempAvg);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+  }
 
   y += 30;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
+  if (SENSOR_OIL_TEMP_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+  }
 
   y += 30;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T CURR:");
+  if (SENSOR_OIL_TEMP_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", static_cast<int>(displayCache.oilTemp));
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+  }
 
   y += 30;
   mainCanvas.setCursor(10, y);
-
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
