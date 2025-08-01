@@ -137,7 +137,7 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     {
       mainCanvas.fillRect(160, 60, 160, GAUGE_H, COLOR_BLACK);
     }
-    drawFillArcMeter(mainCanvas, waterTempAvg, WATER_TEMP_METER_MIN, WATER_TEMP_METER_MAX, 98.0f, COLOR_RED, "Celsius",
+    drawFillArcMeter(mainCanvas, waterTempAvg, WATER_TEMP_METER_MIN, WATER_TEMP_METER_MAX, 110.0f, COLOR_RED, "Celsius",
                      "WATER.T", recordedMaxWaterTemp, prevWaterTempValue, 1.0f, false, 160, 60, !waterGaugeInitialized,
                      5.0f, WATER_TEMP_METER_MIN);
     waterGaugeInitialized = true;
