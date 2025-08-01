@@ -230,7 +230,7 @@ void drawMenuScreen()
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 直近の照度と中央値を表示
-    mainCanvas.printf("LUX:%6.d [ Median: %d ]", latestLux, medianLuxValue);
+    mainCanvas.printf("LUX:%6d [ Median: %d ]", latestLux, medianLuxValue);
   }
   else
   {
