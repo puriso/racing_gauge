@@ -226,34 +226,63 @@ void drawMenuScreen()
   mainCanvas.drawLine(1, LCD_HEIGHT - 2, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
   mainCanvas.drawLine(LCD_WIDTH - 2, 1, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
 
-  mainCanvas.setCursor(10, 30);
+  int y = 30;
+  mainCanvas.setCursor(10, y);
   // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, 30);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  mainCanvas.setCursor(10, 60);
-  // こちらも同様に右寄せ表示
+  y += 30;
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.P CURR:");
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.pressureAvg);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+
+  y += 30;
+  mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, 60);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  mainCanvas.setCursor(10, 90);
-  // 最大油温値を右寄せで表示
+  y += 30;
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("WATER.T CURR:");
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.waterTempAvg);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+
+  y += 30;
+  mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, 90);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  mainCanvas.setCursor(10, 120);
+  y += 30;
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.T CURR:");
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6d", static_cast<int>(displayCache.oilTemp));
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+
+  y += 30;
+  mainCanvas.setCursor(10, y);
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
@@ -261,12 +290,12 @@ void drawMenuScreen()
     mainCanvas.print("LUX:");
     char valStr[16];
     snprintf(valStr, sizeof(valStr), "%6d [ Median: %d ]", latestLux, medianLuxValue);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, 120);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
   else
   {
     mainCanvas.print("LUX:");
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, 120);
+    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
   }
 
   // 戻る案内を左下へ配置
