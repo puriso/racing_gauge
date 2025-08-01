@@ -20,6 +20,11 @@ float recordedMaxOilPressure = 0.0F;
 float recordedMaxWaterTemp = 0.0F;
 int recordedMaxOilTempTop = 0;
 
+// OIL.Pが120以上だった累積時間 [ms]
+unsigned long oilPressureHighDurationMs = 0;
+// 前回の油圧測定時刻
+static unsigned long lastPressureCheckMs = 0;
+
 // 前回描画したゲージ値
 static float prevPressureValue = std::numeric_limits<float>::quiet_NaN();
 static float prevWaterTempValue = std::numeric_limits<float>::quiet_NaN();
@@ -160,6 +165,13 @@ void updateGauges()
   static float smoothWaterTemp = std::numeric_limits<float>::quiet_NaN();
   static float smoothOilTemp = std::numeric_limits<float>::quiet_NaN();
   static float smoothOilPressure = std::numeric_limits<float>::quiet_NaN();
+  unsigned long nowMs = millis();
+  if (lastPressureCheckMs == 0)
+  {
+    lastPressureCheckMs = nowMs;
+  }
+  unsigned long deltaMs = nowMs - lastPressureCheckMs;
+  lastPressureCheckMs = nowMs;
 
   float pressureAvg = calculateAverage(oilPressureSamples);
   pressureAvg = std::min(pressureAvg, MAX_OIL_PRESSURE_DISPLAY);
@@ -168,6 +180,11 @@ void updateGauges()
     // ショートエラー時は 0 として扱い、最大値もリセット
     pressureAvg = 0.0F;
     recordedMaxOilPressure = 0.0F;
+  }
+  else if (pressureAvg >= 1.2F)
+  {
+    // 1.2bar(=120kPa)以上なら経過時間を加算
+    oilPressureHighDurationMs += deltaMs;
   }
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
   float targetOilTemp = calculateAverage(oilTemperatureSamples);
@@ -217,14 +234,9 @@ void drawMenuScreen()
   mainCanvas.setTextSize(1);
   mainCanvas.setTextColor(COLOR_WHITE);
 
-  // 3D風の突き立てているような枠を描く
-  constexpr uint16_t BORDER_LIGHT = rgb565(80, 80, 80);
-  constexpr uint16_t BORDER_DARK = rgb565(20, 20, 20);
-  mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_DARK);
-  mainCanvas.drawLine(1, 1, LCD_WIDTH - 2, 1, BORDER_LIGHT);
-  mainCanvas.drawLine(1, 1, 1, LCD_HEIGHT - 2, BORDER_LIGHT);
-  mainCanvas.drawLine(1, LCD_HEIGHT - 2, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
-  mainCanvas.drawLine(LCD_WIDTH - 2, 1, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
+  // フラットデザインの枠を描く
+  constexpr uint16_t BORDER_COLOR = rgb565(80, 80, 80);
+  mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
   int y = 30;
   mainCanvas.setCursor(10, y);
@@ -284,6 +296,7 @@ void drawMenuScreen()
   y += 30;
   mainCanvas.setCursor(10, y);
 
+
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 現在値を表示
@@ -316,6 +329,10 @@ void drawMenuScreen()
 // ────────────────────── ゲージ状態リセット ──────────────────────
 void resetGaugeState()
 {
+  // メニュー画面の残像を防ぐため一度画面をクリアする
+  mainCanvas.fillScreen(COLOR_BLACK);
+  mainCanvas.pushSprite(0, 0);
+
   pressureGaugeInitialized = false;
   waterGaugeInitialized = false;
   prevPressureValue = std::numeric_limits<float>::quiet_NaN();
