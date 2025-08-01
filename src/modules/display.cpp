@@ -227,27 +227,46 @@ void drawMenuScreen()
   mainCanvas.drawLine(LCD_WIDTH - 2, 1, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
 
   mainCanvas.setCursor(10, 30);
-  // 数値部分を右寄せにし、インデントを揃える
-  mainCanvas.printf("OIL.P MAX: %6.1f", recordedMaxOilPressure);
+  // ラベルは左寄せ、値は右寄せで表示
+  mainCanvas.print("OIL.P MAX:");
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, 30);
+  }
 
   mainCanvas.setCursor(10, 60);
   // こちらも同様に右寄せ表示
-  mainCanvas.printf("WATER.T MAX: %6.1f", recordedMaxWaterTemp);
+  mainCanvas.print("WATER.T MAX:");
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, 60);
+  }
 
   mainCanvas.setCursor(10, 90);
   // 最大油温値を右寄せで表示
-  mainCanvas.printf("OIL.T MAX: %6d", recordedMaxOilTempTop);
+  mainCanvas.print("OIL.T MAX:");
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, 90);
+  }
 
   mainCanvas.setCursor(10, 120);
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 直近の照度と中央値を表示
-    mainCanvas.printf("LUX:%6d [ Median: %d ]", latestLux, medianLuxValue);
+    mainCanvas.print("LUX:");
+    char valStr[16];
+    snprintf(valStr, sizeof(valStr), "%6d [ Median: %d ]", latestLux, medianLuxValue);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, 120);
   }
   else
   {
-    mainCanvas.printf("LUX: Disabled");
+    mainCanvas.print("LUX:");
+    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, 120);
   }
 
   // 戻る案内を左下へ配置
