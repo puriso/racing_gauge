@@ -238,7 +238,8 @@ void drawMenuScreen()
   constexpr uint16_t BORDER_COLOR = rgb565(80, 80, 80);
   mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
-  int y = 30;
+  // 行間を詰めて縦幅を節約するため起点を少し上げる
+  int y = 25;
   mainCanvas.setCursor(10, y);
   // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");
@@ -248,16 +249,16 @@ void drawMenuScreen()
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  y += 30;
+  y += 25;
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P CURR:");
+  mainCanvas.print("OIL.P NOW:");
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.pressureAvg);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  y += 30;
+  y += 25;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
   {
@@ -266,16 +267,16 @@ void drawMenuScreen()
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  y += 30;
+  y += 25;
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("WATER.T CURR:");
+  mainCanvas.print("WATER.T NOW:");
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.waterTempAvg);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  y += 30;
+  y += 25;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
   {
@@ -284,28 +285,27 @@ void drawMenuScreen()
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  y += 30;
+  y += 25;
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.T CURR:");
+  mainCanvas.print("OIL.T NOW:");
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", static_cast<int>(displayCache.oilTemp));
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
-  y += 30;
+  y += 25;
   mainCanvas.setCursor(10, y);
-
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 現在値を表示
-    mainCanvas.print("LUX CURR:");
+    mainCanvas.print("LUX NOW:");
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", latestLux);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 
-    y += 30;
+    y += 25;
     mainCanvas.setCursor(10, y);
     mainCanvas.print("LUX MEDIAN:");
     char medStr[8];
