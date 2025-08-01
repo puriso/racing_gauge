@@ -12,6 +12,11 @@ BrightnessMode currentBrightnessMode = BrightnessMode::Day;
 int luxSamples[MEDIAN_BUFFER_SIZE] = {};
 int luxSampleIndex = 0;  // 次に書き込むインデックス
 
+// 直近取得した照度値
+int latestLux = 0;
+// 中央値フィルタ適用後の照度値
+int medianLuxValue = 0;
+
 // ────────────────────── 中央値計算 ──────────────────────
 // サンプル配列から中央値を計算する
 static auto calculateMedian(const int *samples) -> int
@@ -36,11 +41,13 @@ void updateBacklightLevel()
   }
 
   int currentLux = CoreS3.Ltr553.getAlsValue();
+  latestLux = currentLux;
   // サンプルをリングバッファへ格納
   luxSamples[luxSampleIndex] = currentLux;
   luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
 
   int medianLux = calculateMedian(luxSamples);
+  medianLuxValue = medianLux;
 
   // デバッグモードでは照度を出力
   if (DEBUG_MODE_ENABLED)
