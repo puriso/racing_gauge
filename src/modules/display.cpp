@@ -212,18 +212,18 @@ void updateGauges()
 void drawMenuScreen()
 {
   mainCanvas.fillScreen(COLOR_BLACK);
-  mainCanvas.setFont(&fonts::Font0);
+  mainCanvas.setFont(&fonts::FreeSansBold9pt7b);
   mainCanvas.setTextSize(1);
   mainCanvas.setTextColor(COLOR_WHITE);
 
   mainCanvas.setCursor(10, 30);
-  mainCanvas.printf("OIL.P MAX: %.1f bar", recordedMaxOilPressure);
+  mainCanvas.printf("OIL.P MAX: %.1f", recordedMaxOilPressure);
 
   mainCanvas.setCursor(10, 60);
-  mainCanvas.printf("WATER.T MAX: %.1f C", recordedMaxWaterTemp);
+  mainCanvas.printf("WATER.T MAX: %.1f", recordedMaxWaterTemp);
 
   mainCanvas.setCursor(10, 90);
-  mainCanvas.printf("OIL.T MAX: %d C", recordedMaxOilTempTop);
+  mainCanvas.printf("OIL.T MAX: %d", recordedMaxOilTempTop);
 
   int lux = SENSOR_AMBIENT_LIGHT_PRESENT ? CoreS3.Ltr553.getAlsValue() : 0;
   mainCanvas.setCursor(10, 120);
