@@ -216,6 +216,15 @@ void drawMenuScreen()
   mainCanvas.setTextSize(1);
   mainCanvas.setTextColor(COLOR_WHITE);
 
+  // 3D風の突き立てているような枠を描く
+  constexpr uint16_t BORDER_LIGHT = rgb565(80, 80, 80);
+  constexpr uint16_t BORDER_DARK = rgb565(20, 20, 20);
+  mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_DARK);
+  mainCanvas.drawLine(1, 1, LCD_WIDTH - 2, 1, BORDER_LIGHT);
+  mainCanvas.drawLine(1, 1, 1, LCD_HEIGHT - 2, BORDER_LIGHT);
+  mainCanvas.drawLine(1, LCD_HEIGHT - 2, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
+  mainCanvas.drawLine(LCD_WIDTH - 2, 1, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
+
   mainCanvas.setCursor(10, 30);
   mainCanvas.printf("OIL.P MAX: %.1f", recordedMaxOilPressure);
 
@@ -228,6 +237,10 @@ void drawMenuScreen()
   int lux = SENSOR_AMBIENT_LIGHT_PRESENT ? CoreS3.Ltr553.getAlsValue() : 0;
   mainCanvas.setCursor(10, 120);
   mainCanvas.printf("LUX: %d", lux);
+
+  // 戻る案内を左下へ配置
+  mainCanvas.setCursor(10, LCD_HEIGHT - 20);
+  mainCanvas.printf("Tap screen to return");
 
   mainCanvas.pushSprite(0, 0);
 }
