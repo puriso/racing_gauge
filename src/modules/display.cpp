@@ -138,7 +138,7 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     {
       mainCanvas.fillRect(160, 60, 160, GAUGE_H, COLOR_BLACK);
     }
-    drawFillArcMeter(mainCanvas, waterTempAvg, WATER_TEMP_METER_MIN, WATER_TEMP_METER_MAX, 98.0f, COLOR_RED, "Celsius",
+    drawFillArcMeter(mainCanvas, waterTempAvg, WATER_TEMP_METER_MIN, WATER_TEMP_METER_MAX, 110.0f, COLOR_RED, "Celsius",
                      "WATER.T", recordedMaxWaterTemp, prevWaterTempValue, 1.0f, false, 160, 60, !waterGaugeInitialized,
                      5.0f, WATER_TEMP_METER_MIN);
     waterGaugeInitialized = true;
@@ -213,20 +213,33 @@ void updateGauges()
 void drawMenuScreen()
 {
   mainCanvas.fillScreen(COLOR_BLACK);
-  mainCanvas.setFont(&fonts::FreeSansBold9pt7b);
+  mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
   mainCanvas.setTextSize(1);
   mainCanvas.setTextColor(COLOR_WHITE);
 
+  // 3D風の突き立てているような枠を描く
+  constexpr uint16_t BORDER_LIGHT = rgb565(80, 80, 80);
+  constexpr uint16_t BORDER_DARK = rgb565(20, 20, 20);
+  mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_DARK);
+  mainCanvas.drawLine(1, 1, LCD_WIDTH - 2, 1, BORDER_LIGHT);
+  mainCanvas.drawLine(1, 1, 1, LCD_HEIGHT - 2, BORDER_LIGHT);
+  mainCanvas.drawLine(1, LCD_HEIGHT - 2, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
+  mainCanvas.drawLine(LCD_WIDTH - 2, 1, LCD_WIDTH - 2, LCD_HEIGHT - 2, BORDER_DARK);
+
   mainCanvas.setCursor(10, 30);
-  mainCanvas.printf("OIL.P MAX: %.1f", recordedMaxOilPressure);
+  // 数値部分を右寄せにし、インデントを揃える
+  mainCanvas.printf("OIL.P MAX: %6.1f", recordedMaxOilPressure);
 
   mainCanvas.setCursor(10, 60);
-  mainCanvas.printf("WATER.T MAX: %.1f", recordedMaxWaterTemp);
+  // こちらも同様に右寄せ表示
+  mainCanvas.printf("WATER.T MAX: %6.1f", recordedMaxWaterTemp);
 
   mainCanvas.setCursor(10, 90);
-  mainCanvas.printf("OIL.T MAX: %d", recordedMaxOilTempTop);
+  // 最大油温値を右寄せで表示
+  mainCanvas.printf("OIL.T MAX: %6d", recordedMaxOilTempTop);
 
   mainCanvas.setCursor(10, 120);
+
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 直近の照度と中央値を表示
@@ -234,8 +247,13 @@ void drawMenuScreen()
   }
   else
   {
-    mainCanvas.printf("LUX: N/A");
+    mainCanvas.printf("LUX: Disabled");
   }
+
+  // 戻る案内を左下へ配置
+  mainCanvas.setCursor(10, LCD_HEIGHT - 20);
+  mainCanvas.setFont(&fonts::Font0);
+  mainCanvas.printf("Tap screen to return");
 
   mainCanvas.pushSprite(0, 0);
 }
