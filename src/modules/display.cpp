@@ -240,6 +240,7 @@ void drawMenuScreen()
 
   // 戻る案内を左下へ配置
   mainCanvas.setCursor(10, LCD_HEIGHT - 20);
+  mainCanvas.setFont(&fonts::Font0);
   mainCanvas.printf("Tap screen to return");
 
   mainCanvas.pushSprite(0, 0);
