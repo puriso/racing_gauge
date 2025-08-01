@@ -222,16 +222,40 @@ void drawMenuScreen()
   mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
   mainCanvas.setCursor(10, 30);
-  // 数値部分を右寄せにし、インデントを揃える
-  mainCanvas.printf("OIL.P MAX: %6.1f", recordedMaxOilPressure);
+  // 油圧センサーが無効なら Disabled 表示
+  if (SENSOR_OIL_PRESSURE_PRESENT)
+  {
+    // 数値部分を右寄せにし、インデントを揃える
+    mainCanvas.printf("OIL.P MAX: %6.1f", recordedMaxOilPressure);
+  }
+  else
+  {
+    mainCanvas.printf("OIL.P MAX: Disabled");
+  }
 
   mainCanvas.setCursor(10, 60);
-  // こちらも同様に右寄せ表示
-  mainCanvas.printf("WATER.T MAX: %6.1f", recordedMaxWaterTemp);
+  // 水温センサーが無効なら Disabled 表示
+  if (SENSOR_WATER_TEMP_PRESENT)
+  {
+    // こちらも同様に右寄せ表示
+    mainCanvas.printf("WATER.T MAX: %6.1f", recordedMaxWaterTemp);
+  }
+  else
+  {
+    mainCanvas.printf("WATER.T MAX: Disabled");
+  }
 
   mainCanvas.setCursor(10, 90);
-  // 最大油温値を右寄せで表示
-  mainCanvas.printf("OIL.T MAX: %6d", recordedMaxOilTempTop);
+  // 油温センサーが無効なら Disabled 表示
+  if (SENSOR_OIL_TEMP_PRESENT)
+  {
+    // 最大油温値を右寄せで表示
+    mainCanvas.printf("OIL.T MAX: %6d", recordedMaxOilTempTop);
+  }
+  else
+  {
+    mainCanvas.printf("OIL.T MAX: Disabled");
+  }
 
   mainCanvas.setCursor(10, 120);
 
