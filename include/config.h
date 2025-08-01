@@ -51,9 +51,9 @@ constexpr float OIL_PRESSURE_DISCONNECT_THRESHOLD = 0.25f;
 constexpr float OIL_PRESSURE_SMOOTHING_ALPHA = 0.3f;
 
 // ── 水温メーター設定 ──
-// 水温メーター下限と上限を80℃〜105℃に設定
-constexpr float WATER_TEMP_METER_MIN = 80.0f;
-constexpr float WATER_TEMP_METER_MAX = 105.0f;
+// 水温メーター下限と上限を80℃〜120℃に設定
+constexpr float WATER_TEMP_METER_MIN = 85.0f;
+constexpr float WATER_TEMP_METER_MAX = 115.0f;
 
 // ── 画面サイズ ──
 constexpr int LCD_WIDTH = 320;
