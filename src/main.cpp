@@ -13,6 +13,8 @@ int fpsFrameCounter = 0;
 int currentFps = 0;
 unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
 unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
+bool isMenuVisible = false;         // メニュー表示中かどうか
+static bool wasTouched = false;     // 前回タッチされていたか
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -99,14 +101,34 @@ void loop()
   lastFrameTimeUs = nowUs;
   unsigned long now = millis();
 
+  M5.update();
+
   if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
   }
 
+  bool touched = M5.Touch.getCount() > 0;
+  if (touched && !wasTouched)
+  {
+    isMenuVisible = !isMenuVisible;
+    if (isMenuVisible)
+    {
+      drawMenuScreen();
+    }
+    else
+    {
+      resetGaugeState();
+    }
+  }
+  wasTouched = touched;
+
   acquireSensorData();
-  updateGauges();
+  if (!isMenuVisible)
+  {
+    updateGauges();
+  }
 
   fpsFrameCounter++;
   if (now - lastFpsSecond >= FPS_INTERVAL_MS)
