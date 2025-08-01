@@ -308,14 +308,20 @@ void drawMenuScreen()
   unsigned int min = totalSec / 60U;
   unsigned int sec = totalSec % 60U;
   // OIL.Pが120以上だった時間を分秒で表示
-  mainCanvas.printf("OIL.P>120: %02u min %02u sec", min, sec);
+  mainCanvas.print("OIL.P>120:");
+  char pressureStr[20];
+  snprintf(pressureStr, sizeof(pressureStr), "%02u min %02u sec", min, sec);
+  mainCanvas.drawRightString(pressureStr, LCD_WIDTH - 10, y);
 
   y += 25;
   mainCanvas.setCursor(10, y);
   // 油温120度以上での経過時間を秒表示
   unsigned long oilTempSec = oilTempHighDurationMs / 1000UL;
-  mainCanvas.printf("OIL.T Over 120 Sec: %lu", oilTempSec);
-  
+  mainCanvas.print("OIL.T>120 SEC:");
+  char oilTempStr[12];
+  snprintf(oilTempStr, sizeof(oilTempStr), "%lu", oilTempSec);
+  mainCanvas.drawRightString(oilTempStr, LCD_WIDTH - 10, y);
+
   y += 25;
   mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
