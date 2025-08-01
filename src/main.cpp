@@ -103,7 +103,7 @@ void loop()
 
   M5.update();
 
-  if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  if (!isMenuVisible && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
