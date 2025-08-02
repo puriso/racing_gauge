@@ -15,5 +15,8 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
 void updateGauges();
 void drawMenuScreen();
 void resetGaugeState();
+// 油圧ログ追加とグラフ描画
+void logOilPressure();
+void drawPressureGraph();
 
 #endif  // DISPLAY_H
