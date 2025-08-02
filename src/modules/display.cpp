@@ -22,9 +22,6 @@ int recordedMaxOilTempTop = 0;
 
 // OIL.Tが120度以上だった累積時間 [ms]
 unsigned long oilTempHighDurationMs = 0;
-
-// OIL.Pが120以上だった累積時間 [ms]
-unsigned long oilPressureHighDurationMs = 0;
 // 前回の油圧測定時刻
 static unsigned long lastPressureCheckMs = 0;
 
@@ -184,11 +181,6 @@ void updateGauges()
     pressureAvg = 0.0F;
     recordedMaxOilPressure = 0.0F;
   }
-  else if (pressureAvg >= 1.2F)
-  {
-    // 1.2bar(=120kPa)以上なら経過時間を加算
-    oilPressureHighDurationMs += deltaMs;
-  }
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
   if (targetWaterTemp >= 199.0F)
   {
@@ -308,17 +300,6 @@ void drawMenuScreen()
     snprintf(valStr, sizeof(valStr), "%6d", static_cast<int>(displayCache.oilTemp));
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
-
-  y += 25;
-  mainCanvas.setCursor(10, y);
-  unsigned long totalSec = oilPressureHighDurationMs / 1000UL;
-  unsigned int min = totalSec / 60U;
-  unsigned int sec = totalSec % 60U;
-  // OIL.Pが120以上だった時間を分秒で表示
-  mainCanvas.print("OIL.P>120:");
-  char pressureStr[20];
-  snprintf(pressureStr, sizeof(pressureStr), "%02u min %02u sec", min, sec);
-  mainCanvas.drawRightString(pressureStr, LCD_WIDTH - 10, y);
 
   y += 25;
   mainCanvas.setCursor(10, y);
