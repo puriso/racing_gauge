@@ -116,7 +116,7 @@ void loop()
 
   M5.update();
 
-  if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  if (!isMenuVisible && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
@@ -165,6 +165,8 @@ void loop()
           {
             screenState = ScreenState::Menu;
             drawMenuScreen();
+            // メニュー表示中は輝度を最大にする
+            display.setBrightness(BACKLIGHT_DAY);
           }
         }
       }
@@ -176,11 +178,15 @@ void loop()
       {
         screenState = ScreenState::Menu;
         drawMenuScreen();
+        // メニュー表示中は輝度を最大にする
+        display.setBrightness(BACKLIGHT_DAY);
       }
       else
       {
         screenState = ScreenState::Gauge;
         resetGaugeState();
+        // メニュー終了後は照度センサーで再調整
+        updateBacklightLevel();
       }
     }
   }
