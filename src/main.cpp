@@ -2,9 +2,12 @@
 #include <WiFi.h>  // WiFi 無効化用
 #include <Wire.h>
 
+#include <cstdlib>
+
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/pressure_graph.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -13,8 +16,15 @@ int fpsFrameCounter = 0;
 int currentFps = 0;
 unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
 unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
-bool isMenuVisible = false;         // メニュー表示中かどうか
-static bool wasTouched = false;     // 前回タッチされていたか
+// 画面表示状態
+enum class DisplayMode
+{
+  GAUGE,          // 通常ゲージ
+  MENU,           // メニュー
+  PRESSURE_GRAPH  // 油圧グラフ
+};
+DisplayMode displayMode = DisplayMode::GAUGE;
+static bool wasTouched = false;  // 前回タッチされていたか
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -115,35 +125,69 @@ void loop()
 
   M5.update();
 
-  if (!isMenuVisible && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  if (displayMode == DisplayMode::GAUGE && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
   }
 
   bool touched = M5.Touch.getCount() > 0;
-  if (touched && !wasTouched)
+  static uint16_t touchStartX = 0;
+  static uint16_t touchStartY = 0;
+  static bool touchMoved = false;
+  if (touched)
   {
-    isMenuVisible = !isMenuVisible;
-    if (isMenuVisible)
+    auto detail = M5.Touch.getDetail(0);
+    if (!wasTouched)
     {
-      drawMenuScreen();
-      // メニュー表示中は輝度を最大にする
-      display.setBrightness(BACKLIGHT_DAY);
+      // タッチ開始位置を記録
+      touchStartX = detail.x;
+      touchStartY = detail.y;
+      touchMoved = false;
     }
-    else
+    else if (!touchMoved && (abs((int)detail.x - (int)touchStartX) > 5 || abs((int)detail.y - (int)touchStartY) > 5))
     {
-      resetGaugeState();
-      // メニュー終了後は照度センサーで再調整
-      updateBacklightLevel();
+      // 一定以上移動したらドラッグとみなす
+      touchMoved = true;
+    }
+  }
+  else if (wasTouched && !touchMoved)
+  {
+    // タップとみなし表示状態を切り替える
+    switch (displayMode)
+    {
+      case DisplayMode::GAUGE:
+        displayMode = DisplayMode::MENU;
+        drawMenuScreen();
+        // メニュー表示中は輝度を最大にする
+        display.setBrightness(BACKLIGHT_DAY);
+        break;
+      case DisplayMode::MENU:
+        displayMode = DisplayMode::PRESSURE_GRAPH;
+        resetPressureGraph();
+        // グラフ初期表示
+        drawPressureGraph(mainCanvas);
+        break;
+      case DisplayMode::PRESSURE_GRAPH:
+        displayMode = DisplayMode::GAUGE;
+        resetGaugeState();
+        // ゲージ表示に戻ったら照度で輝度調整
+        updateBacklightLevel();
+        break;
     }
   }
   wasTouched = touched;
 
   acquireSensorData();
-  if (!isMenuVisible)
+  // 油圧ログを更新
+  logOilPressure();
+  if (displayMode == DisplayMode::GAUGE)
   {
     updateGauges();
+  }
+  else if (displayMode == DisplayMode::PRESSURE_GRAPH)
+  {
+    drawPressureGraph(mainCanvas);
   }
 
   fpsFrameCounter++;
