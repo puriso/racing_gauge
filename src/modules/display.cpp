@@ -248,7 +248,7 @@ void drawMenuScreen()
   // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
   constexpr int MENU_TOP_MARGIN = 20;                                                       // 上端の余白
   constexpr int MENU_BOTTOM_MARGIN = 40;                                                    // 下端の余白（戻る案内分）
-  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 6;                          // 表示行数
+  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 6 : 5;                          // 表示行数
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
@@ -276,15 +276,6 @@ void drawMenuScreen()
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.T NOW:");
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6d", static_cast<int>(displayCache.oilTemp));
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
