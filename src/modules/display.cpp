@@ -243,6 +243,8 @@ void drawMenuScreen()
 
   // フラットデザインの枠を描く
   constexpr uint16_t BORDER_COLOR = rgb565(80, 80, 80);
+  // センサー無効時に表示する文字列
+  constexpr char DISABLED_STR[] = "Disabled";
   mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
   // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
@@ -255,39 +257,66 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");
+  if (SENSOR_OIL_PRESSURE_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    // センサー無効時は Disabled と表示
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  }
 
   y += lineHeight;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
+  if (SENSOR_WATER_TEMP_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    // センサー無効時は Disabled と表示
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  }
 
   y += lineHeight;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
+  if (SENSOR_OIL_TEMP_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
+  else
+  {
+    // センサー無効時は Disabled と表示
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  }
 
   y += lineHeight;
   mainCanvas.setCursor(10, y);
-  // 油温120度以上での経過時間を秒表示
-  unsigned long oilTempSec = oilTempHighDurationMs / 1000UL;
-  mainCanvas.print("OIL.T Over 120 Sec:");
-  char oilTempStr[12];
-  snprintf(oilTempStr, sizeof(oilTempStr), "%lu", oilTempSec);
-  mainCanvas.drawRightString(oilTempStr, LCD_WIDTH - 10, y);
-
+");
+  if (SENSOR_OIL_TEMP_PRESENT)
+  {
+    // 油温120度以上での経過時間を秒表示
+    unsigned long oilTempSec = oilTempHighDurationMs / 1000UL;
+    mainCanvas.print("OIL.T Over 120 Sec:");
+    char oilTempStr[12];
+    snprintf(oilTempStr, sizeof(oilTempStr), "%lu", oilTempSec);
+    mainCanvas.drawRightString(oilTempStr, LCD_WIDTH - 10, y);
+  }
+  else
+  {
+    // センサー無効時は Disabled と表示
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  }
+  
   y += lineHeight;
   mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
@@ -308,8 +337,14 @@ void drawMenuScreen()
   }
   else
   {
-    mainCanvas.print("LUX:");
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    // LUX センサーが無い場合は両方 Disabled を表示
+    mainCanvas.print("LUX NOW:");
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+
+    y += 25;
+    mainCanvas.setCursor(10, y);
+    mainCanvas.print("LUX MEDIAN:");
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   // 戻る案内を左下へ配置
