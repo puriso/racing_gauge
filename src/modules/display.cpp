@@ -22,6 +22,13 @@ int recordedMaxOilTempTop = 0;
 // 前回の油圧測定時刻
 static unsigned long lastPressureCheckMs = 0;
 
+// ── 油圧ログ用バッファ ──
+constexpr int PRESSURE_LOG_SECONDS = 30 * 60;  // 30分のログ
+static float oilPressureLog[PRESSURE_LOG_SECONDS] = {};
+static int oilPressureLogIndex = 0;
+static int oilPressureLogCount = 0;
+static unsigned long lastPressureLogTime = 0;
+
 // 前回描画したゲージ値
 static float prevPressureValue = std::numeric_limits<float>::quiet_NaN();
 static float prevWaterTempValue = std::numeric_limits<float>::quiet_NaN();
@@ -357,4 +364,57 @@ void resetGaugeState()
   prevWaterTempValue = std::numeric_limits<float>::quiet_NaN();
   displayCache = {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(),
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
+}
+
+// ────────────────────── 油圧ログ追加 ──────────────────────
+void logOilPressure()
+{
+  unsigned long now = millis();
+  if (now - lastPressureLogTime >= 1000)
+  {
+    // 最新の油圧平均値を取得しログへ保存
+    float pressure = calculateAverage(oilPressureSamples);
+    oilPressureLog[oilPressureLogIndex] = pressure;
+    oilPressureLogIndex = (oilPressureLogIndex + 1) % PRESSURE_LOG_SECONDS;
+    if (oilPressureLogCount < PRESSURE_LOG_SECONDS)
+    {
+      oilPressureLogCount++;
+    }
+    lastPressureLogTime = now;
+  }
+}
+
+// ────────────────────── 油圧グラフ描画 ──────────────────────
+void drawPressureGraph()
+{
+  mainCanvas.fillScreen(COLOR_BLACK);
+
+  const int width = LCD_WIDTH;
+  const int height = LCD_HEIGHT;
+
+  // 軸を描画
+  mainCanvas.drawLine(0, height - 1, width, height - 1, COLOR_WHITE);
+  mainCanvas.drawLine(0, 0, 0, height, COLOR_WHITE);
+  mainCanvas.setTextColor(COLOR_WHITE);
+  mainCanvas.setCursor(5, 5);
+  mainCanvas.print("油圧 / bar");
+  mainCanvas.setCursor(width - 40, height - 15);
+  mainCanvas.print("時間");
+
+  // 表示するサンプル数は画面幅まで
+  int samplesToDraw = std::min(oilPressureLogCount, width);
+  int start = (oilPressureLogIndex - samplesToDraw + PRESSURE_LOG_SECONDS) % PRESSURE_LOG_SECONDS;
+  int prevX = 0;
+  int prevY = height - 1;
+  for (int i = 0; i < samplesToDraw; ++i)
+  {
+    float p = oilPressureLog[(start + i) % PRESSURE_LOG_SECONDS];
+    int x = i;
+    int y = height - 1 - static_cast<int>((p / MAX_OIL_PRESSURE_DISPLAY) * (height - 1));
+    mainCanvas.drawLine(prevX, prevY, x, y, COLOR_YELLOW);
+    prevX = x;
+    prevY = y;
+  }
+
+  mainCanvas.pushSprite(0, 0);
 }
