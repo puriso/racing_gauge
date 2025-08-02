@@ -293,21 +293,6 @@ void drawMenuScreen()
 
   y += lineHeight;
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.T NOW:");
-  if (SENSOR_OIL_TEMP_PRESENT)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6d", static_cast<int>(displayCache.oilTemp));
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
-
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 現在のLUX値を表示
