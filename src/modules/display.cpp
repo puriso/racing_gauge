@@ -297,7 +297,7 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
-    // 現在の照度を表示
+    // 現在のLUX値を表示
     mainCanvas.print("LUX NOW:");
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", latestLux);
