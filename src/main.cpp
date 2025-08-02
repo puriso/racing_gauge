@@ -67,11 +67,23 @@ void setup()
   pinMode(8, INPUT_PULLUP);
   Wire.begin(9, 8);
 
-  if (!adsConverter.begin())
+  if (!DEMO_MODE_ENABLED)
   {
-    Serial.println("[ADS1015] init failed… all analog values will be 0");
+    // デモモードでなければADS1015を初期化し、失敗時は画面にエラーを表示
+    if (!adsConverter.begin())
+    {
+      Serial.println("[ADS1015] init failed… all analog values will be 0");
+      M5.Lcd.setTextSize(2);
+      M5.Lcd.setTextColor(COLOR_RED);
+      M5.Lcd.setCursor(0, 0);
+      M5.Lcd.println("ADS1015初期化失敗");
+      M5.Lcd.println("配線を確認してください");
+    }
+    else
+    {
+      adsConverter.setDataRate(RATE_ADS1015_1600SPS);
+    }
   }
-  adsConverter.setDataRate(RATE_ADS1015_1600SPS);
 
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
