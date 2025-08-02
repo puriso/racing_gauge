@@ -247,8 +247,13 @@ void drawMenuScreen()
   constexpr char DISABLED_STR[] = "Disabled";
   mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
-  // 行間を詰めて縦幅を節約するため起点を少し上げる
-  int y = 25;
+  // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
+  constexpr int MENU_TOP_MARGIN = 20;                                                       // 上端の余白
+  constexpr int MENU_BOTTOM_MARGIN = 40;                                                    // 下端の余白（戻る案内分）
+  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 6;                          // 表示行数
+  const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
+
+  int y = MENU_TOP_MARGIN;
   mainCanvas.setCursor(10, y);
   // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");
@@ -264,7 +269,7 @@ void drawMenuScreen()
     mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
-  y += 25;
+  y += lineHeight;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
   if (SENSOR_WATER_TEMP_PRESENT)
@@ -279,7 +284,7 @@ void drawMenuScreen()
     mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
-  y += 25;
+  y += lineHeight;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
   if (SENSOR_OIL_TEMP_PRESENT)
@@ -294,7 +299,7 @@ void drawMenuScreen()
     mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
-  y += 25;
+  y += lineHeight;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T NOW:");
   if (SENSOR_OIL_TEMP_PRESENT)
@@ -309,7 +314,7 @@ void drawMenuScreen()
     mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
-  y += 25;
+  y += lineHeight;
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T>120 SEC:");
   if (SENSOR_OIL_TEMP_PRESENT)
@@ -326,8 +331,8 @@ void drawMenuScreen()
     // センサー無効時は Disabled と表示
     mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
-
-  y += 25;
+  
+  y += lineHeight;
   mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
@@ -337,7 +342,7 @@ void drawMenuScreen()
     snprintf(valStr, sizeof(valStr), "%6d", latestLux);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 
-    y += 25;
+    y += lineHeight;
     mainCanvas.setCursor(10, y);
     // 照度の中央値を表示
     mainCanvas.print("LUX MEDIAN:");
