@@ -258,28 +258,10 @@ void drawMenuScreen()
 
   y += 25;
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P NOW:");
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.pressureAvg);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-
-  y += 25;
-  mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-
-  y += 25;
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("WATER.T NOW:");
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.waterTempAvg);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
 
@@ -305,16 +287,17 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   // 油温120度以上での経過時間を秒表示
   unsigned long oilTempSec = oilTempHighDurationMs / 1000UL;
-  mainCanvas.print("OIL.T>120 SEC:");
+  mainCanvas.print("OIL.T Over 120 Sec:");
   char oilTempStr[12];
   snprintf(oilTempStr, sizeof(oilTempStr), "%lu", oilTempSec);
   mainCanvas.drawRightString(oilTempStr, LCD_WIDTH - 10, y);
+
 
   y += 25;
   mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
-    // 現在値を表示
+    // 現在のLUX値を表示
     mainCanvas.print("LUX NOW:");
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", latestLux);
@@ -322,6 +305,7 @@ void drawMenuScreen()
 
     y += 25;
     mainCanvas.setCursor(10, y);
+    // 照度の中央値を表示
     mainCanvas.print("LUX MEDIAN:");
     char medStr[8];
     snprintf(medStr, sizeof(medStr), "%6d", medianLuxValue);
