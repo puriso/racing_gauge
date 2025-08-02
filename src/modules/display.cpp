@@ -251,6 +251,8 @@ void drawMenuScreen()
 
   // フラットデザインの枠を描く
   constexpr uint16_t BORDER_COLOR = rgb565(80, 80, 80);
+  // センサー無効時に表示する文字列
+  constexpr char DISABLED_STR[] = "Disabled";
   mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
   // 行間を詰めて縦幅を節約するため起点を少し上げる
@@ -267,7 +269,7 @@ void drawMenuScreen()
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += 25;
@@ -282,7 +284,7 @@ void drawMenuScreen()
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += 25;
@@ -297,7 +299,7 @@ void drawMenuScreen()
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += 25;
@@ -312,7 +314,7 @@ void drawMenuScreen()
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += 25;
@@ -327,7 +329,7 @@ void drawMenuScreen()
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += 25;
@@ -342,7 +344,7 @@ void drawMenuScreen()
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += 25;
@@ -361,7 +363,7 @@ void drawMenuScreen()
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += 25;
@@ -378,7 +380,7 @@ void drawMenuScreen()
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += 25;
@@ -402,12 +404,12 @@ void drawMenuScreen()
   {
     // LUX センサーが無い場合は両方 Disabled を表示
     mainCanvas.print("LUX NOW:");
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
 
     y += 25;
     mainCanvas.setCursor(10, y);
     mainCanvas.print("LUX MEDIAN:");
-    mainCanvas.drawRightString("Disabled", LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   // 戻る案内を左下へ配置
