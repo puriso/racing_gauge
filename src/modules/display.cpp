@@ -19,9 +19,6 @@ static bool waterGaugeInitialized = false;
 float recordedMaxOilPressure = 0.0F;
 float recordedMaxWaterTemp = 0.0F;
 int recordedMaxOilTempTop = 0;
-
-// OIL.Tが120度以上だった累積時間 [ms]
-unsigned long oilTempHighDurationMs = 0;
 // 前回の油圧測定時刻
 static unsigned long lastPressureCheckMs = 0;
 
@@ -196,11 +193,6 @@ void updateGauges()
     targetOilTemp = 0.0F;
     recordedMaxOilTempTop = 0;
   }
-  else if (targetOilTemp >= 120.0F)
-  {
-    // 120℃以上なら経過時間を加算
-    oilTempHighDurationMs += deltaMs;
-  }
 
   if (std::isnan(smoothWaterTemp))
   {
@@ -314,24 +306,6 @@ void drawMenuScreen()
     mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.T>120 SEC:");
-  if (SENSOR_OIL_TEMP_PRESENT)
-  {
-    // 油温120度以上での経過時間を秒表示
-    unsigned long oilTempSec = oilTempHighDurationMs / 1000UL;
-    mainCanvas.print("OIL.T Over 120 Sec:");
-    char oilTempStr[12];
-    snprintf(oilTempStr, sizeof(oilTempStr), "%lu", oilTempSec);
-    mainCanvas.drawRightString(oilTempStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
-  
   y += lineHeight;
   mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
