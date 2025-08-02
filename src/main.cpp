@@ -76,8 +76,8 @@ void setup()
       M5.Lcd.setTextSize(2);
       M5.Lcd.setTextColor(COLOR_RED);
       M5.Lcd.setCursor(0, 0);
-      M5.Lcd.println("ADS1015初期化失敗");
-      M5.Lcd.println("配線を確認してください");
+      M5.Lcd.println("ADS1015 init failed");
+      M5.Lcd.println("Check wiring");
     }
     else
     {
