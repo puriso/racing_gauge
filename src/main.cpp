@@ -11,10 +11,11 @@
 unsigned long lastFpsSecond = 0;  // 直近1秒判定用
 int fpsFrameCounter = 0;
 int currentFps = 0;
-unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
-unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
-bool isMenuVisible = false;         // メニュー表示中かどうか
-static bool wasTouched = false;     // 前回タッチされていたか
+unsigned long lastDebugPrint = 0;        // デバッグ表示用タイマー
+unsigned long lastFrameTimeUs = 0;       // 前回フレーム開始時刻
+bool isMenuVisible = false;              // メニュー表示中かどうか
+static bool wasTouched = false;          // 前回タッチされていたか
+static unsigned long lastTouchTime = 0;  // 最終タッチ時刻
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -122,6 +123,10 @@ void loop()
   }
 
   bool touched = M5.Touch.getCount() > 0;
+  if (touched)
+  {
+    lastTouchTime = now;  // タッチ時刻を記録
+  }
   if (touched && !wasTouched)
   {
     isMenuVisible = !isMenuVisible;
@@ -139,6 +144,14 @@ void loop()
     }
   }
   wasTouched = touched;
+
+  // 一定時間タッチがない場合はメニューを自動で閉じる
+  if (isMenuVisible && (now - lastTouchTime >= MENU_TIMEOUT_MS))
+  {
+    isMenuVisible = false;
+    resetGaugeState();
+    updateBacklightLevel();
+  }
 
   acquireSensorData();
   if (!isMenuVisible)

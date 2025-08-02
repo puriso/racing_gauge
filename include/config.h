@@ -80,6 +80,9 @@ constexpr int MEDIAN_BUFFER_SIZE = 6;
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
 
+// メニューが自動的に閉じるまでの時間 [ms]
+constexpr unsigned long MENU_TIMEOUT_MS = 60000UL;
+
 // 最大60FPSに制御するためのフレーム間隔 [us]
 constexpr unsigned long FRAME_INTERVAL_US = 1000000UL / 60;
 
