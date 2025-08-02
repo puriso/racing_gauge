@@ -364,6 +364,7 @@ void drawMenuScreen()
 void resetGaugeState()
 {
   // メニュー画面の残像を防ぐため一度画面をクリアする
+  display.fillScreen(COLOR_BLACK);  // 実ディスプレイも黒で塗りつぶす
   mainCanvas.fillScreen(COLOR_BLACK);
   mainCanvas.pushSprite(0, 0);
 
