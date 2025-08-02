@@ -44,6 +44,9 @@ jobs:
       - name: PlatformIO インストール
         run: pip install platformio
 
+      - name: intelhex インストール
+        run: pip install intelhex
+
       - name: ビルド
         run: pio run -e m5stack-cores3
 

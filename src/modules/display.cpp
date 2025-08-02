@@ -22,9 +22,6 @@ int recordedMaxOilTempTop = 0;
 
 // OIL.Tが120度以上だった累積時間 [ms]
 unsigned long oilTempHighDurationMs = 0;
-
-// OIL.Pが120以上だった累積時間 [ms]
-unsigned long oilPressureHighDurationMs = 0;
 // 前回の油圧測定時刻
 static unsigned long lastPressureCheckMs = 0;
 
@@ -184,11 +181,6 @@ void updateGauges()
     pressureAvg = 0.0F;
     recordedMaxOilPressure = 0.0F;
   }
-  else if (pressureAvg >= 1.2F)
-  {
-    // 1.2bar(=120kPa)以上なら経過時間を加算
-    oilPressureHighDurationMs += deltaMs;
-  }
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
   if (targetWaterTemp >= 199.0F)
   {
@@ -274,41 +266,11 @@ void drawMenuScreen()
 
   y += 25;
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P NOW:");
-  if (SENSOR_OIL_PRESSURE_PRESENT)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.pressureAvg);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
-
-  y += 25;
-  mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
   if (SENSOR_WATER_TEMP_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
-
-  y += 25;
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("WATER.T NOW:");
-  if (SENSOR_WATER_TEMP_PRESENT)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", displayCache.waterTempAvg);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
   else
@@ -349,30 +311,12 @@ void drawMenuScreen()
 
   y += 25;
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P>120:");
-  if (SENSOR_OIL_PRESSURE_PRESENT)
-  {
-    // OIL.Pが120以上だった時間を分秒で表示
-    unsigned long totalSec = oilPressureHighDurationMs / 1000UL;
-    unsigned int min = totalSec / 60U;
-    unsigned int sec = totalSec % 60U;
-    char pressureStr[20];
-    snprintf(pressureStr, sizeof(pressureStr), "%02u min %02u sec", min, sec);
-    mainCanvas.drawRightString(pressureStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
-
-  y += 25;
-  mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T>120 SEC:");
   if (SENSOR_OIL_TEMP_PRESENT)
   {
     // 油温120度以上での経過時間を秒表示
     unsigned long oilTempSec = oilTempHighDurationMs / 1000UL;
+    mainCanvas.print("OIL.T Over 120 Sec:");
     char oilTempStr[12];
     snprintf(oilTempStr, sizeof(oilTempStr), "%lu", oilTempSec);
     mainCanvas.drawRightString(oilTempStr, LCD_WIDTH - 10, y);
@@ -387,7 +331,7 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
-    // 現在値を表示
+    // 現在のLUX値を表示
     mainCanvas.print("LUX NOW:");
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", latestLux);
@@ -395,6 +339,7 @@ void drawMenuScreen()
 
     y += 25;
     mainCanvas.setCursor(10, y);
+    // 照度の中央値を表示
     mainCanvas.print("LUX MEDIAN:");
     char medStr[8];
     snprintf(medStr, sizeof(medStr), "%6d", medianLuxValue);
