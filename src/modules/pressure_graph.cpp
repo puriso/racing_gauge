@@ -11,6 +11,7 @@
 constexpr int PRESSURE_LOG_SECONDS = 30 * 60;            // 30分のログ秒数
 constexpr int PANEL_SECONDS = PRESSURE_LOG_SECONDS / 3;  // 各段の秒数(10分)
 constexpr int HEADER_HEIGHT = 16;                        // 見出しの高さ
+constexpr int PANEL_GAP = 4;                             // 段間の隙間
 constexpr float GUIDE_LINES[] = {3.0f, 6.0f, 8.0f};      // 強調線の油圧値
 
 // ── 油圧ログ用バッファ ──
@@ -45,6 +46,31 @@ void logOilPressure()
   }
 }
 
+// ────────────────────── 破線描画ヘルパ ──────────────────────
+static void drawDashedVLine(M5Canvas& canvas, int x, int y1, int y2, uint16_t color)
+{
+  // y方向の破線を描画する
+  const int dash = 2;
+  const int gap = 2;
+  for (int y = y1; y <= y2; y += dash + gap)
+  {
+    int y2p = std::min(y + dash - 1, y2);
+    canvas.drawLine(x, y, x, y2p, color);
+  }
+}
+
+static void drawDashedHLine(M5Canvas& canvas, int y, int x1, int x2, uint16_t color)
+{
+  // x方向の破線を描画する
+  const int dash = 2;
+  const int gap = 2;
+  for (int x = x1; x <= x2; x += dash + gap)
+  {
+    int x2p = std::min(x + dash - 1, x2);
+    canvas.drawLine(x, y, x2p, y, color);
+  }
+}
+
 // ────────────────────── 油圧グラフ描画 ──────────────────────
 void drawPressureGraph(M5Canvas& canvas)
 {
@@ -52,7 +78,8 @@ void drawPressureGraph(M5Canvas& canvas)
 
   const int width = LCD_WIDTH;
   const int height = LCD_HEIGHT;
-  const int panelHeight = (height - HEADER_HEIGHT) / 3;  // 各段の高さ
+  // 隙間を考慮した各段の高さ
+  const int panelHeight = (height - HEADER_HEIGHT - PANEL_GAP * 2) / 3;
   const int maxScroll = std::max(0, PANEL_SECONDS - width);
 
   // ── タッチによるスクロール処理 ──
@@ -80,7 +107,7 @@ void drawPressureGraph(M5Canvas& canvas)
   // ── 各段の描画 ──
   for (int panel = 0; panel < 3; ++panel)
   {
-    int panelY = HEADER_HEIGHT + panel * panelHeight;
+    int panelY = HEADER_HEIGHT + panel * (panelHeight + PANEL_GAP);
     int endSec = panel * PANEL_SECONDS + scrollOffset;  // 右端の秒数
 
     // 背景グリッドを描画
@@ -89,7 +116,7 @@ void drawPressureGraph(M5Canvas& canvas)
       int secAgo = endSec + (width - 1 - x);
       if (secAgo % 60 == 0)
       {
-        canvas.drawLine(x, panelY, x, panelY + panelHeight - 1, COLOR_GRAY);
+        drawDashedVLine(canvas, x, panelY, panelY + panelHeight - 1, COLOR_GRAY);
         canvas.setCursor(x + 2, panelY + panelHeight - 10);
         canvas.printf("%d", secAgo / 60);
       }
@@ -97,7 +124,7 @@ void drawPressureGraph(M5Canvas& canvas)
     for (int y = 0; y <= static_cast<int>(MAX_OIL_PRESSURE_METER); ++y)
     {
       int gy = panelY + panelHeight - 1 - static_cast<int>((y / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
-      canvas.drawLine(0, gy, width, gy, COLOR_GRAY);
+      drawDashedHLine(canvas, gy, 0, width - 1, COLOR_GRAY);
       canvas.setCursor(0, gy - 7);
       canvas.printf("%d", y);
     }
