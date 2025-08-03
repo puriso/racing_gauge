@@ -207,7 +207,7 @@ void acquireSensorData()
   {
     currentGForce = absVals[longitudinalAxis];
     float val = (longitudinalAxis == 0) ? adjX : (longitudinalAxis == 1) ? adjY : adjZ;
-    currentGDirection = (val >= 0.0F) ? 'F' : 'R';
+    currentGDirection = (val >= 0.0F) ? 'F' : 'B';  // 前後方向の判定
   }
 
   // デモモード処理
