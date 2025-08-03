@@ -12,7 +12,7 @@ extern float oilPressureSamples[PRESSURE_SAMPLE_SIZE];
 extern float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE];
 extern float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE];
 extern bool oilPressureOverVoltage;
-extern float currentGForce;  // 現在の横方向合成加速度 [G]
+extern float currentGForce;  // 起動時からの横方向合成加速度変化 [G]
 
 void acquireSensorData();
 

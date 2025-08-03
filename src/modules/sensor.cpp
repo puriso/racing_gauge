@@ -137,7 +137,16 @@ void acquireSensorData()
   M5.Imu.getAccelData(&ax, &ay, &az);
   // 縦方向 (Z) を除外して合成する
   float totalG = sqrtf(ax * ax + ay * ay);
-  currentGForce = totalG;
+
+  // 起動時の状態を 0G とみなすためのオフセット
+  static bool gForceOffsetInitialized = false;
+  static float gForceOffset = 0.0F;
+  if (!gForceOffsetInitialized)
+  {
+    gForceOffset = totalG;
+    gForceOffsetInitialized = true;
+  }
+  currentGForce = fabsf(totalG - gForceOffset);
 
   // デモモード処理
   if (DEMO_MODE_ENABLED)
