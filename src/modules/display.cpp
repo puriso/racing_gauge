@@ -52,13 +52,20 @@ static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressur
   constexpr int GAUGE_H = 170;  // ゲージ高さ
 
   canvas.setFont(&fonts::FreeSansBold12pt7b);
-  int textW = canvas.textWidth("LOW");
+  // 警告文字列を生成（例: G2.3L）
+  char warnStr[16];
+  snprintf(warnStr, sizeof(warnStr), "G%.1f%c", gForce, currentGDirection);
+  int textW = canvas.textWidth(warnStr);
   int textH = canvas.fontHeight();
   constexpr int PADDING = 4;  // ボックス余白
   int boxW = textW + (PADDING * 2);
   int boxH = textH + (PADDING * 2);
   int boxX = GAUGE_X + ((GAUGE_W - boxW) / 2);
   int boxY = GAUGE_Y + ((GAUGE_H - boxH) / 2);
+  static int lastBoxX = boxX;  // 最後に描画したボックス座標
+  static int lastBoxY = boxY;
+  static int lastBoxW = boxW;
+  static int lastBoxH = boxH;
 
   // 横Gが1G以上で判定
   constexpr float G_FORCE_THRESHOLD = 1.0F;          // G判定値
@@ -90,10 +97,21 @@ static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressur
     if (now - startMs >= WARNING_DELAY_MS)
     {
       // 0.5秒以上継続したら警告表示
+      // サイズ変化に対応するため以前のボックスを消去
+      if (isShowing)
+      {
+        canvas.fillRect(lastBoxX, lastBoxY, lastBoxW, lastBoxH, COLOR_BLACK);
+      }
+      // 赤背景に方向付きG値を表示
       canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_RED);
       canvas.setTextColor(COLOR_WHITE, COLOR_RED);
       canvas.setCursor(boxX + ((boxW - textW) / 2), boxY + ((boxH - textH) / 2));
-      canvas.print("LOW");
+      canvas.print(warnStr);
+      // 消去用にボックス位置とサイズを保持
+      lastBoxX = boxX;
+      lastBoxY = boxY;
+      lastBoxW = boxW;
+      lastBoxH = boxH;
       shouldShow = true;
     }
   }
@@ -111,7 +129,8 @@ static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressur
     startMs = 0;
     if (isShowing)
     {
-      canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_BLACK);
+      // 直前に描画した領域を完全に消去
+      canvas.fillRect(lastBoxX, lastBoxY, lastBoxW, lastBoxH, COLOR_BLACK);
     }
   }
 
