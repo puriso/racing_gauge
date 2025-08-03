@@ -15,6 +15,7 @@ float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE] = {};
 float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE] = {};
 bool oilPressureOverVoltage = false;
 float currentGForce = 0.0F;
+char currentGDirection = 'R';
 static int oilPressureIndex = 0;
 static int waterTempIndex = 0;
 static int oilTempIndex = 0;
@@ -132,21 +133,38 @@ void acquireSensorData()
 
   unsigned long now = millis();
 
-  // IMU から加速度を取得し横方向のみの合成値を計算
+  // IMU から加速度を取得し、水平成分のみを利用
   float ax = 0.0F, ay = 0.0F, az = 0.0F;
   M5.Imu.getAccelData(&ax, &ay, &az);
-  // 縦方向 (Z) を除外して合成する
-  float totalG = sqrtf(ax * ax + ay * ay);
 
-  // 起動時の状態を 0G とみなすためのオフセット
+  // 起動時の値を基準として各軸のオフセットを求める
   static bool gForceOffsetInitialized = false;
-  static float gForceOffset = 0.0F;
+  static float axOffset = 0.0F;
+  static float ayOffset = 0.0F;
   if (!gForceOffsetInitialized)
   {
-    gForceOffset = totalG;
+    axOffset = ax;
+    ayOffset = ay;
     gForceOffsetInitialized = true;
   }
-  currentGForce = fabsf(totalG - gForceOffset);
+
+  float adjX = ax - axOffset;
+  float adjY = ay - ayOffset;
+  float absX = fabsf(adjX);
+  float absY = fabsf(adjY);
+
+  if (absX >= absY)
+  {
+    // 前後方向の加速度が支配的
+    currentGForce = absX;
+    currentGDirection = (adjX >= 0.0F) ? 'F' : 'R';
+  }
+  else
+  {
+    // 左右方向の加速度が支配的
+    currentGForce = absY;
+    currentGDirection = (adjY >= 0.0F) ? 'R' : 'L';
+  }
 
   // デモモード処理
   if (DEMO_MODE_ENABLED)

@@ -36,6 +36,12 @@ struct DisplayCache
 } displayCache = {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(),
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
 
+// 直近の低油圧イベント情報
+float lastLowEventG = 0.0F;         // 発生時のG値
+char lastLowEventDir = 'R';         // Gの向き
+float lastLowEventDuration = 0.0F;  // 継続時間[s]
+float lastLowEventPressure = 0.0F;  // そのときの油圧[bar]
+
 // 油圧警告表示。現在の表示状態とその変更の有無を返す
 static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool& stateChanged)
 {
@@ -61,6 +67,9 @@ static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressur
   bool conditionMet = (gForce >= G_FORCE_THRESHOLD && pressure <= PRESSURE_THRESHOLD);
   static unsigned long startMs = 0;  // 条件成立開始時刻
   static bool isShowing = false;
+  static float peakG = 0.0F;                                     // 期間中の最大G
+  static float minPressure = std::numeric_limits<float>::max();  // 期間中の最低油圧
+  static char eventDir = 'R';                                    // 発生方向
   unsigned long now = millis();
   bool shouldShow = false;
 
@@ -69,6 +78,14 @@ static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressur
     if (startMs == 0)
     {
       startMs = now;
+      peakG = gForce;
+      minPressure = pressure;
+      eventDir = currentGDirection;
+    }
+    else
+    {
+      peakG = std::max(peakG, gForce);
+      minPressure = std::min(minPressure, pressure);
     }
     if (now - startMs >= WARNING_DELAY_MS)
     {
@@ -83,6 +100,14 @@ static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressur
   else
   {
     // 条件外になったらタイマーをリセットし、表示していれば消去
+    if (startMs != 0)
+    {
+      // 条件解除時にイベント情報を記録
+      lastLowEventG = peakG;
+      lastLowEventDir = eventDir;
+      lastLowEventDuration = (now - startMs) / 1000.0F;
+      lastLowEventPressure = minPressure;
+    }
     startMs = 0;
     if (isShowing)
     {
@@ -311,10 +336,27 @@ void drawMenuScreen()
   // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
   constexpr int MENU_TOP_MARGIN = 20;                                                       // 上端の余白
   constexpr int MENU_BOTTOM_MARGIN = 40;                                                    // 下端の余白（戻る案内分）
-  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 6;                          // 表示行数
+  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 8 : 7;                          // 表示行数
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
+
+  // 直近の低油圧イベント情報を表示
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.P LOW:");
+  if (lastLowEventDuration > 0.0F)
+  {
+    char valStr[32];
+    snprintf(valStr, sizeof(valStr), "%4.1f%c,%4.1fs,%5.1f", lastLowEventG, lastLowEventDir, lastLowEventDuration,
+             lastLowEventPressure);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+  else
+  {
+    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
+  }
+
+  y += lineHeight;
   mainCanvas.setCursor(10, y);
   // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");

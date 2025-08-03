@@ -22,8 +22,9 @@ static void printSensorDebugInfo()
   float pressure = calculateAverage(oilPressureSamples);
   float water = calculateAverage(waterTemperatureSamples);
   float oil = calculateAverage(oilTemperatureSamples);
-  // 横Gと各センサー値をシリアルに表示
-  Serial.printf("G: %.2f, Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", currentGForce, pressure, water, oil);
+  // 水平Gと各センサー値をシリアルに表示
+  Serial.printf("G: %.2f%c, Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", currentGForce, currentGDirection, pressure,
+                water, oil);
 }
 
 // ────────────────────── setup() ──────────────────────
