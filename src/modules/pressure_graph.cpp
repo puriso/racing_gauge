@@ -13,15 +13,16 @@ constexpr int PRESSURE_LOG_SECONDS = 30 * 60;            // 30分のログ秒数
 constexpr int PANEL_SECONDS = PRESSURE_LOG_SECONDS / 3;  // 各段の秒数(10分)
 constexpr int HEADER_HEIGHT = 16;                        // 見出しの高さ
 constexpr int PANEL_GAP = 10;                            // 段間の隙間を広げる
-constexpr float HIGHLIGHT_LINE = 3.0F;                   // 色付き強調線
-constexpr float Y_TICKS[] = {0.0F, 3.0F, 7.0F, 10.0F};   // Y軸目盛
+constexpr float HIGHLIGHT_LINE = 3.0F;                   // 強調線の値
+constexpr float Y_TICKS[] = {0.0F, 3.0F, 7.0F};          // Y軸目盛
 constexpr float MAX_G_FORCE = 3.0F;                      // G表示の上限
 
 // ── ログ用バッファ ──
 static float oilPressureLog[PRESSURE_LOG_SECONDS] = {};
 static float gForceLog[PRESSURE_LOG_SECONDS] = {};
-static int logIndex = 0;  // 次に書き込む位置
-static int logCount = 0;  // 実際に記録されたサンプル数
+static float gLateralLog[PRESSURE_LOG_SECONDS] = {};  // 左右Gの符号付きログ
+static int logIndex = 0;                              // 次に書き込む位置
+static int logCount = 0;                              // 実際に記録されたサンプル数
 static unsigned long lastLogTime = 0;
 
 // グラフ表示スクロール量（秒単位、0=最新）
@@ -45,8 +46,9 @@ void logPressureAndG()
     // IMUから加速度を取得しG値を計算
     float accX, accY, accZ;
     M5.Imu.getAccel(&accX, &accY, &accZ);
-    float gValue = std::sqrt((accX * accX) + (accY * accY) + (accZ * accZ));
+    float gValue = std::sqrt((accX * accX) + (accY * accY));  // 前後左右の合算
     gForceLog[logIndex] = gValue;
+    gLateralLog[logIndex] = accX;  // 左右方向のGを記録
 
     logIndex = (logIndex + 1) % PRESSURE_LOG_SECONDS;
     if (logCount < PRESSURE_LOG_SECONDS)
@@ -137,8 +139,8 @@ void drawPressureGraph(M5Canvas& canvas)
       int gy = panelY + panelHeight - 1 - static_cast<int>((tick / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
       if (tick == HIGHLIGHT_LINE)
       {
-        // 色付き強調線
-        canvas.drawLine(0, gy, width - 1, gy, COLOR_YELLOW);
+        // 3kgf/cm²の青破線
+        drawDashedHLine(canvas, gy, 0, width - 1, COLOR_BLUE);
       }
       else
       {
@@ -173,10 +175,18 @@ void drawPressureGraph(M5Canvas& canvas)
       int gy = panelY + panelHeight - 1 - static_cast<int>((gValue / MAX_G_FORCE) * (panelHeight - 1));
       if (prevGX >= 0)
       {
-        canvas.drawLine(prevGX, prevGY, x, gy, COLOR_RED);
+        canvas.drawLine(prevGX, prevGY, x, gy, COLOR_GRAY);  // Gはグレーで表示
       }
       prevGX = x;
       prevGY = gy;
+
+      float gLat = gLateralLog[index];
+      if (pressure <= 3.0F && gValue >= 1.0F)
+      {
+        // 条件を満たす地点にL/Rを表示
+        canvas.setCursor(x, panelY);
+        canvas.print(gLat >= 0 ? "R" : "L");
+      }
     }
 
     // 段の境界線

@@ -35,6 +35,7 @@ constexpr uint16_t COLOR_ORANGE = rgb565(255, 165, 0);
 constexpr uint16_t COLOR_YELLOW = rgb565(255, 255, 0);
 constexpr uint16_t COLOR_RED = rgb565(255, 0, 0);
 constexpr uint16_t COLOR_GRAY = rgb565(169, 169, 169);
+constexpr uint16_t COLOR_BLUE = rgb565(0, 0, 255);  // 青色
 
 // ディスプレイの色深度
 constexpr int DISPLAY_COLOR_DEPTH = 16;
