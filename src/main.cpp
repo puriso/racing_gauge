@@ -187,7 +187,12 @@ void loop()
   }
   else if (displayMode == DisplayMode::PRESSURE_GRAPH)
   {
-    drawPressureGraph(mainCanvas);
+    static unsigned long lastGraphDraw = 0;  // 最終描画時刻
+    if (now - lastGraphDraw >= 1000)
+    {
+      drawPressureGraph(mainCanvas);
+      lastGraphDraw = now;
+    }
   }
 
   fpsFrameCounter++;

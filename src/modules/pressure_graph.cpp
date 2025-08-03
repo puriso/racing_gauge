@@ -7,14 +7,19 @@
 #include "config.h"
 #include "sensor.h"
 
+// ── 定数設定 ──
+constexpr int PRESSURE_LOG_SECONDS = 30 * 60;            // 30分のログ秒数
+constexpr int PANEL_SECONDS = PRESSURE_LOG_SECONDS / 3;  // 各段の秒数(10分)
+constexpr int HEADER_HEIGHT = 16;                        // 見出しの高さ
+constexpr float GUIDE_LINES[] = {3.0f, 6.0f, 8.0f};      // 強調線の油圧値
+
 // ── 油圧ログ用バッファ ──
-constexpr int PRESSURE_LOG_SECONDS = 30 * 60;  // 30分のログ
 static float oilPressureLog[PRESSURE_LOG_SECONDS] = {};
 static int oilPressureLogIndex = 0;  // 次に書き込む位置
 static int oilPressureLogCount = 0;  // 実際に記録されたサンプル数
 static unsigned long lastPressureLogTime = 0;
 
-// グラフ表示開始位置（0=最新）
+// グラフ表示スクロール量（秒単位、0=最新）
 static int scrollOffset = 0;
 // タッチ位置記録用
 static int lastTouchX = -1;
@@ -47,18 +52,18 @@ void drawPressureGraph(M5Canvas& canvas)
 
   const int width = LCD_WIDTH;
   const int height = LCD_HEIGHT;
-  const int windowSeconds = width;  // 1秒=1px で表示
+  const int panelHeight = (height - HEADER_HEIGHT) / 3;  // 各段の高さ
+  const int maxScroll = std::max(0, PANEL_SECONDS - width);
 
-  // タッチでスクロール量を更新
+  // ── タッチによるスクロール処理 ──
   if (M5.Touch.getCount() > 0)
   {
     auto detail = M5.Touch.getDetail(0);
     if (lastTouchX >= 0)
     {
       scrollOffset += lastTouchX - detail.x;
-      int maxOffset = std::max(0, oilPressureLogCount - windowSeconds);
       if (scrollOffset < 0) scrollOffset = 0;
-      if (scrollOffset > maxOffset) scrollOffset = maxOffset;
+      if (scrollOffset > maxScroll) scrollOffset = maxScroll;
     }
     lastTouchX = detail.x;
   }
@@ -68,40 +73,64 @@ void drawPressureGraph(M5Canvas& canvas)
   }
 
   canvas.setTextColor(COLOR_WHITE);
-  // 軸を描画
-  canvas.drawLine(0, 0, 0, height - 1, COLOR_WHITE);
-  canvas.drawLine(0, height - 1, width, height - 1, COLOR_WHITE);
+  canvas.setTextSize(1);
+  canvas.setCursor(0, 0);
+  canvas.print("OIL.P Log");
 
-  // 表示するサンプル数を計算
-  int samplesToDraw = std::min(windowSeconds, oilPressureLogCount - scrollOffset);
-  if (samplesToDraw <= 0)
+  // ── 各段の描画 ──
+  for (int panel = 0; panel < 3; ++panel)
   {
-    canvas.pushSprite(0, 0);
-    return;
+    int panelY = HEADER_HEIGHT + panel * panelHeight;
+    int endSec = panel * PANEL_SECONDS + scrollOffset;  // 右端の秒数
+
+    // 背景グリッドを描画
+    for (int x = 0; x < width; ++x)
+    {
+      int secAgo = endSec + (width - 1 - x);
+      if (secAgo % 60 == 0)
+      {
+        canvas.drawLine(x, panelY, x, panelY + panelHeight - 1, COLOR_GRAY);
+        canvas.setCursor(x + 2, panelY + panelHeight - 10);
+        canvas.printf("%d", secAgo / 60);
+      }
+    }
+    for (int y = 0; y <= static_cast<int>(MAX_OIL_PRESSURE_METER); ++y)
+    {
+      int gy = panelY + panelHeight - 1 - static_cast<int>((y / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
+      canvas.drawLine(0, gy, width, gy, COLOR_GRAY);
+      canvas.setCursor(0, gy - 7);
+      canvas.printf("%d", y);
+    }
+
+    // 強調線を描画
+    for (float g : GUIDE_LINES)
+    {
+      int gy = panelY + panelHeight - 1 - static_cast<int>((g / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
+      uint16_t color = COLOR_YELLOW;
+      if (g >= 6.0f) color = COLOR_ORANGE;
+      if (g >= 8.0f) color = COLOR_RED;
+      canvas.drawLine(0, gy, width, gy, color);
+      canvas.drawLine(0, gy + 1, width, gy + 1, color);  // 太線にする
+    }
+
+    // データを描画
+    int prevX = -1;
+    int prevY = 0;
+    for (int x = width - 1; x >= 0; --x)
+    {
+      int secAgo = endSec + (width - 1 - x);
+      if (secAgo >= oilPressureLogCount) continue;  // データ不足
+      int index = (oilPressureLogIndex - 1 - secAgo + PRESSURE_LOG_SECONDS) % PRESSURE_LOG_SECONDS;
+      float p = oilPressureLog[index];
+      int y = panelY + panelHeight - 1 - static_cast<int>((p / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
+      if (prevX >= 0)
+      {
+        canvas.drawLine(prevX, prevY, x, y, COLOR_WHITE);
+      }
+      prevX = x;
+      prevY = y;
+    }
   }
-  int start = (oilPressureLogIndex - scrollOffset - samplesToDraw + PRESSURE_LOG_SECONDS) % PRESSURE_LOG_SECONDS;
-  float samplesPerPixel = static_cast<float>(samplesToDraw) / width;
-
-  float firstP = oilPressureLog[start % PRESSURE_LOG_SECONDS];
-  int prevX = 0;
-  int prevY = height - 1 - static_cast<int>((firstP / MAX_OIL_PRESSURE_DISPLAY) * (height - 1));
-
-  for (int x = 1; x < width; ++x)
-  {
-    int sampleIndex = start + static_cast<int>(x * samplesPerPixel);
-    if (sampleIndex >= start + samplesToDraw) break;
-    float p = oilPressureLog[sampleIndex % PRESSURE_LOG_SECONDS];
-    int y = height - 1 - static_cast<int>((p / MAX_OIL_PRESSURE_DISPLAY) * (height - 1));
-    canvas.drawLine(prevX, prevY, x, y, COLOR_YELLOW);
-    prevX = x;
-    prevY = y;
-  }
-
-  // 軸ラベル
-  canvas.setCursor(5, 5);
-  canvas.print("油圧 / bar");
-  canvas.setCursor(width - 40, height - 15);
-  canvas.print("時間");
 
   canvas.pushSprite(0, 0);
 }
