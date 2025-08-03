@@ -3,8 +3,8 @@
 
 #include <M5GFX.h>
 
-// 油圧ログ追加
-void logOilPressure();
+// 油圧とGのログを追加
+void logPressureAndG();
 
 // グラフ表示開始位置をリセット
 void resetPressureGraph();

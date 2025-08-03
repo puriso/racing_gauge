@@ -70,7 +70,7 @@ void setup()
   M5.Lcd.fillScreen(COLOR_BLACK);
 
   // M5.Speaker.begin();  // スピーカーを使用しないため無効化
-  // M5.Imu.begin();      // IMU を使用しないため無効化
+  M5.Imu.begin();  // G計測のため IMU を有効化
   btStop();
 
   pinMode(9, INPUT_PULLUP);
@@ -179,8 +179,8 @@ void loop()
   wasTouched = touched;
 
   acquireSensorData();
-  // 油圧ログを更新
-  logOilPressure();
+  // 油圧とGのログを更新
+  logPressureAndG();
   if (displayMode == DisplayMode::GAUGE)
   {
     updateGauges();

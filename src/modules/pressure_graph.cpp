@@ -3,6 +3,7 @@
 #include <M5CoreS3.h>
 
 #include <algorithm>
+#include <cmath>
 
 #include "config.h"
 #include "sensor.h"
@@ -11,14 +12,17 @@
 constexpr int PRESSURE_LOG_SECONDS = 30 * 60;            // 30分のログ秒数
 constexpr int PANEL_SECONDS = PRESSURE_LOG_SECONDS / 3;  // 各段の秒数(10分)
 constexpr int HEADER_HEIGHT = 16;                        // 見出しの高さ
-constexpr int PANEL_GAP = 4;                             // 段間の隙間
-constexpr float GUIDE_LINES[] = {3.0f, 6.0f, 8.0f};      // 強調線の油圧値
+constexpr int PANEL_GAP = 10;                            // 段間の隙間を広げる
+constexpr float HIGHLIGHT_LINE = 3.0F;                   // 色付き強調線
+constexpr float Y_TICKS[] = {0.0F, 3.0F, 7.0F, 10.0F};   // Y軸目盛
+constexpr float MAX_G_FORCE = 3.0F;                      // G表示の上限
 
-// ── 油圧ログ用バッファ ──
+// ── ログ用バッファ ──
 static float oilPressureLog[PRESSURE_LOG_SECONDS] = {};
-static int oilPressureLogIndex = 0;  // 次に書き込む位置
-static int oilPressureLogCount = 0;  // 実際に記録されたサンプル数
-static unsigned long lastPressureLogTime = 0;
+static float gForceLog[PRESSURE_LOG_SECONDS] = {};
+static int logIndex = 0;  // 次に書き込む位置
+static int logCount = 0;  // 実際に記録されたサンプル数
+static unsigned long lastLogTime = 0;
 
 // グラフ表示スクロール量（秒単位、0=最新）
 static int scrollOffset = 0;
@@ -28,21 +32,28 @@ static int lastTouchX = -1;
 // ────────────────────── グラフ状態リセット ──────────────────────
 void resetPressureGraph() { scrollOffset = 0; }
 
-// ────────────────────── 油圧ログ追加 ──────────────────────
-void logOilPressure()
+// ────────────────────── 油圧とGのログ追加 ──────────────────────
+void logPressureAndG()
 {
   unsigned long now = millis();
-  if (now - lastPressureLogTime >= 1000)
+  if (now - lastLogTime >= 1000)
   {
     // 最新の油圧平均値を取得しログへ保存
     float pressure = calculateAverage(oilPressureSamples);
-    oilPressureLog[oilPressureLogIndex] = pressure;
-    oilPressureLogIndex = (oilPressureLogIndex + 1) % PRESSURE_LOG_SECONDS;
-    if (oilPressureLogCount < PRESSURE_LOG_SECONDS)
+    oilPressureLog[logIndex] = pressure;
+
+    // IMUから加速度を取得しG値を計算
+    float accX, accY, accZ;
+    M5.Imu.getAccel(&accX, &accY, &accZ);
+    float gValue = std::sqrt((accX * accX) + (accY * accY) + (accZ * accZ));
+    gForceLog[logIndex] = gValue;
+
+    logIndex = (logIndex + 1) % PRESSURE_LOG_SECONDS;
+    if (logCount < PRESSURE_LOG_SECONDS)
     {
-      oilPressureLogCount++;
+      logCount++;
     }
-    lastPressureLogTime = now;
+    lastLogTime = now;
   }
 }
 
@@ -121,41 +132,57 @@ void drawPressureGraph(M5Canvas& canvas)
         canvas.printf("%d", secAgo / 60);
       }
     }
-    for (int y = 0; y <= static_cast<int>(MAX_OIL_PRESSURE_METER); ++y)
+    for (float tick : Y_TICKS)
     {
-      int gy = panelY + panelHeight - 1 - static_cast<int>((y / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
-      drawDashedHLine(canvas, gy, 0, width - 1, COLOR_GRAY);
+      int gy = panelY + panelHeight - 1 - static_cast<int>((tick / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
+      if (tick == HIGHLIGHT_LINE)
+      {
+        // 色付き強調線
+        canvas.drawLine(0, gy, width - 1, gy, COLOR_YELLOW);
+      }
+      else
+      {
+        drawDashedHLine(canvas, gy, 0, width - 1, COLOR_GRAY);
+      }
       canvas.setCursor(0, gy - 7);
-      canvas.printf("%d", y);
-    }
-
-    // 強調線を描画
-    for (float g : GUIDE_LINES)
-    {
-      int gy = panelY + panelHeight - 1 - static_cast<int>((g / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
-      uint16_t color = COLOR_YELLOW;
-      if (g >= 6.0f) color = COLOR_ORANGE;
-      if (g >= 8.0f) color = COLOR_RED;
-      canvas.drawLine(0, gy, width, gy, color);
-      canvas.drawLine(0, gy + 1, width, gy + 1, color);  // 太線にする
+      canvas.printf("%.0f", tick);
     }
 
     // データを描画
-    int prevX = -1;
-    int prevY = 0;
+    int prevPX = -1;
+    int prevPY = 0;
+    int prevGX = -1;
+    int prevGY = 0;
     for (int x = width - 1; x >= 0; --x)
     {
       int secAgo = endSec + (width - 1 - x);
-      if (secAgo >= oilPressureLogCount) continue;  // データ不足
-      int index = (oilPressureLogIndex - 1 - secAgo + PRESSURE_LOG_SECONDS) % PRESSURE_LOG_SECONDS;
-      float p = oilPressureLog[index];
-      int y = panelY + panelHeight - 1 - static_cast<int>((p / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
-      if (prevX >= 0)
+      if (secAgo >= logCount) continue;  // データ不足
+      int index = (logIndex - 1 - secAgo + PRESSURE_LOG_SECONDS) % PRESSURE_LOG_SECONDS;
+
+      float pressure = oilPressureLog[index];
+      int py = panelY + panelHeight - 1 - static_cast<int>((pressure / MAX_OIL_PRESSURE_METER) * (panelHeight - 1));
+      if (prevPX >= 0)
       {
-        canvas.drawLine(prevX, prevY, x, y, COLOR_WHITE);
+        canvas.drawLine(prevPX, prevPY, x, py, COLOR_WHITE);
       }
-      prevX = x;
-      prevY = y;
+      prevPX = x;
+      prevPY = py;
+
+      float gValue = gForceLog[index];
+      gValue = std::min(gValue, MAX_G_FORCE);
+      int gy = panelY + panelHeight - 1 - static_cast<int>((gValue / MAX_G_FORCE) * (panelHeight - 1));
+      if (prevGX >= 0)
+      {
+        canvas.drawLine(prevGX, prevGY, x, gy, COLOR_RED);
+      }
+      prevGX = x;
+      prevGY = gy;
+    }
+
+    // 段の境界線
+    if (panel < 2)
+    {
+      canvas.drawLine(0, panelY + panelHeight, width - 1, panelY + panelHeight, COLOR_GRAY);
     }
   }
 
