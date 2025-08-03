@@ -133,37 +133,81 @@ void acquireSensorData()
 
   unsigned long now = millis();
 
-  // IMU から加速度を取得し、水平成分のみを利用
+  // IMU から加速度を取得
   float ax = 0.0F, ay = 0.0F, az = 0.0F;
   M5.Imu.getAccelData(&ax, &ay, &az);
 
-  // 起動時の値を基準として各軸のオフセットを求める
+  // ── 起動直後は複数サンプルからオフセットを平均化し縦軸を判定 ──
   static bool gForceOffsetInitialized = false;
   static float axOffset = 0.0F;
   static float ayOffset = 0.0F;
+  static float azOffset = 0.0F;
+  static int offsetSampleCount = 0;
+  static int verticalAxis = 2;  // 0:X, 1:Y, 2:Z
   if (!gForceOffsetInitialized)
   {
-    axOffset = ax;
-    ayOffset = ay;
-    gForceOffsetInitialized = true;
+    axOffset += ax;
+    ayOffset += ay;
+    azOffset += az;
+    offsetSampleCount++;
+    if (offsetSampleCount >= 20)
+    {
+      axOffset /= offsetSampleCount;
+      ayOffset /= offsetSampleCount;
+      azOffset /= offsetSampleCount;
+
+      // 最大オフセットを持つ軸を縦方向とみなす
+      float absOffsets[3] = {fabsf(axOffset), fabsf(ayOffset), fabsf(azOffset)};
+      verticalAxis = 0;
+      if (absOffsets[1] > absOffsets[verticalAxis]) verticalAxis = 1;
+      if (absOffsets[2] > absOffsets[verticalAxis]) verticalAxis = 2;
+
+      gForceOffsetInitialized = true;
+    }
+    else
+    {
+      // オフセット確定までは 0G 扱い
+      currentGForce = 0.0F;
+      currentGDirection = 'R';
+      return;
+    }
   }
 
   float adjX = ax - axOffset;
   float adjY = ay - ayOffset;
-  float absX = fabsf(adjX);
-  float absY = fabsf(adjY);
+  float adjZ = az - azOffset;
+  float absVals[3] = {fabsf(adjX), fabsf(adjY), fabsf(adjZ)};
 
-  if (absX >= absY)
+  // 縦軸を除いた 2 軸のみで判定
+  int lateralAxis = 0;
+  int longitudinalAxis = 0;
+  if (verticalAxis == 0)
   {
-    // 前後方向の加速度が支配的
-    currentGForce = absX;
-    currentGDirection = (adjX >= 0.0F) ? 'F' : 'R';
+    lateralAxis = 1;       // Y: 左右
+    longitudinalAxis = 2;  // Z: 前後
+  }
+  else if (verticalAxis == 1)
+  {
+    lateralAxis = 0;       // X: 左右
+    longitudinalAxis = 2;  // Z: 前後
+  }
+  else  // verticalAxis == 2
+  {
+    lateralAxis = 1;       // Y: 左右
+    longitudinalAxis = 0;  // X: 前後
+  }
+
+  if (absVals[lateralAxis] >= absVals[longitudinalAxis])
+  {
+    currentGForce = absVals[lateralAxis];
+    float val = (lateralAxis == 0) ? adjX : (lateralAxis == 1) ? adjY : adjZ;
+    currentGDirection = (val >= 0.0F) ? 'R' : 'L';
   }
   else
   {
-    // 左右方向の加速度が支配的
-    currentGForce = absY;
-    currentGDirection = (adjY >= 0.0F) ? 'R' : 'L';
+    currentGForce = absVals[longitudinalAxis];
+    float val = (longitudinalAxis == 0) ? adjX : (longitudinalAxis == 1) ? adjY : adjZ;
+    currentGDirection = (val >= 0.0F) ? 'F' : 'R';
   }
 
   // デモモード処理
