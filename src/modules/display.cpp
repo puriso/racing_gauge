@@ -8,6 +8,7 @@
 #include "DrawFillArcMeter.h"
 #include "backlight.h"
 #include "fps_display.h"
+#include "sensor.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 M5GFX display;
@@ -34,6 +35,42 @@ struct DisplayCache
   int16_t maxOilTemp;
 } displayCache = {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(),
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
+
+// 油圧警告表示。描画を行い状態変化したかを返す
+static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure)
+{
+  constexpr int GAUGE_X = 0;    // 油圧ゲージの左上X
+  constexpr int GAUGE_Y = 60;   // 油圧ゲージの左上Y
+  constexpr int GAUGE_W = 160;  // ゲージ幅
+  constexpr int GAUGE_H = 170;  // ゲージ高さ
+  constexpr int BOX_W = 80;     // 警告ボックス幅
+  constexpr int BOX_H = 40;     // 警告ボックス高さ
+
+  int boxX = GAUGE_X + (GAUGE_W - BOX_W) / 2;
+  int boxY = GAUGE_Y + (GAUGE_H - BOX_H) / 2;
+
+  bool shouldShow = (gForce > 1.0F && pressure <= 3.0F);
+  static bool isShowing = false;
+
+  if (shouldShow)
+  {
+    // 条件を満たせば赤背景に白文字でLOWを表示
+    canvas.fillRect(boxX, boxY, BOX_W, BOX_H, COLOR_RED);
+    canvas.setTextColor(COLOR_WHITE, COLOR_RED);
+    canvas.setFont(&FreeSansBold24pt7b);
+    canvas.setCursor(boxX + (BOX_W - canvas.textWidth("LOW")) / 2, boxY + (BOX_H - canvas.fontHeight()) / 2);
+    canvas.print("LOW");
+  }
+  else
+  {
+    // 条件外なら警告表示を消去
+    canvas.fillRect(boxX, boxY, BOX_W, BOX_H, COLOR_BLACK);
+  }
+
+  bool changed = (shouldShow != isShowing);
+  isShowing = shouldShow;
+  return changed;
+}
 
 // ────────────────────── 油温バー描画 ──────────────────────
 void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
@@ -146,11 +183,11 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     waterGaugeInitialized = true;
     displayCache.waterTempAvg = waterTempAvg;
   }
-
+  bool warnChanged = drawLowPressureWarning(mainCanvas, currentGForce, pressureAvg);
   bool fpsChanged = drawFpsOverlay();
 
   // 値が更新されたときのみスプライトを転送する
-  if (oilChanged || pressureChanged || waterChanged || fpsChanged)
+  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged)
   {
     mainCanvas.pushSprite(0, 0);
   }

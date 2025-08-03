@@ -1,5 +1,6 @@
 #include "sensor.h"
 
+#include <M5CoreS3.h>
 #include <Wire.h>
 
 #include <algorithm>
@@ -13,6 +14,7 @@ float oilPressureSamples[PRESSURE_SAMPLE_SIZE] = {};
 float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE] = {};
 float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE] = {};
 bool oilPressureOverVoltage = false;
+float currentGForce = 0.0F;
 static int oilPressureIndex = 0;
 static int waterTempIndex = 0;
 static int oilTempIndex = 0;
@@ -129,6 +131,11 @@ void acquireSensorData()
                                   1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 0.0F, 0.0F, 2.5F};
 
   unsigned long now = millis();
+
+  // IMU から加速度を取得し合成値を計算
+  float ax = 0.0F, ay = 0.0F, az = 0.0F;
+  M5.Imu.getAccelData(&ax, &ay, &az);
+  currentGForce = sqrtf(ax * ax + ay * ay + az * az);
 
   // デモモード処理
   if (DEMO_MODE_ENABLED)

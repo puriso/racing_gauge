@@ -60,7 +60,7 @@ void setup()
   M5.Lcd.fillScreen(COLOR_BLACK);
 
   // M5.Speaker.begin();  // スピーカーを使用しないため無効化
-  // M5.Imu.begin();      // IMU を使用しないため無効化
+  M5.Imu.begin();  // IMU を使用
   btStop();
 
   pinMode(9, INPUT_PULLUP);
