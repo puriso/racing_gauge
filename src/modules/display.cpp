@@ -36,8 +36,8 @@ struct DisplayCache
 } displayCache = {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(),
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
 
-// 油圧警告表示。描画を行い状態変化したかを返す
-static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure)
+// 油圧警告表示。現在の表示状態とその変更の有無を返す
+static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool& stateChanged)
 {
   constexpr int GAUGE_X = 0;    // 油圧ゲージの左上X
   constexpr int GAUGE_Y = 60;   // 油圧ゲージの左上Y
@@ -61,15 +61,15 @@ static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressur
     canvas.setCursor(boxX + (BOX_W - canvas.textWidth("LOW")) / 2, boxY + (BOX_H - canvas.fontHeight()) / 2);
     canvas.print("LOW");
   }
-  else
+  else if (isShowing)
   {
-    // 条件外なら警告表示を消去
+    // 表示中から条件外になった場合のみ黒で消去
     canvas.fillRect(boxX, boxY, BOX_W, BOX_H, COLOR_BLACK);
   }
 
-  bool changed = (shouldShow != isShowing);
+  stateChanged = (shouldShow != isShowing);
   isShowing = shouldShow;
-  return changed;
+  return shouldShow;
 }
 
 // ────────────────────── 油温バー描画 ──────────────────────
@@ -183,7 +183,16 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     waterGaugeInitialized = true;
     displayCache.waterTempAvg = waterTempAvg;
   }
-  bool warnChanged = drawLowPressureWarning(mainCanvas, currentGForce, pressureAvg);
+
+  bool warnChanged = false;
+  bool isWarnShowing = drawLowPressureWarning(mainCanvas, currentGForce, pressureAvg, warnChanged);
+  if (warnChanged && !isWarnShowing)
+  {
+    // 警告が消えたら油圧ゲージを再描画して元に戻す
+    bool isUseDecimal = pressureAvg < 9.95F;
+    drawFillArcMeter(mainCanvas, pressureAvg, 0.0f, MAX_OIL_PRESSURE_METER, 8.0f, COLOR_RED, "x100kPa", "OIL.P",
+                     recordedMaxOilPressure, prevPressureValue, 0.5f, isUseDecimal, 0, 60, false);
+  }
   bool fpsChanged = drawFpsOverlay();
 
   // 値が更新されたときのみスプライトを転送する

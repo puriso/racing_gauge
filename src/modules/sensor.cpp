@@ -135,7 +135,9 @@ void acquireSensorData()
   // IMU から加速度を取得し合成値を計算
   float ax = 0.0F, ay = 0.0F, az = 0.0F;
   M5.Imu.getAccelData(&ax, &ay, &az);
-  currentGForce = sqrtf(ax * ax + ay * ay + az * az);
+  // 合成加速度から静止時の 1G を差し引いて使用し、負値は 0 とする
+  float totalG = sqrtf(ax * ax + ay * ay + az * az);
+  currentGForce = std::max(0.0F, totalG - 1.0F);
 
   // デモモード処理
   if (DEMO_MODE_ENABLED)
