@@ -39,32 +39,54 @@ struct DisplayCache
 // 油圧警告表示。現在の表示状態とその変更の有無を返す
 static bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool& stateChanged)
 {
+  // ゲージ位置とサイズ
   constexpr int GAUGE_X = 0;    // 油圧ゲージの左上X
   constexpr int GAUGE_Y = 60;   // 油圧ゲージの左上Y
   constexpr int GAUGE_W = 160;  // ゲージ幅
   constexpr int GAUGE_H = 170;  // ゲージ高さ
-  constexpr int BOX_W = 80;     // 警告ボックス幅
-  constexpr int BOX_H = 40;     // 警告ボックス高さ
 
-  int boxX = GAUGE_X + (GAUGE_W - BOX_W) / 2;
-  int boxY = GAUGE_Y + (GAUGE_H - BOX_H) / 2;
+  canvas.setFont(&fonts::FreeSansBold12pt7b);
+  int textW = canvas.textWidth("LOW");
+  int textH = canvas.fontHeight();
+  constexpr int PADDING = 4;  // ボックス余白
+  int boxW = textW + (PADDING * 2);
+  int boxH = textH + (PADDING * 2);
+  int boxX = GAUGE_X + ((GAUGE_W - boxW) / 2);
+  int boxY = GAUGE_Y + ((GAUGE_H - boxH) / 2);
 
-  bool shouldShow = (gForce > 1.0F && pressure <= 3.0F);
+  constexpr float G_FORCE_THRESHOLD = 1.0F;          // G判定値
+  constexpr float PRESSURE_THRESHOLD = 3.0F;         // 油圧閾値
+  constexpr unsigned long WARNING_DELAY_MS = 500UL;  // 継続時間
+  bool conditionMet = (gForce > G_FORCE_THRESHOLD && pressure <= PRESSURE_THRESHOLD);
+  static unsigned long startMs = 0;  // 条件成立開始時刻
   static bool isShowing = false;
+  unsigned long now = millis();
+  bool shouldShow = false;
 
-  if (shouldShow)
+  if (conditionMet)
   {
-    // 条件を満たせば赤背景に白文字でLOWを表示
-    canvas.fillRect(boxX, boxY, BOX_W, BOX_H, COLOR_RED);
-    canvas.setTextColor(COLOR_WHITE, COLOR_RED);
-    canvas.setFont(&FreeSansBold24pt7b);
-    canvas.setCursor(boxX + (BOX_W - canvas.textWidth("LOW")) / 2, boxY + (BOX_H - canvas.fontHeight()) / 2);
-    canvas.print("LOW");
+    if (startMs == 0)
+    {
+      startMs = now;
+    }
+    if (now - startMs >= WARNING_DELAY_MS)
+    {
+      // 0.5秒以上継続したら警告表示
+      canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_RED);
+      canvas.setTextColor(COLOR_WHITE, COLOR_RED);
+      canvas.setCursor(boxX + ((boxW - textW) / 2), boxY + ((boxH - textH) / 2));
+      canvas.print("LOW");
+      shouldShow = true;
+    }
   }
-  else if (isShowing)
+  else
   {
-    // 表示中から条件外になった場合のみ黒で消去
-    canvas.fillRect(boxX, boxY, BOX_W, BOX_H, COLOR_BLACK);
+    // 条件外になったらタイマーをリセットし、表示していれば消去
+    startMs = 0;
+    if (isShowing)
+    {
+      canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_BLACK);
+    }
   }
 
   stateChanged = (shouldShow != isShowing);
