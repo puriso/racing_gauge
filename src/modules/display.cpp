@@ -253,57 +253,30 @@ void drawMenuScreen()
   // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
   constexpr int MENU_TOP_MARGIN = 20;     // 上端の余白
   constexpr int MENU_BOTTOM_MARGIN = 40;  // 下端の余白（戻る案内分）
-  // 低油圧イベント詳細表示のため2行追加
-  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 10 : 9;                         // 表示行数
+  // 表示行数を減らして行間を確保
+  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 6 : 4;                          // 表示行数
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
 
-  // 直近の低油圧イベント情報を表示
+  // 最高油温を表示
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P LOW VALUE:");
-  if (lastLowEventDuration > 0.0F)
+  mainCanvas.print("OIL.T MAX:");
+  if (SENSOR_OIL_TEMP_PRESENT)
   {
     char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", lastLowEventPressure);
+    snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
   else
   {
-    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
+    // センサー無効時は Disabled と表示
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += lineHeight;
+  // 最高油圧を表示
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P LOW G:");
-  if (lastLowEventDuration > 0.0F)
-  {
-    char valStr[16];
-    snprintf(valStr, sizeof(valStr), "%4.1f, %s", lastLowEventG, lastLowEventDir);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
-  }
-
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P LOW SEC:");
-  if (lastLowEventDuration > 0.0F)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%4.1f", lastLowEventDuration);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
-  }
-
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
-  // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");
   if (SENSOR_OIL_PRESSURE_PRESENT)
   {
@@ -318,27 +291,29 @@ void drawMenuScreen()
   }
 
   y += lineHeight;
+  // 直近の低油圧イベント情報を1行で表示
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.P LOW:");
+  if (lastLowEventDuration > 0.0F)
+  {
+    char valStr[24];
+    snprintf(valStr, sizeof(valStr), "%4.1f%s,%4.1fs,%6.1f", lastLowEventG, lastLowEventDir, lastLowEventDuration,
+             lastLowEventPressure);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+  else
+  {
+    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
+  }
+
+  y += lineHeight;
+  // 最高水温を表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
   if (SENSOR_WATER_TEMP_PRESENT)
   {
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
-
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.T MAX:");
-  if (SENSOR_OIL_TEMP_PRESENT)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
   else
