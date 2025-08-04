@@ -308,10 +308,9 @@ void drawMenuScreen()
     mainCanvas.setFont(&fonts::Font0);
     int unitWidth = mainCanvas.textWidth("x100kpa");
     int unitHeight = mainCanvas.fontHeight();
-    // 詳細文字列の幅と高さを測定（通常フォント）
+    // 詳細文字列の幅を測定（通常フォント）
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
     int textWidth = mainCanvas.textWidth(detailStr);
-    int textHeight = mainCanvas.fontHeight();
     int startX = right - unitWidth - textWidth;
 
     // 詳細文字列を描画
@@ -320,7 +319,7 @@ void drawMenuScreen()
 
     // 単位部分を小さいフォントで描画（下揃え）
     mainCanvas.setFont(&fonts::Font0);
-    mainCanvas.setCursor(startX + textWidth, y + (textHeight - unitHeight));
+    mainCanvas.setCursor(startX + textWidth, y - unitHeight);
     mainCanvas.print("x100kpa");
     // フォントを元に戻す
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
