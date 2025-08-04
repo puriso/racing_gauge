@@ -254,7 +254,8 @@ void drawMenuScreen()
   constexpr int MENU_TOP_MARGIN = 20;     // 上端の余白
   constexpr int MENU_BOTTOM_MARGIN = 40;  // 下端の余白（戻る案内分）
   // 表示行数を減らして行間を確保
-  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 6 : 4;                          // 表示行数
+  // OIL.P LOW の詳細表示を2行で確保するため1行分多く確保
+  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 5;                          // 表示行数
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
@@ -291,9 +292,10 @@ void drawMenuScreen()
   }
 
   y += lineHeight;
-  // 直近の低油圧イベント情報を1行で表示
+  // 直近の低油圧イベント情報を2行で表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.P LOW:");
+  y += lineHeight;
   if (lastLowEventDuration > 0.0F)
   {
     char valStr[24];
