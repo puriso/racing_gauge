@@ -22,7 +22,9 @@ static void printSensorDebugInfo()
   float pressure = calculateAverage(oilPressureSamples);
   float water = calculateAverage(waterTemperatureSamples);
   float oil = calculateAverage(oilTemperatureSamples);
-  Serial.printf("Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", pressure, water, oil);
+  // 水平Gと各センサー値をシリアルに表示
+  Serial.printf("G: %.2f%s, Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", currentGForce, currentGDirection, pressure,
+                water, oil);
 }
 
 // ────────────────────── setup() ──────────────────────
@@ -60,7 +62,7 @@ void setup()
   M5.Lcd.fillScreen(COLOR_BLACK);
 
   // M5.Speaker.begin();  // スピーカーを使用しないため無効化
-  // M5.Imu.begin();      // IMU を使用しないため無効化
+  M5.Imu.begin();  // IMU を使用
   btStop();
 
   pinMode(9, INPUT_PULLUP);

@@ -8,6 +8,8 @@
 #include "DrawFillArcMeter.h"
 #include "backlight.h"
 #include "fps_display.h"
+#include "low_warning.h"
+#include "sensor.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 M5GFX display;
@@ -147,10 +149,19 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     displayCache.waterTempAvg = waterTempAvg;
   }
 
+  bool warnChanged = false;
+  bool isWarnShowing = drawLowPressureWarning(mainCanvas, currentGForce, pressureAvg, warnChanged);
+  if (warnChanged && !isWarnShowing)
+  {
+    // 警告が消えたら油圧ゲージを再描画して元に戻す
+    bool isUseDecimal = pressureAvg < 9.95F;
+    drawFillArcMeter(mainCanvas, pressureAvg, 0.0f, MAX_OIL_PRESSURE_METER, 8.0f, COLOR_RED, "x100kPa", "OIL.P",
+                     recordedMaxOilPressure, prevPressureValue, 0.5f, isUseDecimal, 0, 60, false);
+  }
   bool fpsChanged = drawFpsOverlay();
 
   // 値が更新されたときのみスプライトを転送する
-  if (oilChanged || pressureChanged || waterChanged || fpsChanged)
+  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged)
   {
     mainCanvas.pushSprite(0, 0);
   }
@@ -242,10 +253,27 @@ void drawMenuScreen()
   // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
   constexpr int MENU_TOP_MARGIN = 20;                                                       // 上端の余白
   constexpr int MENU_BOTTOM_MARGIN = 40;                                                    // 下端の余白（戻る案内分）
-  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 6;                          // 表示行数
+  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 8 : 7;                          // 表示行数
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
+
+  // 直近の低油圧イベント情報を表示
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.P LOW:");
+  if (lastLowEventDuration > 0.0F)
+  {
+    char valStr[32];
+    snprintf(valStr, sizeof(valStr), "%4.1f%s,%4.1fs,%5.1f", lastLowEventG, lastLowEventDir, lastLowEventDuration,
+             lastLowEventPressure);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+  else
+  {
+    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
+  }
+
+  y += lineHeight;
   mainCanvas.setCursor(10, y);
   // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");
