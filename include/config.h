@@ -10,6 +10,9 @@ constexpr bool DEBUG_MODE_ENABLED = false;
 // デモモードを有効にするかどうか
 constexpr bool DEMO_MODE_ENABLED = false;
 
+// FPS表示を行うかどうか
+constexpr bool FPS_DISPLAY_ENABLED = false;
+
 // ── センサー接続可否（false にするとその項目は常に 0 表示） ──
 constexpr bool SENSOR_OIL_PRESSURE_PRESENT = true;
 constexpr bool SENSOR_WATER_TEMP_PRESENT = true;
