@@ -37,11 +37,11 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
   static int lastBoxW = boxW;
   static int lastBoxH = boxH;
 
-  // 横Gが1G以上で判定
+  // 横Gが1Gを超えた場合に判定
   constexpr float G_FORCE_THRESHOLD = 1.0F;          // G判定値
   constexpr float PRESSURE_THRESHOLD = 3.0F;         // 油圧閾値
   constexpr unsigned long WARNING_DELAY_MS = 500UL;  // 継続時間
-  bool conditionMet = (gForce >= G_FORCE_THRESHOLD && pressure <= PRESSURE_THRESHOLD);
+  bool conditionMet = (gForce > G_FORCE_THRESHOLD && pressure <= PRESSURE_THRESHOLD);
   static unsigned long startMs = 0;  // 条件成立開始時刻
   static bool isShowing = false;
   static float peakG = 0.0F;                                     // 期間中の最大G
