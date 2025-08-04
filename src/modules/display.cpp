@@ -294,14 +294,34 @@ void drawMenuScreen()
   y += lineHeight;
   // 直近の低油圧イベント情報を2行で表示
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P LOW:");
+  mainCanvas.print("OIL.P LOW WARN");
   y += lineHeight;
   if (lastLowEventDuration > 0.0F)
   {
-    char valStr[24];
-    snprintf(valStr, sizeof(valStr), "%4.1f%s,%4.1fs,%6.1f", lastLowEventG, lastLowEventDir, lastLowEventDuration,
+    // 方向, G値, 継続秒数, 油圧をカンマ区切りで作成（カンマ後にスペースを入れる）
+    char detailStr[40];
+    snprintf(detailStr, sizeof(detailStr), "%s, %.1fG, %.1fs, %.1f", lastLowEventDir, lastLowEventG, lastLowEventDuration,
              lastLowEventPressure);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+
+    const int right = LCD_WIDTH - 10;  // 右端位置
+    // 単位 "x100kpa" を小さいフォントで描画するため、事前に幅を測定
+    mainCanvas.setFont(&fonts::Font0);
+    int unitWidth = mainCanvas.textWidth("x100kpa");
+    // 詳細文字列の幅を測定（通常フォント）
+    mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
+    int textWidth = mainCanvas.textWidth(detailStr);
+    int startX = right - unitWidth - textWidth;
+
+    // 詳細文字列を描画
+    mainCanvas.setCursor(startX, y);
+    mainCanvas.print(detailStr);
+
+    // 単位部分を小さいフォントで描画
+    mainCanvas.setFont(&fonts::Font0);
+    mainCanvas.setCursor(startX + textWidth, y);
+    mainCanvas.print("x100kpa");
+    // フォントを元に戻す
+    mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
   }
   else
   {
