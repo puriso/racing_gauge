@@ -304,21 +304,23 @@ void drawMenuScreen()
              lastLowEventPressure);
 
     const int right = LCD_WIDTH - 10;  // 右端位置
-    // 単位 "x100kpa" を小さいフォントで描画するため、事前に幅を測定
+    // 単位 "x100kpa" を小さいフォントで描画するため、事前に幅と高さを測定
     mainCanvas.setFont(&fonts::Font0);
     int unitWidth = mainCanvas.textWidth("x100kpa");
-    // 詳細文字列の幅を測定（通常フォント）
+    int unitHeight = mainCanvas.fontHeight();
+    // 詳細文字列の幅と高さを測定（通常フォント）
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
     int textWidth = mainCanvas.textWidth(detailStr);
+    int textHeight = mainCanvas.fontHeight();
     int startX = right - unitWidth - textWidth;
 
     // 詳細文字列を描画
     mainCanvas.setCursor(startX, y);
     mainCanvas.print(detailStr);
 
-    // 単位部分を小さいフォントで描画
+    // 単位部分を小さいフォントで描画（下揃え）
     mainCanvas.setFont(&fonts::Font0);
-    mainCanvas.setCursor(startX + textWidth, y);
+    mainCanvas.setCursor(startX + textWidth, y + (textHeight - unitHeight));
     mainCanvas.print("x100kpa");
     // フォントを元に戻す
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
