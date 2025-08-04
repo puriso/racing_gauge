@@ -251,21 +251,49 @@ void drawMenuScreen()
   mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
   // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
-  constexpr int MENU_TOP_MARGIN = 20;                                                       // 上端の余白
-  constexpr int MENU_BOTTOM_MARGIN = 40;                                                    // 下端の余白（戻る案内分）
-  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 8 : 7;                          // 表示行数
+  constexpr int MENU_TOP_MARGIN = 20;     // 上端の余白
+  constexpr int MENU_BOTTOM_MARGIN = 40;  // 下端の余白（戻る案内分）
+  // 低油圧イベント詳細表示のため2行追加
+  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 10 : 9;                         // 表示行数
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
 
   // 直近の低油圧イベント情報を表示
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P LOW:");
+  mainCanvas.print("OIL.P LOW VALUE:");
   if (lastLowEventDuration > 0.0F)
   {
-    char valStr[32];
-    snprintf(valStr, sizeof(valStr), "%4.1f%s,%4.1fs,%5.1f", lastLowEventG, lastLowEventDir, lastLowEventDuration,
-             lastLowEventPressure);
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6.1f", lastLowEventPressure);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+  else
+  {
+    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
+  }
+
+  y += lineHeight;
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.P LOW G:");
+  if (lastLowEventDuration > 0.0F)
+  {
+    char valStr[16];
+    snprintf(valStr, sizeof(valStr), "%4.1f, %s", lastLowEventG, lastLowEventDir);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+  else
+  {
+    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
+  }
+
+  y += lineHeight;
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.P LOW SEC:");
+  if (lastLowEventDuration > 0.0F)
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%4.1f", lastLowEventDuration);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
   else
@@ -324,7 +352,7 @@ void drawMenuScreen()
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 現在のLUX値を表示
-    mainCanvas.print("LUX NOW:");
+    mainCanvas.print("LUX LATEST:");
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", latestLux);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
@@ -340,7 +368,7 @@ void drawMenuScreen()
   else
   {
     // LUX センサーが無い場合は両方 Disabled を表示
-    mainCanvas.print("LUX NOW:");
+    mainCanvas.print("LUX LATEST:");
     mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
 
     y += 25;

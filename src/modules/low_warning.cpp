@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <limits>
 
 #include "config.h"
@@ -24,10 +23,9 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
   constexpr int GAUGE_H = 170;  // ゲージ高さ
 
   canvas.setFont(&fonts::FreeSansBold12pt7b);
-  // 警告文字列を生成（例: G2.3Right）
-  char warnStr[16];
-  snprintf(warnStr, sizeof(warnStr), "G%.1f%s", gForce, currentGDirection);
-  int textW = canvas.textWidth(warnStr);
+  // 警告文字列は固定で "LOW"
+  constexpr char WARN_TEXT[] = "LOW";
+  int textW = canvas.textWidth(WARN_TEXT);
   int textH = canvas.fontHeight();
   constexpr int PADDING = 4;  // ボックス余白
   int boxW = textW + (PADDING * 2);
@@ -74,11 +72,11 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
       {
         canvas.fillRect(lastBoxX, lastBoxY, lastBoxW, lastBoxH, COLOR_BLACK);
       }
-      // 赤背景に方向付きG値を表示
+      // 赤背景に固定文言を表示
       canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_RED);
       canvas.setTextColor(COLOR_WHITE, COLOR_RED);
       canvas.setCursor(boxX + ((boxW - textW) / 2), boxY + ((boxH - textH) / 2));
-      canvas.print(warnStr);
+      canvas.print(WARN_TEXT);
       // 消去用にボックス位置とサイズを保持
       lastBoxX = boxX;
       lastBoxY = boxY;
