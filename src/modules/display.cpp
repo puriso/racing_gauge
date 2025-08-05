@@ -254,12 +254,28 @@ void drawMenuScreen()
   constexpr int MENU_TOP_MARGIN = 20;     // 上端の余白
   constexpr int MENU_BOTTOM_MARGIN = 40;  // 下端の余白（戻る案内分）
   // 表示行数を減らして行間を確保
-  // OIL.P LOW の詳細表示を2行で確保するため1行分多く確保
+  // OIL.P WARN の詳細表示を2行で確保するため1行分多く確保
   constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 5;                          // 表示行数
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
 
+  // 最高水温を表示
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("WATER.T MAX:");
+  if (SENSOR_WATER_TEMP_PRESENT)
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+  else
+  {
+    // センサー無効時は Disabled と表示
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  }
+
+  y += lineHeight;
   // 最高油温を表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
@@ -294,7 +310,7 @@ void drawMenuScreen()
   y += lineHeight;
   // 直近の低油圧イベント情報を2行で表示
   mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P LOW WARN");
+  mainCanvas.print("OIL.P WARN:");
   y += lineHeight;
   if (lastLowEventDuration > 0.0F)
   {
@@ -304,10 +320,9 @@ void drawMenuScreen()
              lastLowEventPressure);
 
     const int right = LCD_WIDTH - 10;  // 右端位置
-    // 単位 "x100kpa" を小さいフォントで描画するため、事前に幅と高さを測定
+    // 単位 "x100kpa" を小さいフォントで描画するため、事前に幅を測定
     mainCanvas.setFont(&fonts::Font0);
     int unitWidth = mainCanvas.textWidth("x100kpa");
-    int unitHeight = mainCanvas.fontHeight();
     // 詳細文字列の幅を測定（通常フォント）
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
     int textWidth = mainCanvas.textWidth(detailStr);
@@ -317,9 +332,9 @@ void drawMenuScreen()
     mainCanvas.setCursor(startX, y);
     mainCanvas.print(detailStr);
 
-    // 単位部分を小さいフォントで描画（下揃え）
+    // 単位部分を小さいフォントで描画（数値と下揃え）
     mainCanvas.setFont(&fonts::Font0);
-    mainCanvas.setCursor(startX + textWidth, y - unitHeight);
+    mainCanvas.setCursor(startX + textWidth, y);
     mainCanvas.print("x100kpa");
     // フォントを元に戻す
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
@@ -327,22 +342,6 @@ void drawMenuScreen()
   else
   {
     mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
-  }
-
-  y += lineHeight;
-  // 最高水温を表示
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("WATER.T MAX:");
-  if (SENSOR_WATER_TEMP_PRESENT)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
   }
 
   y += lineHeight;
