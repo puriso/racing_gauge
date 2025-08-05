@@ -266,7 +266,8 @@ void drawMenuScreen()
   if (SENSOR_WATER_TEMP_PRESENT)
   {
     char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
+    // 小数点を表示しない
+    snprintf(valStr, sizeof(valStr), "%6.0f", recordedMaxWaterTemp);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
   else
@@ -320,22 +321,27 @@ void drawMenuScreen()
              lastLowEventPressure);
 
     const int right = LCD_WIDTH - 10;  // 右端位置
-    // 単位 "x100kpa" を小さいフォントで描画するため、事前に幅を測定
-    mainCanvas.setFont(&fonts::Font0);
-    int unitWidth = mainCanvas.textWidth("x100kpa");
-    // 詳細文字列の幅を測定（通常フォント）
+    // 詳細文字列の幅と高さを測定（通常フォント）
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
     int textWidth = mainCanvas.textWidth(detailStr);
+    int textHeight = mainCanvas.fontHeight();
+
+    // 単位 "x100kPa" の幅と高さを小さいフォントで測定
+    mainCanvas.setFont(&fonts::Font0);
+    int unitWidth = mainCanvas.textWidth("x100kPa");
+    int unitHeight = mainCanvas.fontHeight();
+
     int startX = right - unitWidth - textWidth;
 
     // 詳細文字列を描画
+    mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
     mainCanvas.setCursor(startX, y);
     mainCanvas.print(detailStr);
 
-    // 単位部分を小さいフォントで描画（数値と下揃え）
+    // 単位部分を小さいフォントで描画（数値の下端に揃える）
     mainCanvas.setFont(&fonts::Font0);
-    mainCanvas.setCursor(startX + textWidth, y);
-    mainCanvas.print("x100kpa");
+    mainCanvas.setCursor(startX + textWidth, y + textHeight - unitHeight);
+    mainCanvas.print("x100kPa");
     // フォントを元に戻す
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
   }
