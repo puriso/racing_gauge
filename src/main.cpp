@@ -11,10 +11,11 @@
 unsigned long lastFpsSecond = 0;  // 直近1秒判定用
 int fpsFrameCounter = 0;
 int currentFps = 0;
-unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
-unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
-bool isMenuVisible = false;         // メニュー表示中かどうか
-static bool wasTouched = false;     // 前回タッチされていたか
+unsigned long lastDebugPrint = 0;                                    // デバッグ表示用タイマー
+unsigned long lastFrameTimeUs = 0;                                   // 前回フレーム開始時刻
+bool isMenuVisible = false;                                          // メニュー表示中かどうか
+static bool wasTouched = false;                                      // 前回タッチされていたか
+static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -129,15 +130,20 @@ void loop()
     isMenuVisible = !isMenuVisible;
     if (isMenuVisible)
     {
+      previousBrightnessMode = currentBrightnessMode;  // 現在の輝度モードを保存
       drawMenuScreen();
       // メニュー表示中は輝度を最大にする
-      display.setBrightness(BACKLIGHT_DAY);
+      applyBrightnessMode(BrightnessMode::Day);
     }
     else
     {
       resetGaugeState();
-      // メニュー終了後は照度センサーで再調整
+      // メニュー終了後は元の輝度に戻す
+#if SENSOR_AMBIENT_LIGHT_PRESENT
       updateBacklightLevel();
+#else
+      applyBrightnessMode(previousBrightnessMode);
+#endif
     }
   }
   wasTouched = touched;
