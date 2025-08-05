@@ -27,6 +27,16 @@ static auto calculateMedian(const int *samples) -> int
   return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
 }
 
+// 指定された輝度モードを適用
+void applyBrightnessMode(BrightnessMode mode)
+{
+  currentBrightnessMode = mode;
+  int targetBrightness = (mode == BrightnessMode::Day)    ? BACKLIGHT_DAY
+                         : (mode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
+                                                          : BACKLIGHT_NIGHT;
+  display.setBrightness(targetBrightness);
+}
+
 // ────────────────────── 輝度更新 ──────────────────────
 void updateBacklightLevel()
 {
@@ -34,8 +44,7 @@ void updateBacklightLevel()
   {
     if (currentBrightnessMode != BrightnessMode::Day)
     {
-      currentBrightnessMode = BrightnessMode::Day;
-      display.setBrightness(BACKLIGHT_DAY);
+      applyBrightnessMode(BrightnessMode::Day);
     }
     return;
   }
@@ -61,10 +70,6 @@ void updateBacklightLevel()
 
   if (newMode != currentBrightnessMode)
   {
-    currentBrightnessMode = newMode;
-    int targetBrightness = (newMode == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                           : (newMode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                               : BACKLIGHT_NIGHT;
-    display.setBrightness(targetBrightness);
+    applyBrightnessMode(newMode);
   }
 }
