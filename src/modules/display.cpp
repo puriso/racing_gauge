@@ -147,7 +147,12 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     displayCache.waterTempAvg = waterTempAvg;
   }
 
-  bool fpsChanged = drawFpsOverlay();
+  bool fpsChanged = false;
+  if (FPS_DISPLAY_ENABLED)
+  {
+    // FPS表示が有効な場合のみ描画する
+    fpsChanged = drawFpsOverlay();
+  }
 
   // 値が更新されたときのみスプライトを転送する
   if (oilChanged || pressureChanged || waterChanged || fpsChanged)

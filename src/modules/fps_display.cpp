@@ -2,6 +2,7 @@
 
 #include <M5CoreS3.h>
 
+#include "config.h"
 #include "display.h"
 
 // FPSラベルが描画済みかどうかを保持
@@ -11,6 +12,12 @@ static unsigned long lastFpsDrawTime = 0;
 // ────────────────────── FPS表示 ──────────────────────
 auto drawFpsOverlay() -> bool
 {
+  if (!FPS_DISPLAY_ENABLED)
+  {
+    // FPS表示が無効な場合は何もしない
+    return false;
+  }
+
   mainCanvas.setFont(&fonts::Font0);
   mainCanvas.setTextSize(0);
   // FPS表示を目立たせないよう文字色をグレーに設定
