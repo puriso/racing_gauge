@@ -11,10 +11,11 @@
 unsigned long lastFpsSecond = 0;  // 直近1秒判定用
 int fpsFrameCounter = 0;
 int currentFps = 0;
-unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
-unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
-bool isMenuVisible = false;         // メニュー表示中かどうか
-static bool wasTouched = false;     // 前回タッチされていたか
+unsigned long lastDebugPrint = 0;                                    // デバッグ表示用タイマー
+unsigned long lastFrameTimeUs = 0;                                   // 前回フレーム開始時刻
+bool isMenuVisible = false;                                          // メニュー表示中かどうか
+static bool wasTouched = false;                                      // 前回タッチされていたか
+static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -22,7 +23,9 @@ static void printSensorDebugInfo()
   float pressure = calculateAverage(oilPressureSamples);
   float water = calculateAverage(waterTemperatureSamples);
   float oil = calculateAverage(oilTemperatureSamples);
-  Serial.printf("Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", pressure, water, oil);
+  // 水平Gと各センサー値をシリアルに表示
+  Serial.printf("G: %.2f%s, Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", currentGForce, currentGDirection, pressure,
+                water, oil);
 }
 
 // ────────────────────── setup() ──────────────────────
@@ -60,7 +63,7 @@ void setup()
   M5.Lcd.fillScreen(COLOR_BLACK);
 
   // M5.Speaker.begin();  // スピーカーを使用しないため無効化
-  // M5.Imu.begin();      // IMU を使用しないため無効化
+  M5.Imu.begin();  // IMU を使用
   btStop();
 
   pinMode(9, INPUT_PULLUP);
@@ -127,15 +130,20 @@ void loop()
     isMenuVisible = !isMenuVisible;
     if (isMenuVisible)
     {
+      previousBrightnessMode = currentBrightnessMode;  // 現在の輝度モードを保存
       drawMenuScreen();
       // メニュー表示中は輝度を最大にする
-      display.setBrightness(BACKLIGHT_DAY);
+      applyBrightnessMode(BrightnessMode::Day);
     }
     else
     {
       resetGaugeState();
-      // メニュー終了後は照度センサーで再調整
+      // メニュー終了後は元の輝度に戻す
+#if SENSOR_AMBIENT_LIGHT_PRESENT
       updateBacklightLevel();
+#else
+      applyBrightnessMode(previousBrightnessMode);
+#endif
     }
   }
   wasTouched = touched;
