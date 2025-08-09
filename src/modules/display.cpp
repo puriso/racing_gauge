@@ -8,6 +8,8 @@
 #include "DrawFillArcMeter.h"
 #include "backlight.h"
 #include "fps_display.h"
+#include "low_warning.h"
+#include "sensor.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 M5GFX display;
@@ -147,6 +149,15 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     displayCache.waterTempAvg = waterTempAvg;
   }
 
+  bool warnChanged = false;
+  bool isWarnShowing = drawLowPressureWarning(mainCanvas, currentGForce, pressureAvg, warnChanged);
+  if (warnChanged && !isWarnShowing)
+  {
+    // 警告が消えたら油圧ゲージを再描画して元に戻す
+    bool isUseDecimal = pressureAvg < 9.95F;
+    drawFillArcMeter(mainCanvas, pressureAvg, 0.0f, MAX_OIL_PRESSURE_METER, 8.0f, COLOR_RED, "x100kPa", "OIL.P",
+                     recordedMaxOilPressure, prevPressureValue, 0.5f, isUseDecimal, 0, 60, false);
+  }
   bool fpsChanged = false;
   if (FPS_DISPLAY_ENABLED)
   {
@@ -155,7 +166,7 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   }
 
   // 値が更新されたときのみスプライトを転送する
-  if (oilChanged || pressureChanged || waterChanged || fpsChanged)
+  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged)
   {
     mainCanvas.pushSprite(0, 0);
   }
@@ -245,34 +256,23 @@ void drawMenuScreen()
   mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
   // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
-  constexpr int MENU_TOP_MARGIN = 20;                                                       // 上端の余白
-  constexpr int MENU_BOTTOM_MARGIN = 40;                                                    // 下端の余白（戻る案内分）
-  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 6;                          // 表示行数
+  constexpr int MENU_TOP_MARGIN = 20;     // 上端の余白
+  constexpr int MENU_BOTTOM_MARGIN = 40;  // 下端の余白（戻る案内分）
+  // 表示行数を減らして行間を確保
+  // OIL.P WARN の詳細表示を2行で確保するため1行分多く確保
+  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 5;                          // 表示行数
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
-  mainCanvas.setCursor(10, y);
-  // ラベルは左寄せ、値は右寄せで表示
-  mainCanvas.print("OIL.P MAX:");
-  if (SENSOR_OIL_PRESSURE_PRESENT)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
 
-  y += lineHeight;
+  // 最高水温を表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
   if (SENSOR_WATER_TEMP_PRESENT)
   {
     char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
+    // 小数点を表示しない
+    snprintf(valStr, sizeof(valStr), "%6.0f", recordedMaxWaterTemp);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
   }
   else
@@ -282,6 +282,7 @@ void drawMenuScreen()
   }
 
   y += lineHeight;
+  // 最高油温を表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
   if (SENSOR_OIL_TEMP_PRESENT)
@@ -297,11 +298,69 @@ void drawMenuScreen()
   }
 
   y += lineHeight;
+  // 最高油圧を表示
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.P MAX:");
+  if (SENSOR_OIL_PRESSURE_PRESENT)
+  {
+    char valStr[8];
+    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
+    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  }
+  else
+  {
+    // センサー無効時は Disabled と表示
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  }
+
+  y += lineHeight;
+  // 直近の低油圧イベント情報を2行で表示
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("OIL.P WARN:");
+  y += lineHeight;
+  if (lastLowEventDuration > 0.0F)
+  {
+    // 方向, G値, 継続秒数, 油圧をカンマ区切りで作成（カンマ後にスペースを入れる）
+    char detailStr[40];
+    snprintf(detailStr, sizeof(detailStr), "%s, %.1fG, %.1fs, %.1f", lastLowEventDir, lastLowEventG, lastLowEventDuration,
+             lastLowEventPressure);
+
+    const int right = LCD_WIDTH - 10;  // 右端位置
+    // 詳細文字列の幅と高さを測定（通常フォント）
+    mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
+    int textWidth = mainCanvas.textWidth(detailStr);
+    int textHeight = mainCanvas.fontHeight();
+
+    // 単位 "x100kPa" の幅と高さを小さいフォントで測定
+    mainCanvas.setFont(&fonts::Font0);
+    int unitWidth = mainCanvas.textWidth("x100kPa");
+    int unitHeight = mainCanvas.fontHeight();
+
+    int startX = right - unitWidth - textWidth;
+
+    // 詳細文字列を描画
+    mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
+    mainCanvas.setCursor(startX, y);
+    mainCanvas.print(detailStr);
+
+    // 単位部分を小さいフォントで描画（数値の下端に揃える）
+    mainCanvas.setFont(&fonts::Font0);
+    mainCanvas.setCursor(startX + textWidth, y + textHeight - unitHeight);
+    mainCanvas.print("x100kPa");
+    // フォントを元に戻す
+    mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
+  }
+  else
+  {
+    mainCanvas.drawRightString("None", LCD_WIDTH - 10, y);
+  }
+
+  y += lineHeight;
   mainCanvas.setCursor(10, y);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 現在のLUX値を表示
-    mainCanvas.print("LUX NOW:");
+    mainCanvas.print("LUX LATEST:");
     char valStr[8];
     snprintf(valStr, sizeof(valStr), "%6d", latestLux);
     mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
@@ -317,7 +376,7 @@ void drawMenuScreen()
   else
   {
     // LUX センサーが無い場合は両方 Disabled を表示
-    mainCanvas.print("LUX NOW:");
+    mainCanvas.print("LUX LATEST:");
     mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
 
     y += 25;
