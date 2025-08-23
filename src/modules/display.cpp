@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <limits>
 
@@ -36,7 +37,17 @@ struct DisplayCache
 } displayCache = {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(),
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
 
+// センサー異常と判定する温度
+constexpr float SENSOR_ERROR_TEMP = 199.0F;
+// 更新のしきい値
+constexpr float OIL_TEMP_CHANGE_THRESHOLD = 0.1F;
+constexpr float PRESSURE_CHANGE_THRESHOLD = 0.05F;
+constexpr float WATER_TEMP_CHANGE_THRESHOLD = 0.05F;
+// 数値表示用バッファ長
+constexpr std::size_t VALUE_STR_LEN = 8;
+
 // ────────────────────── 油温バー描画 ──────────────────────
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
 {
   constexpr int MIN_TEMP = 80;
@@ -50,10 +61,11 @@ void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
   constexpr int BAR_HEIGHT = 20;
   constexpr float RANGE = MAX_TEMP - MIN_TEMP;
 
-  canvas.fillRect(BASE_X + 1, BASE_Y + 1, BAR_WIDTH - 2, BAR_HEIGHT - 2, 0x18E3);
+  constexpr uint16_t BAR_BG_COLOR = 0x18E3;  // バー背景色
+  canvas.fillRect(BASE_X + 1, BASE_Y + 1, BAR_WIDTH - 2, BAR_HEIGHT - 2, BAR_BG_COLOR);
 
   float drawTemp = oilTemp;
-  if (drawTemp >= 199.0F)
+  if (drawTemp >= SENSOR_ERROR_TEMP)
   {
     // 異常値の場合はバーを 0 として扱う
     drawTemp = 0.0F;
@@ -89,32 +101,45 @@ void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
   canvas.printf("OIL.T / Celsius,  MAX:%03d", maxOilTemp);
   // snprintf でバッファサイズを指定し、
   // 安全に文字列化する
-  int displayOilTemp = oilTemp >= 199.0F ? 0 : static_cast<int>(oilTemp);
-  std::array<char, 8> tempStr{};
+  int displayOilTemp = oilTemp >= SENSOR_ERROR_TEMP ? 0 : static_cast<int>(oilTemp);
+  std::array<char, VALUE_STR_LEN> tempStr{};
   snprintf(tempStr.data(), tempStr.size(), "%d", displayOilTemp);
   canvas.setFont(&FreeSansBold24pt7b);
   canvas.drawRightString(tempStr.data(), LCD_WIDTH - 1, 2);
 }
 
 // ────────────────────── 画面更新＋ログ ──────────────────────
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, int16_t maxOilTemp)
 {
   const int TOPBAR_Y = 0;
   const int TOPBAR_H = 50;
   const int GAUGE_H = 170;
+  constexpr int GAUGE_Y = 60;       // ゲージのY座標
+  constexpr int GAUGE_WIDTH = 160;  // ゲージの幅
+  constexpr float PRESSURE_DECIMAL_LIMIT = 9.95F;
+  constexpr float PRESSURE_METER_STEP = 8.0F;
+  constexpr float PRESSURE_VALUE_SMOOTH = 0.5F;
+  constexpr int PRESSURE_GAUGE_X = 0;
+  constexpr int WATER_GAUGE_X = 160;
+  constexpr float WATER_METER_MAX = 110.0F;
+  constexpr float WATER_METER_STEP = 5.0F;
 
   // 水温は0.05度以上、油温は0.1度以上、油圧は0.05bar以上変化したら更新する
-  bool oilChanged = std::isnan(displayCache.oilTemp) || fabs(oilTemp - displayCache.oilTemp) >= 0.1F ||
+  bool oilChanged = std::isnan(displayCache.oilTemp) ||
+                    std::fabs(oilTemp - displayCache.oilTemp) >= OIL_TEMP_CHANGE_THRESHOLD ||
                     (maxOilTemp != displayCache.maxOilTemp);
-  bool pressureChanged = std::isnan(displayCache.pressureAvg) || fabs(pressureAvg - displayCache.pressureAvg) >= 0.05F;
-  bool waterChanged = std::isnan(displayCache.waterTempAvg) || fabs(waterTempAvg - displayCache.waterTempAvg) >= 0.05F;
+  bool pressureChanged = std::isnan(displayCache.pressureAvg) ||
+                         std::fabs(pressureAvg - displayCache.pressureAvg) >= PRESSURE_CHANGE_THRESHOLD;
+  bool waterChanged = std::isnan(displayCache.waterTempAvg) ||
+                      std::fabs(waterTempAvg - displayCache.waterTempAvg) >= WATER_TEMP_CHANGE_THRESHOLD;
 
   mainCanvas.setTextColor(COLOR_WHITE);
 
   if (oilChanged)
   {
     mainCanvas.fillRect(0, TOPBAR_Y, LCD_WIDTH, TOPBAR_H, COLOR_BLACK);
-    if (oilTemp >= 199.0F)
+    if (oilTemp >= SENSOR_ERROR_TEMP)
     {
       // センサー異常時は最大値も 0 扱いにする
       maxOilTemp = 0;
@@ -132,11 +157,12 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   {
     if (!pressureGaugeInitialized)
     {
-      mainCanvas.fillRect(0, 60, 160, GAUGE_H, COLOR_BLACK);
+      mainCanvas.fillRect(PRESSURE_GAUGE_X, GAUGE_Y, GAUGE_WIDTH, GAUGE_H, COLOR_BLACK);
     }
-    bool isUseDecimal = pressureAvg < 9.95F;
-    drawFillArcMeter(mainCanvas, pressureAvg, 0.0f, MAX_OIL_PRESSURE_METER, 8.0f, COLOR_RED, "x100kPa", "OIL.P",
-                     recordedMaxOilPressure, prevPressureValue, 0.5f, isUseDecimal, 0, 60, !pressureGaugeInitialized);
+    bool isUseDecimal = pressureAvg < PRESSURE_DECIMAL_LIMIT;
+    drawFillArcMeter(mainCanvas, pressureAvg, 0.0F, MAX_OIL_PRESSURE_METER, PRESSURE_METER_STEP, COLOR_RED, "x100kPa",
+                     "OIL.P", recordedMaxOilPressure, prevPressureValue, PRESSURE_VALUE_SMOOTH, isUseDecimal,
+                     PRESSURE_GAUGE_X, GAUGE_Y, !pressureGaugeInitialized);
     pressureGaugeInitialized = true;
     displayCache.pressureAvg = pressureAvg;
   }
@@ -145,11 +171,11 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   {
     if (!waterGaugeInitialized)
     {
-      mainCanvas.fillRect(160, 60, 160, GAUGE_H, COLOR_BLACK);
+      mainCanvas.fillRect(WATER_GAUGE_X, GAUGE_Y, GAUGE_WIDTH, GAUGE_H, COLOR_BLACK);
     }
-    drawFillArcMeter(mainCanvas, waterTempAvg, WATER_TEMP_METER_MIN, WATER_TEMP_METER_MAX, 110.0f, COLOR_RED, "Celsius",
-                     "WATER.T", recordedMaxWaterTemp, prevWaterTempValue, 1.0f, false, 160, 60, !waterGaugeInitialized,
-                     5.0f, WATER_TEMP_METER_MIN);
+    drawFillArcMeter(mainCanvas, waterTempAvg, WATER_TEMP_METER_MIN, WATER_TEMP_METER_MAX, WATER_METER_MAX, COLOR_RED,
+                     "Celsius", "WATER.T", recordedMaxWaterTemp, prevWaterTempValue, 1.0F, false, WATER_GAUGE_X, GAUGE_Y,
+                     !waterGaugeInitialized, WATER_METER_STEP, WATER_TEMP_METER_MIN);
     waterGaugeInitialized = true;
     displayCache.waterTempAvg = waterTempAvg;
   }
@@ -184,14 +210,15 @@ void updateGauges()
 
   float pressureAvg = calculateAverage(oilPressureSamples);
   pressureAvg = std::min(pressureAvg, MAX_OIL_PRESSURE_DISPLAY);
-  if (pressureAvg >= 11.0F || oilPressureOverVoltage)
+  constexpr float PRESSURE_OVER_LIMIT = 11.0F;
+  if (pressureAvg >= PRESSURE_OVER_LIMIT || oilPressureOverVoltage)
   {
     // ショートエラー時は 0 として扱い、最大値もリセット
     pressureAvg = 0.0F;
     recordedMaxOilPressure = 0.0F;
   }
   float targetWaterTemp = calculateAverage(waterTemperatureSamples);
-  if (targetWaterTemp >= 199.0F)
+  if (targetWaterTemp >= SENSOR_ERROR_TEMP)
   {
     // 199℃以上ならセンサー異常として扱い0を返す
     targetWaterTemp = 0.0F;
@@ -199,7 +226,7 @@ void updateGauges()
   }
 
   float targetOilTemp = calculateAverage(oilTemperatureSamples);
-  if (targetOilTemp >= 199.0F)
+  if (targetOilTemp >= SENSOR_ERROR_TEMP)
   {
     // 199℃以上はセンサー異常として 0 扱いにする
     targetOilTemp = 0.0F;
@@ -219,8 +246,9 @@ void updateGauges()
     smoothOilPressure = pressureAvg;
   }
 
-  smoothWaterTemp += 0.1F * (targetWaterTemp - smoothWaterTemp);
-  smoothOilTemp += 0.1F * (targetOilTemp - smoothOilTemp);
+  constexpr float SMOOTHING_ALPHA = 0.1F;
+  smoothWaterTemp += SMOOTHING_ALPHA * (targetWaterTemp - smoothWaterTemp);
+  smoothOilTemp += SMOOTHING_ALPHA * (targetOilTemp - smoothOilTemp);
   smoothOilPressure += OIL_PRESSURE_SMOOTHING_ALPHA * (pressureAvg - smoothOilPressure);
 
   float oilTempValue = smoothOilTemp;
@@ -234,7 +262,7 @@ void updateGauges()
   recordedMaxOilPressure = std::max(recordedMaxOilPressure, pressureAvg);
   recordedMaxWaterTemp = std::max(recordedMaxWaterTemp, smoothWaterTemp);
   recordedMaxOilTempTop = std::max(recordedMaxOilTempTop, static_cast<int>(targetOilTemp));
-  renderDisplayAndLog(pressureValue, smoothWaterTemp, oilTempValue, recordedMaxOilTempTop);
+  renderDisplayAndLog(pressureValue, smoothWaterTemp, oilTempValue, static_cast<int16_t>(recordedMaxOilTempTop));
 }
 
 // ────────────────────── メニュー画面描画 ──────────────────────
@@ -248,93 +276,97 @@ void drawMenuScreen()
   // フラットデザインの枠を描く
   constexpr uint16_t BORDER_COLOR = rgb565(80, 80, 80);
   // センサー無効時に表示する文字列
-  constexpr char DISABLED_STR[] = "Disabled";
+  constexpr const char* DISABLED_STR = "Disabled";
   mainCanvas.drawRect(0, 0, LCD_WIDTH, LCD_HEIGHT, BORDER_COLOR);
 
   // 画面高さに合わせて行間を自動計算し、下にはみ出さないようにする
   constexpr int MENU_TOP_MARGIN = 20;                                                       // 上端の余白
   constexpr int MENU_BOTTOM_MARGIN = 40;                                                    // 下端の余白（戻る案内分）
   constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 6;                          // 表示行数
+  constexpr int MENU_X = 10;                                                                // 左端のX座標
+  constexpr int RIGHT_MARGIN = 10;                                                          // 右端の余白
+  constexpr int LUX_EXTRA_Y = 25;                                                           // LUX表示の追加オフセット
+  constexpr int CURSOR_BOTTOM_OFFSET = 20;                                                  // 戻る案内のYオフセット
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
-  int y = MENU_TOP_MARGIN;
-  mainCanvas.setCursor(10, y);
+  int cursorY = MENU_TOP_MARGIN;
+  mainCanvas.setCursor(MENU_X, cursorY);
   // ラベルは左寄せ、値は右寄せで表示
   mainCanvas.print("OIL.P MAX:");
   if (SENSOR_OIL_PRESSURE_PRESENT)
   {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+    std::array<char, VALUE_STR_LEN> valStr{};
+    snprintf(valStr.data(), valStr.size(), "%6.1f", recordedMaxOilPressure);
+    mainCanvas.drawRightString(valStr.data(), LCD_WIDTH - RIGHT_MARGIN, cursorY);
   }
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - RIGHT_MARGIN, cursorY);
   }
 
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
+  cursorY += lineHeight;
+  mainCanvas.setCursor(MENU_X, cursorY);
   mainCanvas.print("WATER.T MAX:");
   if (SENSOR_WATER_TEMP_PRESENT)
   {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxWaterTemp);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+    std::array<char, VALUE_STR_LEN> valStr{};
+    snprintf(valStr.data(), valStr.size(), "%6.1f", recordedMaxWaterTemp);
+    mainCanvas.drawRightString(valStr.data(), LCD_WIDTH - RIGHT_MARGIN, cursorY);
   }
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - RIGHT_MARGIN, cursorY);
   }
 
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
+  cursorY += lineHeight;
+  mainCanvas.setCursor(MENU_X, cursorY);
   mainCanvas.print("OIL.T MAX:");
   if (SENSOR_OIL_TEMP_PRESENT)
   {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+    std::array<char, VALUE_STR_LEN> valStr{};
+    snprintf(valStr.data(), valStr.size(), "%6d", recordedMaxOilTempTop);
+    mainCanvas.drawRightString(valStr.data(), LCD_WIDTH - RIGHT_MARGIN, cursorY);
   }
   else
   {
     // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - RIGHT_MARGIN, cursorY);
   }
 
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
+  cursorY += lineHeight;
+  mainCanvas.setCursor(MENU_X, cursorY);
   if (SENSOR_AMBIENT_LIGHT_PRESENT)
   {
     // 現在のLUX値を表示
     mainCanvas.print("LUX NOW:");
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6d", latestLux);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+    std::array<char, VALUE_STR_LEN> valStr{};
+    snprintf(valStr.data(), valStr.size(), "%6d", latestLux);
+    mainCanvas.drawRightString(valStr.data(), LCD_WIDTH - RIGHT_MARGIN, cursorY);
 
-    y += lineHeight;
-    mainCanvas.setCursor(10, y);
+    cursorY += lineHeight;
+    mainCanvas.setCursor(MENU_X, cursorY);
     // 照度の中央値を表示
     mainCanvas.print("LUX MEDIAN:");
-    char medStr[8];
-    snprintf(medStr, sizeof(medStr), "%6d", medianLuxValue);
-    mainCanvas.drawRightString(medStr, LCD_WIDTH - 10, y);
+    std::array<char, VALUE_STR_LEN> medStr{};
+    snprintf(medStr.data(), medStr.size(), "%6d", medianLuxValue);
+    mainCanvas.drawRightString(medStr.data(), LCD_WIDTH - RIGHT_MARGIN, cursorY);
   }
   else
   {
     // LUX センサーが無い場合は両方 Disabled を表示
     mainCanvas.print("LUX NOW:");
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - RIGHT_MARGIN, cursorY);
 
-    y += 25;
-    mainCanvas.setCursor(10, y);
+    cursorY += LUX_EXTRA_Y;
+    mainCanvas.setCursor(MENU_X, cursorY);
     mainCanvas.print("LUX MEDIAN:");
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - RIGHT_MARGIN, cursorY);
   }
 
   // 戻る案内を左下へ配置
-  mainCanvas.setCursor(10, LCD_HEIGHT - 20);
+  mainCanvas.setCursor(MENU_X, LCD_HEIGHT - CURSOR_BOTTOM_OFFSET);
   mainCanvas.setFont(&fonts::Font0);
   mainCanvas.printf("Tap screen to return");
 
