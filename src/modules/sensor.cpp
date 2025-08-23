@@ -1,5 +1,6 @@
 #include "sensor.h"
 
+#include <M5CoreS3.h>
 #include <Wire.h>
 
 #include <algorithm>
@@ -13,6 +14,8 @@ float oilPressureSamples[PRESSURE_SAMPLE_SIZE] = {};
 float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE] = {};
 float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE] = {};
 bool oilPressureOverVoltage = false;
+float currentGForce = 0.0F;
+const char *currentGDirection = "Right";
 static int oilPressureIndex = 0;
 static int waterTempIndex = 0;
 static int oilTempIndex = 0;
@@ -130,6 +133,102 @@ void acquireSensorData()
                                   1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 0.0F, 0.0F, 2.5F};
 
   unsigned long now = millis();
+
+  // IMU から加速度を取得
+  float ax = 0.0F, ay = 0.0F, az = 0.0F;
+  M5.Imu.getAccelData(&ax, &ay, &az);
+
+  // ── 起動直後は複数サンプルからオフセットを平均化し縦軸を判定 ──
+  static bool gForceOffsetInitialized = false;
+  static float axOffset = 0.0F;
+  static float ayOffset = 0.0F;
+  static float azOffset = 0.0F;
+  static int offsetSampleCount = 0;
+  static int verticalAxis = 2;  // 0:X, 1:Y, 2:Z
+  if (!gForceOffsetInitialized)
+  {
+    axOffset += ax;
+    ayOffset += ay;
+    azOffset += az;
+    offsetSampleCount++;
+    if (offsetSampleCount >= 20)
+    {
+      axOffset /= offsetSampleCount;
+      ayOffset /= offsetSampleCount;
+      azOffset /= offsetSampleCount;
+
+      // 最大オフセットを持つ軸を縦方向とみなす
+      float absOffsets[3] = {fabsf(axOffset), fabsf(ayOffset), fabsf(azOffset)};
+      verticalAxis = 0;
+      if (absOffsets[1] > absOffsets[verticalAxis]) verticalAxis = 1;
+      if (absOffsets[2] > absOffsets[verticalAxis]) verticalAxis = 2;
+
+      gForceOffsetInitialized = true;
+    }
+    else
+    {
+      // オフセット確定までは 0G 扱い
+      currentGForce = 0.0F;
+      currentGDirection = "Right";
+      return;
+    }
+  }
+
+  float adjX = ax - axOffset;
+  float adjY = ay - ayOffset;
+  float adjZ = az - azOffset;
+
+  // 縦軸を除いた 2 軸のみで判定
+  int lateralAxis = 0;       // 左右成分を持つ軸
+  int longitudinalAxis = 0;  // 前後成分を持つ軸
+  if (verticalAxis == 0)
+  {
+    lateralAxis = 1;       // Y: 左右
+    longitudinalAxis = 2;  // Z: 前後
+  }
+  else if (verticalAxis == 1)
+  {
+    lateralAxis = 0;       // X: 左右
+    longitudinalAxis = 2;  // Z: 前後
+  }
+  else  // verticalAxis == 2
+  {
+    lateralAxis = 1;       // Y: 左右
+    longitudinalAxis = 0;  // X: 前後
+  }
+
+  float lat = (lateralAxis == 0) ? adjX : (lateralAxis == 1) ? adjY : adjZ;
+  float lon = (longitudinalAxis == 0) ? adjX : (longitudinalAxis == 1) ? adjY : adjZ;
+  float absLat = fabsf(lat);
+  float absLon = fabsf(lon);
+
+  // 方向判定。真横判定の範囲を広げるため比率で判定する
+  constexpr float PURE_RATIO = 0.75F;  // 斜め判定のしきい値
+  if (absLat >= absLon * PURE_RATIO)
+  {
+    // 左右方向として扱う
+    currentGForce = sqrtf((lat * lat) + (lon * lon));
+    currentGDirection = (lat >= 0.0F) ? "Right" : "Left";
+  }
+  else if (absLon >= absLat * PURE_RATIO)
+  {
+    // 前後方向として扱う
+    currentGForce = sqrtf((lat * lat) + (lon * lon));
+    currentGDirection = (lon >= 0.0F) ? "Front" : "Rear";
+  }
+  else
+  {
+    // 斜め方向
+    currentGForce = sqrtf((lat * lat) + (lon * lon));
+    if (lat >= 0.0F)
+    {
+      currentGDirection = (lon >= 0.0F) ? "Right/Front" : "Right/Rear";
+    }
+    else
+    {
+      currentGDirection = (lon >= 0.0F) ? "Left/Front" : "Left/Rear";
+    }
+  }
 
   // デモモード処理
   if (DEMO_MODE_ENABLED)
