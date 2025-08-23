@@ -48,6 +48,18 @@ void test_calculate_average()
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f, avg);
 }
 
+// サンプルバッファ更新のテスト
+void test_update_sample_buffer()
+{
+  float buffer[3] = {};
+  int index = 0;
+  bool first = true;
+  updateSampleBuffer(1.0f, buffer, index, first);
+  updateSampleBuffer(2.0f, buffer, index, first);
+  // 初期化後は先頭要素から更新されるため buffer[0] は2になる
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f, buffer[0]);
+}
+
 // テスト実行
 void setup()
 {
@@ -56,6 +68,7 @@ void setup()
   RUN_TEST(test_convert_voltage_to_oil_pressure);
   RUN_TEST(test_convert_voltage_to_temp);
   RUN_TEST(test_calculate_average);
+  RUN_TEST(test_update_sample_buffer);
   UNITY_END();
 }
 

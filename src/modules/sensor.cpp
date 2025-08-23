@@ -101,7 +101,8 @@ static void updateSampleBuffer(float value, float (&buffer)[N], int &index, bool
     {
       v = value;
     }
-    index = 1 % N;  // 初期化後は 1 番目から開始
+    // 初期化直後は最初の要素から更新を再開する
+    index = 0;
     first = false;
   }
   else
