@@ -40,9 +40,9 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
   int textW = canvas.textWidth(WARN_TEXT);
   int textH = canvas.fontHeight();
   constexpr int PADDING = 4;  // ボックス余白
-  int boxW = textW + (PADDING * 2);
-  int boxH = textH + (PADDING * 2);
-  int boxX = GAUGE_X + ((GAUGE_W - boxW) / 2);
+  int boxW = textW + (PADDING * 2) - 1;
+  int boxH = textH + (PADDING * 2) - 2;
+  int boxX = GAUGE_X + ((GAUGE_W - boxW) / 2 - 8);
   int boxY = GAUGE_Y + ((GAUGE_H - boxH) / 2);
 
   static LowWarningState state;  // 表示状態

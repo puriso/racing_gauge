@@ -345,7 +345,7 @@ void drawMenuScreen()
 
     // 単位部分を小さいフォントで描画（数値の下端に揃える）
     mainCanvas.setFont(&fonts::Font0);
-    mainCanvas.setCursor(startX + textWidth, y + textHeight - unitHeight);
+    mainCanvas.setCursor(startX + textWidth + 5, y + textHeight - unitHeight  - 4);
     mainCanvas.print("x100kPa");
     // フォントを元に戻す
     mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
