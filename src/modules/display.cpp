@@ -1,6 +1,7 @@
 #include "display.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -42,13 +43,14 @@ void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
   constexpr int MAX_TEMP = 130;
   constexpr int ALERT_TEMP = 120;
 
-  constexpr int X = 20;
-  constexpr int Y = 15;
-  constexpr int W = 210;
-  constexpr int H = 20;
+  // バー描画位置とサイズ
+  constexpr int BASE_X = 20;
+  constexpr int BASE_Y = 15;
+  constexpr int BAR_WIDTH = 210;
+  constexpr int BAR_HEIGHT = 20;
   constexpr float RANGE = MAX_TEMP - MIN_TEMP;
 
-  canvas.fillRect(X + 1, Y + 1, W - 2, H - 2, 0x18E3);
+  canvas.fillRect(BASE_X + 1, BASE_Y + 1, BAR_WIDTH - 2, BAR_HEIGHT - 2, 0x18E3);
 
   float drawTemp = oilTemp;
   if (drawTemp >= 199.0F)
@@ -59,34 +61,39 @@ void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
 
   if (drawTemp >= MIN_TEMP)
   {
-    int barWidth = static_cast<int>(W * (drawTemp - MIN_TEMP) / RANGE);
+    int barWidth = static_cast<int>(BAR_WIDTH * (drawTemp - MIN_TEMP) / RANGE);
     uint16_t barColor = (drawTemp >= ALERT_TEMP) ? COLOR_RED : COLOR_WHITE;
-    canvas.fillRect(X, Y, barWidth, H, barColor);
+    canvas.fillRect(BASE_X, BASE_Y, barWidth, BAR_HEIGHT, barColor);
   }
 
-  const int marks[] = {80, 90, 100, 110, 120, 130};
+  // 目盛りの値を std::array で管理
+  constexpr std::array<int, 6> MARKS = {80, 90, 100, 110, 120, 130};
   canvas.setTextSize(1);
   canvas.setTextColor(COLOR_WHITE);
   canvas.setFont(&fonts::Font0);
 
-  for (int m : marks)
+  for (int mark : MARKS)
   {
-    int tx = X + static_cast<int>(W * (m - MIN_TEMP) / RANGE);
-    canvas.drawPixel(tx, Y - 2, COLOR_WHITE);
-    canvas.setCursor(tx - 10, Y - 14);
-    canvas.printf("%d", m);
-    if (m == ALERT_TEMP) canvas.drawLine(tx, Y, tx, Y + H - 2, COLOR_GRAY);
+    int textX = BASE_X + static_cast<int>(BAR_WIDTH * (mark - MIN_TEMP) / RANGE);
+    canvas.drawPixel(textX, BASE_Y - 2, COLOR_WHITE);
+    canvas.setCursor(textX - 10, BASE_Y - 14);
+    canvas.printf("%d", mark);
+    if (mark == ALERT_TEMP)
+    {
+      // 警告温度の位置に灰色のラインを描画
+      canvas.drawLine(textX, BASE_Y, textX, BASE_Y + BAR_HEIGHT - 2, COLOR_GRAY);
+    }
   }
 
-  canvas.setCursor(X, Y + H + 4);
+  canvas.setCursor(BASE_X, BASE_Y + BAR_HEIGHT + 4);
   canvas.printf("OIL.T / Celsius,  MAX:%03d", maxOilTemp);
   // snprintf でバッファサイズを指定し、
   // 安全に文字列化する
   int displayOilTemp = oilTemp >= 199.0F ? 0 : static_cast<int>(oilTemp);
-  char tempStr[8];
-  snprintf(tempStr, sizeof(tempStr), "%d", displayOilTemp);
+  std::array<char, 8> tempStr{};
+  snprintf(tempStr.data(), tempStr.size(), "%d", displayOilTemp);
   canvas.setFont(&FreeSansBold24pt7b);
-  canvas.drawRightString(tempStr, LCD_WIDTH - 1, 2);
+  canvas.drawRightString(tempStr.data(), LCD_WIDTH - 1, 2);
 }
 
 // ────────────────────── 画面更新＋ログ ──────────────────────
