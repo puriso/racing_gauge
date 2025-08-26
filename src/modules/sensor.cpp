@@ -202,31 +202,29 @@ void acquireSensorData()
   float absLat = fabsf(lat);
   float absLon = fabsf(lon);
 
-  // 方向判定。真横判定の範囲を広げるため比率で判定する
-  constexpr float PURE_RATIO = 0.75F;  // 斜め判定のしきい値
-  if (absLat >= absLon * PURE_RATIO)
-  {
-    // 左右方向として扱う
-    currentGForce = sqrtf((lat * lat) + (lon * lon));
-    currentGDirection = (lat >= 0.0F) ? "Right" : "Left";
-  }
-  else if (absLon >= absLat * PURE_RATIO)
+  // 方向判定。許容角度 10 度以内で単独方向とする
+  constexpr float PURE_TAN = 0.17632698F;  // tan(10度)
+  currentGForce = sqrtf((lat * lat) + (lon * lon));
+  if (absLat <= absLon * PURE_TAN)
   {
     // 前後方向として扱う
-    currentGForce = sqrtf((lat * lat) + (lon * lon));
     currentGDirection = (lon >= 0.0F) ? "Front" : "Rear";
+  }
+  else if (absLon <= absLat * PURE_TAN)
+  {
+    // 左右方向として扱う
+    currentGDirection = (lat >= 0.0F) ? "Right" : "Left";
   }
   else
   {
-    // 斜め方向
-    currentGForce = sqrtf((lat * lat) + (lon * lon));
-    if (lat >= 0.0F)
+    // 斜め方向 (Front/Rear + Left/Right)
+    if (lon >= 0.0F)
     {
-      currentGDirection = (lon >= 0.0F) ? "Right/Front" : "Right/Rear";
+      currentGDirection = (lat >= 0.0F) ? "FR" : "FL";
     }
     else
     {
-      currentGDirection = (lon >= 0.0F) ? "Left/Front" : "Left/Rear";
+      currentGDirection = (lat >= 0.0F) ? "RR" : "RL";
     }
   }
 
