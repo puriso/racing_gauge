@@ -5,6 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/power.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -123,6 +124,9 @@ void loop()
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
   }
+
+  // VBUS電圧を監視して負荷を調整
+  monitorVbusVoltage();
 
   bool touched = M5.Touch.getCount() > 0;
   if (touched && !wasTouched)

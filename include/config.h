@@ -25,6 +25,12 @@ constexpr bool SENSOR_AMBIENT_LIGHT_PRESENT = true;
 // 0.3sq ケーブル往復14mで約0.137Vの降下を想定
 constexpr float VOLTAGE_DROP = 0.137f;
 
+// ── 電源監視設定 ──
+// VBUS 電圧の低下を検出する閾値 [V]
+constexpr float VBUS_LOW_THRESHOLD = 4.75f;
+// 低電圧時のバックライト輝度
+constexpr uint8_t BACKLIGHT_LOW_VBUS = 16;
+
 // ── 色設定 (16 bit) ──
 // RGB888 から 565 形式へ変換する constexpr 関数
 constexpr uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
