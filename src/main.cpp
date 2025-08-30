@@ -11,22 +11,10 @@
 unsigned long lastFpsSecond = 0;  // 直近1秒判定用
 int fpsFrameCounter = 0;
 int currentFps = 0;
-unsigned long lastDebugPrint = 0;                                    // デバッグ表示用タイマー
 unsigned long lastFrameTimeUs = 0;                                   // 前回フレーム開始時刻
 bool isMenuVisible = false;                                          // メニュー表示中かどうか
 static bool wasTouched = false;                                      // 前回タッチされていたか
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
-
-// ────────────────────── デバッグ情報表示 ──────────────────────
-static void printSensorDebugInfo()
-{
-  float pressure = calculateAverage(oilPressureSamples);
-  float water = calculateAverage(waterTemperatureSamples);
-  float oil = calculateAverage(oilTemperatureSamples);
-  // 水平Gと各センサー値をシリアルに表示
-  Serial.printf("G: %.2f%s, Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", currentGForce, currentGDirection, pressure,
-                water, oil);
-}
 
 // ────────────────────── setup() ──────────────────────
 void setup()
@@ -164,12 +152,5 @@ void loop()
     }
     fpsFrameCounter = 0;
     lastFpsSecond = now;
-  }
-
-  if (DEBUG_MODE_ENABLED && now - lastDebugPrint >= 1000UL)
-  {
-    // FPS更新とは別に1秒ごとにデータを出力
-    printSensorDebugInfo();
-    lastDebugPrint = now;
   }
 }
