@@ -21,6 +21,12 @@ void acquireSensorData();
 template <size_t N>
 inline auto calculateAverage(const float (&values)[N]) -> float
 {
+  // 配列サイズが0の場合は0を返す
+  if (N == 0)
+  {
+    return 0.0F;
+  }
+
   float sum = 0.0F;
   for (size_t i = 0; i < N; ++i)
   {
