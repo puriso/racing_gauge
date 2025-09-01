@@ -2,6 +2,8 @@
 #include <WiFi.h>  // WiFi 無効化用
 #include <Wire.h>
 
+#include <algorithm>
+
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
@@ -16,6 +18,13 @@ unsigned long lastFrameTimeUs = 0;                                   // 前回�
 bool isMenuVisible = false;                                          // メニュー表示中かどうか
 static bool wasTouched = false;                                      // 前回タッチされていたか
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
+static bool isVoltageLow = false;                                    // 電圧低下状態か
+static bool isRecovering = false;                                    // 復帰中か
+static BrightnessMode vbusPrevBrightness = BrightnessMode::Day;      // 電圧低下前の輝度モード
+static unsigned long lastVbusCheckMs = 0;                            // 前回のVBUS監視時刻
+static unsigned long lastBrightnessStepMs = 0;                       // 輝度復帰ステップ時刻
+static uint8_t recoverBrightness = BACKLIGHT_NIGHT;                  // 復帰中の現在輝度
+static bool wifiThrottled = false;                                   // WiFi出力を抑制したか
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -119,7 +128,57 @@ void loop()
 
   M5.update();
 
-  if (!isMenuVisible && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  // VBUS 電圧監視
+  if (now - lastVbusCheckMs >= VBUS_CHECK_INTERVAL_MS)
+  {
+    float vbus = M5.Power.getVBusVoltage();
+    if (!isVoltageLow && vbus < VBUS_LOW_THRESHOLD)
+    {
+      // 閾値を下回ったら負荷を抑制
+      isVoltageLow = true;
+      vbusPrevBrightness = currentBrightnessMode;
+      applyBrightnessMode(BrightnessMode::Night);
+      recoverBrightness = BACKLIGHT_NIGHT;
+      if (WiFi.getMode() != WIFI_MODE_NULL)
+      {
+        WiFi.setTxPower(WIFI_POWER_MINUS_1dBm);
+        wifiThrottled = true;
+      }
+    }
+    else if (isVoltageLow && vbus >= VBUS_RECOVER_THRESHOLD)
+    {
+      // 電圧が回復したら段階的に戻す
+      isVoltageLow = false;
+      isRecovering = true;
+      lastBrightnessStepMs = now;
+    }
+    lastVbusCheckMs = now;
+  }
+
+  if (isRecovering)
+  {
+    uint8_t targetBrightness = (vbusPrevBrightness == BrightnessMode::Day)    ? BACKLIGHT_DAY
+                               : (vbusPrevBrightness == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
+                                                                              : BACKLIGHT_NIGHT;
+    if (recoverBrightness < targetBrightness && now - lastBrightnessStepMs >= 100)
+    {
+      recoverBrightness = std::min<uint8_t>(recoverBrightness + 10, targetBrightness);
+      display.setBrightness(recoverBrightness);
+      lastBrightnessStepMs = now;
+    }
+    if (recoverBrightness >= targetBrightness)
+    {
+      applyBrightnessMode(vbusPrevBrightness);
+      isRecovering = false;
+      if (wifiThrottled)
+      {
+        WiFi.setTxPower(WIFI_POWER_19_5dBm);
+        wifiThrottled = false;
+      }
+    }
+  }
+
+  if (!isMenuVisible && !isVoltageLow && !isRecovering && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
