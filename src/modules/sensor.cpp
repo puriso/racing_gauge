@@ -13,6 +13,7 @@ Adafruit_ADS1015 adsConverter;
 float oilPressureSamples[PRESSURE_SAMPLE_SIZE] = {};
 float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE] = {};
 float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE] = {};
+// 各バッファは小容量のためメモリ消費は僅か (数十バイト程度)
 bool oilPressureOverVoltage = false;
 float currentGForce = 0.0F;
 const char *currentGDirection = "Right";

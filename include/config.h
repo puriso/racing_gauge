@@ -91,9 +91,12 @@ constexpr uint8_t ADC_CH_WATER_TEMP = 1;
 constexpr uint8_t ADC_CH_OIL_PRESSURE = 2;
 constexpr uint8_t ADC_CH_OIL_TEMP = 0;
 
-// サンプリング数設定
+// サンプリング数設定 (メモリオーバーを防ぐため小さめに設定)
 constexpr int PRESSURE_SAMPLE_SIZE = 5;
 constexpr int WATER_TEMP_SAMPLE_SIZE = 2;  // 500ms間隔×2サンプルで約1秒平均
 constexpr int OIL_TEMP_SAMPLE_SIZE = 2;    // 500ms間隔×2サンプルで約1秒平均
+static_assert(PRESSURE_SAMPLE_SIZE <= 10, "PRESSURE_SAMPLE_SIZE が大きすぎます");
+static_assert(WATER_TEMP_SAMPLE_SIZE <= 10, "WATER_TEMP_SAMPLE_SIZE が大きすぎます");
+static_assert(OIL_TEMP_SAMPLE_SIZE <= 10, "OIL_TEMP_SAMPLE_SIZE が大きすぎます");
 
 #endif  // CONFIG_H
