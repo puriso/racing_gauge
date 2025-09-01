@@ -24,7 +24,6 @@ static BrightnessMode vbusPrevBrightness = BrightnessMode::Day;      // 電圧�
 static unsigned long lastVbusCheckMs = 0;                            // 前回のVBUS監視時刻
 static unsigned long lastBrightnessStepMs = 0;                       // 輝度復帰ステップ時刻
 static uint8_t recoverBrightness = BACKLIGHT_NIGHT;                  // 復帰中の現在輝度
-static bool wifiThrottled = false;                                   // WiFi出力を抑制したか
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -139,11 +138,6 @@ void loop()
       vbusPrevBrightness = currentBrightnessMode;
       applyBrightnessMode(BrightnessMode::Night);
       recoverBrightness = BACKLIGHT_NIGHT;
-      if (WiFi.getMode() != WIFI_MODE_NULL)
-      {
-        WiFi.setTxPower(WIFI_POWER_MINUS_1dBm);
-        wifiThrottled = true;
-      }
     }
     else if (isVoltageLow && vbus >= VBUS_RECOVER_THRESHOLD)
     {
@@ -170,11 +164,6 @@ void loop()
     {
       applyBrightnessMode(vbusPrevBrightness);
       isRecovering = false;
-      if (wifiThrottled)
-      {
-        WiFi.setTxPower(WIFI_POWER_19_5dBm);
-        wifiThrottled = false;
-      }
     }
   }
 
