@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "display.h"
+#include "display/brightness_guard.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 // 現在の輝度モード
@@ -34,7 +35,7 @@ void applyBrightnessMode(BrightnessMode mode)
   int targetBrightness = (mode == BrightnessMode::Day)    ? BACKLIGHT_DAY
                          : (mode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
                                                           : BACKLIGHT_NIGHT;
-  display.setBrightness(targetBrightness);
+  GuardedBrightness::apply(targetBrightness);
 }
 
 // ────────────────────── 輝度更新 ──────────────────────

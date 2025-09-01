@@ -78,6 +78,14 @@ constexpr uint8_t BACKLIGHT_DAY = 255;
 constexpr uint8_t BACKLIGHT_DUSK = 200;
 constexpr uint8_t BACKLIGHT_NIGHT = 60;
 
+// ── 輝度ガード設定 ──
+#define RG_ENABLE_VOLTAGE_GUARD 1       // 電圧ガード機能の有効化
+#define RG_VIN_SAMPLE_WINDOW_MS 500     // 電圧移動平均窓 [ms]
+#define RG_VIN_MIN_FOR_RISE_V 4.80f     // 輝度上昇を許可する最低電圧
+#define RG_VIN_HYSTERESIS_V 0.10f       // ヒステリシス幅 [V]
+#define RG_BRIGHTNESS_CAP_UNDER_VIN 80  // 電圧不足時の輝度上限
+#define RG_RETRY_AFTER_MS 1000          // 再評価までの待ち時間 [ms]
+
 constexpr int MEDIAN_BUFFER_SIZE = 6;
 
 // FPS 更新間隔 [ms]

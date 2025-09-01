@@ -3,6 +3,7 @@
 #include <Wire.h>
 
 #include "config.h"
+#include "display/brightness_guard.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
 #include "modules/sensor.h"
@@ -50,7 +51,7 @@ void setup()
   display.initDMA();
   display.setRotation(3);
   display.setColorDepth(DISPLAY_COLOR_DEPTH);
-  display.setBrightness(BACKLIGHT_DAY);
+  GuardedBrightness::apply(BACKLIGHT_DAY);
 
   mainCanvas.setColorDepth(DISPLAY_COLOR_DEPTH);
   mainCanvas.setTextSize(1);
