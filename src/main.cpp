@@ -2,11 +2,10 @@
 #include <WiFi.h>  // WiFi 無効化用
 #include <Wire.h>
 
-#include <algorithm>
-
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/power.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -18,12 +17,7 @@ unsigned long lastFrameTimeUs = 0;                                   // 前回�
 bool isMenuVisible = false;                                          // メニュー表示中かどうか
 static bool wasTouched = false;                                      // 前回タッチされていたか
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
-static bool isVoltageLow = false;                                    // 電圧低下状態か
-static bool isRecovering = false;                                    // 復帰中か
-static BrightnessMode vbusPrevBrightness = BrightnessMode::Day;      // 電圧低下前の輝度モード
-static unsigned long lastVbusCheckMs = 0;                            // 前回のVBUS監視時刻
-static unsigned long lastBrightnessStepMs = 0;                       // 輝度復帰ステップ時刻
-static uint8_t recoverBrightness = BACKLIGHT_NIGHT;                  // 復帰中の現在輝度
+static VbusState vbusState;                                          // VBUS制御の状態
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -127,47 +121,24 @@ void loop()
 
   M5.update();
 
-  // VBUS 電圧監視
-  if (now - lastVbusCheckMs >= VBUS_CHECK_INTERVAL_MS)
+  // VBUS 電圧に基づく負荷制御
+  PowerAction action = processVbus(M5.Power.getVBusVoltage(), now, currentBrightnessMode, vbusState);
+  if (action == PowerAction::ReduceBrightness)
   {
-    float vbus = M5.Power.getVBusVoltage();
-    if (!isVoltageLow && vbus < VBUS_LOW_THRESHOLD)
-    {
-      // 閾値を下回ったら負荷を抑制
-      isVoltageLow = true;
-      vbusPrevBrightness = currentBrightnessMode;
-      applyBrightnessMode(BrightnessMode::Night);
-      recoverBrightness = BACKLIGHT_NIGHT;
-    }
-    else if (isVoltageLow && vbus >= VBUS_RECOVER_THRESHOLD)
-    {
-      // 電圧が回復したら段階的に戻す
-      isVoltageLow = false;
-      isRecovering = true;
-      lastBrightnessStepMs = now;
-    }
-    lastVbusCheckMs = now;
+    applyBrightnessMode(BrightnessMode::Night);
+    display.setBrightness(BACKLIGHT_NIGHT);
+  }
+  else if (action == PowerAction::StepBrightness)
+  {
+    display.setBrightness(vbusState.recoverBrightness);
+  }
+  else if (action == PowerAction::RestoreBrightness)
+  {
+    applyBrightnessMode(vbusState.prevBrightness);
   }
 
-  if (isRecovering)
-  {
-    uint8_t targetBrightness = (vbusPrevBrightness == BrightnessMode::Day)    ? BACKLIGHT_DAY
-                               : (vbusPrevBrightness == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
-                                                                              : BACKLIGHT_NIGHT;
-    if (recoverBrightness < targetBrightness && now - lastBrightnessStepMs >= 100)
-    {
-      recoverBrightness = std::min<uint8_t>(recoverBrightness + 10, targetBrightness);
-      display.setBrightness(recoverBrightness);
-      lastBrightnessStepMs = now;
-    }
-    if (recoverBrightness >= targetBrightness)
-    {
-      applyBrightnessMode(vbusPrevBrightness);
-      isRecovering = false;
-    }
-  }
-
-  if (!isMenuVisible && !isVoltageLow && !isRecovering && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  if (!isMenuVisible && !vbusState.isVoltageLow && !vbusState.isRecovering &&
+      now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
