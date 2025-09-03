@@ -78,6 +78,9 @@ constexpr uint8_t BACKLIGHT_DAY = 255;
 constexpr uint8_t BACKLIGHT_DUSK = 200;
 constexpr uint8_t BACKLIGHT_NIGHT = 60;
 
+// VBUS電圧がこの値を下回る場合は輝度変更を遅延する
+constexpr float VBUS_VOLTAGE_THRESHOLD = 4.6f;
+
 constexpr int MEDIAN_BUFFER_SIZE = 6;
 
 // FPS 更新間隔 [ms]

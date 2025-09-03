@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <cstring>
 
+#ifndef UNIT_TEST
+#include <M5Unified.h>
+#endif
+
 #include "display.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
@@ -27,9 +31,22 @@ static auto calculateMedian(const int *samples) -> int
   return sortedSamples[MEDIAN_BUFFER_SIZE / 2];
 }
 
+// VBUS電圧を取得するヘルパー関数
+static float getVBusVoltage();
+#ifndef UNIT_TEST
+static float getVBusVoltage() { return M5.Power.getVBusVoltage(); }
+#endif
+
 // 指定された輝度モードを適用
 void applyBrightnessMode(BrightnessMode mode)
 {
+  float vbus = getVBusVoltage();
+  if (vbus < VBUS_VOLTAGE_THRESHOLD)
+  {
+    // 電圧が低下しているため輝度変更を次回ループへ延期
+    return;
+  }
+
   currentBrightnessMode = mode;
   int targetBrightness = (mode == BrightnessMode::Day)    ? BACKLIGHT_DAY
                          : (mode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
