@@ -45,15 +45,10 @@ A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays
 ```mermaid
 graph TD
     subgraph "M5Stack CoreS3"
-        V5{
-{5V}}
-        GND{
-  {
-    GND
-  }}
+        V5{{5V}}
+        GND{{GND}}
     end
     ADS[ADS1015]
-
 
     V5 --> ADS
     GND --> ADS
