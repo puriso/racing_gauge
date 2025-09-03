@@ -9,6 +9,7 @@
 #include "backlight.h"
 #include "fps_display.h"
 #include "low_warning.h"
+#include "record_indicator.h"
 #include "sensor.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
@@ -164,9 +165,10 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     // FPS表示が有効な場合のみ描画する
     fpsChanged = drawFpsOverlay();
   }
+  bool recordingChanged = drawRecordingIndicator(mainCanvas);
 
   // 値が更新されたときのみスプライトを転送する
-  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged)
+  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged || recordingChanged)
   {
     mainCanvas.pushSprite(0, 0);
   }

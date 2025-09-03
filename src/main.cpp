@@ -5,6 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/record_indicator.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -16,6 +17,8 @@ unsigned long lastFrameTimeUs = 0;                                   // 前回�
 bool isMenuVisible = false;                                          // メニュー表示中かどうか
 static bool wasTouched = false;                                      // 前回タッチされていたか
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
+static unsigned long recordingStartMs = 0;                           // 録画開始時刻
+static BrightnessMode recordingPrevMode = BrightnessMode::Day;       // 録画開始前の輝度
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -119,7 +122,7 @@ void loop()
 
   M5.update();
 
-  if (!isMenuVisible && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  if (!isMenuVisible && !isRecordingMode && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
@@ -141,15 +144,42 @@ void loop()
       resetGaugeState();
       // メニュー終了後は元の輝度に戻す
 #if SENSOR_AMBIENT_LIGHT_PRESENT
-      updateBacklightLevel();
+      if (isRecordingMode)
+      {
+        applyBrightnessMode(BrightnessMode::Day);
+      }
+      else
+      {
+        updateBacklightLevel();
+      }
 #else
-      applyBrightnessMode(previousBrightnessMode);
+      applyBrightnessMode(isRecordingMode ? BrightnessMode::Day : previousBrightnessMode);
 #endif
     }
   }
   wasTouched = touched;
 
   acquireSensorData();
+
+  if (!isRecordingMode && currentGForce > 1.0F)
+  {
+    // 1Gを超えたら録画モードを開始
+    isRecordingMode = true;
+    recordingStartMs = now;
+    recordingPrevMode = currentBrightnessMode;
+    applyBrightnessMode(BrightnessMode::Day);
+  }
+  else if (isRecordingMode && now - recordingStartMs >= 180000UL)
+  {
+    // 3分経過で録画モードを終了
+    isRecordingMode = false;
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+    updateBacklightLevel();
+#else
+    applyBrightnessMode(recordingPrevMode);
+#endif
+  }
+
   if (!isMenuVisible)
   {
     updateGauges();
