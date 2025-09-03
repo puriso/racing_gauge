@@ -5,6 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/power.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -16,6 +17,7 @@ unsigned long lastFrameTimeUs = 0;                                   // 前回�
 bool isMenuVisible = false;                                          // メニュー表示中かどうか
 static bool wasTouched = false;                                      // 前回タッチされていたか
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
+static VbusState vbusState;                                          // VBUS制御の状態
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -119,7 +121,24 @@ void loop()
 
   M5.update();
 
-  if (!isMenuVisible && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  // VBUS 電圧に基づく負荷制御
+  PowerAction action = processVbus(M5.Power.getVBusVoltage(), now, currentBrightnessMode, vbusState);
+  if (action == PowerAction::ReduceBrightness)
+  {
+    applyBrightnessMode(BrightnessMode::Night);
+    display.setBrightness(BACKLIGHT_NIGHT);
+  }
+  else if (action == PowerAction::StepBrightness)
+  {
+    display.setBrightness(vbusState.recoverBrightness);
+  }
+  else if (action == PowerAction::RestoreBrightness)
+  {
+    applyBrightnessMode(vbusState.prevBrightness);
+  }
+
+  if (!isMenuVisible && !vbusState.isVoltageLow && !vbusState.isRecovering &&
+      now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
