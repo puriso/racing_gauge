@@ -1,18 +1,18 @@
-#include "record_indicator.h"
+#include "racing_indicator.h"
 
-// 録画モードかどうかを保持
-bool isRecordingMode = false;
+// レーシングモードかどうかを保持
+bool isRacingMode = false;
 
 // Rマークが描画済みかどうか
 static bool indicatorDrawn = false;
 
-// ────────────────────── 録画中表示 ──────────────────────
-bool drawRecordingIndicator(M5Canvas &canvas)
+// ────────────────────── レーシング中表示 ──────────────────────
+bool drawRacingIndicator(M5Canvas &canvas)
 {
   constexpr int INDICATOR_X = 2;
   constexpr int INDICATOR_Y = LCD_HEIGHT - 16;
 
-  if (isRecordingMode)
+  if (isRacingMode)
   {
     if (!indicatorDrawn)
     {

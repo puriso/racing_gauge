@@ -5,7 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
-#include "modules/record_indicator.h"
+#include "modules/racing_indicator.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -17,8 +17,8 @@ unsigned long lastFrameTimeUs = 0;                                   // 前回�
 bool isMenuVisible = false;                                          // メニュー表示中かどうか
 static bool wasTouched = false;                                      // 前回タッチされていたか
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
-static unsigned long recordingStartMs = 0;                           // 録画開始時刻
-static BrightnessMode recordingPrevMode = BrightnessMode::Day;       // 録画開始前の輝度
+static unsigned long racingStartMs = 0;                              // レーシング開始時刻
+static BrightnessMode racingPrevMode = BrightnessMode::Day;          // レーシング開始前の輝度
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -122,7 +122,7 @@ void loop()
 
   M5.update();
 
-  if (!isMenuVisible && !isRecordingMode && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  if (!isMenuVisible && !isRacingMode && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = now;
@@ -144,7 +144,7 @@ void loop()
       resetGaugeState();
       // メニュー終了後は元の輝度に戻す
 #if SENSOR_AMBIENT_LIGHT_PRESENT
-      if (isRecordingMode)
+      if (isRacingMode)
       {
         applyBrightnessMode(BrightnessMode::Day);
       }
@@ -153,7 +153,7 @@ void loop()
         updateBacklightLevel();
       }
 #else
-      applyBrightnessMode(isRecordingMode ? BrightnessMode::Day : previousBrightnessMode);
+      applyBrightnessMode(isRacingMode ? BrightnessMode::Day : previousBrightnessMode);
 #endif
     }
   }
@@ -161,22 +161,22 @@ void loop()
 
   acquireSensorData();
 
-  if (!isRecordingMode && currentGForce > 1.0F)
+  if (!isRacingMode && currentGForce > 1.0F)
   {
-    // 1Gを超えたら録画モードを開始
-    isRecordingMode = true;
-    recordingStartMs = now;
-    recordingPrevMode = currentBrightnessMode;
+    // 1Gを超えたらレーシングモードを開始
+    isRacingMode = true;
+    racingStartMs = now;
+    racingPrevMode = currentBrightnessMode;
     applyBrightnessMode(BrightnessMode::Day);
   }
-  else if (isRecordingMode && now - recordingStartMs >= 180000UL)
+  else if (isRacingMode && now - racingStartMs >= 180000UL)
   {
-    // 3分経過で録画モードを終了
-    isRecordingMode = false;
+    // 3分経過でレーシングモードを終了
+    isRacingMode = false;
 #if SENSOR_AMBIENT_LIGHT_PRESENT
     updateBacklightLevel();
 #else
-    applyBrightnessMode(recordingPrevMode);
+    applyBrightnessMode(racingPrevMode);
 #endif
   }
 
