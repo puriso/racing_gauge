@@ -24,6 +24,8 @@ constexpr bool SENSOR_AMBIENT_LIGHT_PRESENT = true;
 // ── 電圧降下補正 ──
 // 0.3sq ケーブル往復14mで約0.137Vの降下を想定
 constexpr float VOLTAGE_DROP = 0.137f;
+// バッテリー電圧がこの値未満の場合は輝度を変更しない [mV]
+constexpr int16_t MIN_BATTERY_VOLTAGE_MV = 3300;
 
 // ── 色設定 (16 bit) ──
 // RGB888 から 565 形式へ変換する constexpr 関数

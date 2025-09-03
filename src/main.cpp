@@ -1,5 +1,6 @@
 #include <M5CoreS3.h>
-#include <WiFi.h>  // WiFi 無効化用
+#include <M5Unified.h>  // バージョン取得用
+#include <WiFi.h>       // WiFi 無効化用
 #include <Wire.h>
 
 #include "config.h"
@@ -32,6 +33,10 @@ static void printSensorDebugInfo()
 void setup()
 {
   Serial.begin(115200);
+
+  // M5ライブラリのバージョンをシリアルに表示
+  Serial.print("M5Unified version: ");
+  Serial.println(M5UNIFIED_VERSION);
 
   M5.begin();
   CoreS3.begin(M5.config());

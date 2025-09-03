@@ -30,6 +30,16 @@ static auto calculateMedian(const int *samples) -> int
 // 指定された輝度モードを適用
 void applyBrightnessMode(BrightnessMode mode)
 {
+  // 電圧を取得し、閾値未満なら輝度を変更しない
+  int16_t voltage = M5.Power.getBatteryVoltage();
+  if (voltage < MIN_BATTERY_VOLTAGE_MV)
+  {
+    if (DEBUG_MODE_ENABLED)
+    {
+      Serial.printf("[Power] voltage:%dmV, skip brightness change\n", voltage);
+    }
+    return;
+  }
   currentBrightnessMode = mode;
   int targetBrightness = (mode == BrightnessMode::Day)    ? BACKLIGHT_DAY
                          : (mode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
