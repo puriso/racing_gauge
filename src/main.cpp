@@ -169,7 +169,7 @@ void loop()
     racingPrevMode = currentBrightnessMode;
     applyBrightnessMode(BrightnessMode::Day);
   }
-  else if (isRacingMode && now - racingStartMs >= 180000UL)
+  else if (isRacingMode && now - racingStartMs >= RACING_MODE_DURATION_MS)
   {
     // 3分経過でレーシングモードを終了
     isRacingMode = false;
