@@ -93,7 +93,6 @@ void setup()
       unsigned long errorStart = millis();  // エラー表示開始時刻
       while (true)
       {
-        M5.update();
         if (millis() - errorStart >= ADS_ERROR_RESTART_DELAY_MS)
         {
           ESP.restart();  // 1分後に再起動
