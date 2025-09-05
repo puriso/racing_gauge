@@ -160,11 +160,10 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
                      recordedMaxOilPressure, prevPressureValue, 0.5f, isUseDecimal, 0, 60, false);
   }
   bool fpsChanged = false;
-  if (FPS_DISPLAY_ENABLED)
-  {
-    // FPS表示が有効な場合のみ描画する
-    fpsChanged = drawFpsOverlay();
-  }
+#if FPS_DISPLAY_ENABLED
+  // FPS表示が有効な場合のみ描画する
+  fpsChanged = drawFpsOverlay();
+#endif
   bool racingChanged = drawRacingIndicator(mainCanvas);
 
   // 値が更新されたときのみスプライトを転送する
@@ -231,11 +230,10 @@ void updateGauges()
 
   float oilTempValue = smoothOilTemp;
   float pressureValue = smoothOilPressure;
-  if (!SENSOR_OIL_TEMP_PRESENT)
-  {
-    // センサーが無い場合は常に 0 表示
-    oilTempValue = 0.0F;
-  }
+#if !SENSOR_OIL_TEMP_PRESENT
+  // センサーが無い場合は常に 0 表示
+  oilTempValue = 0.0F;
+#endif
 
   recordedMaxOilPressure = std::max(recordedMaxOilPressure, pressureAvg);
   recordedMaxWaterTemp = std::max(recordedMaxWaterTemp, smoothWaterTemp);
@@ -262,7 +260,11 @@ void drawMenuScreen()
   constexpr int MENU_BOTTOM_MARGIN = 40;  // 下端の余白（戻る案内分）
   // 表示行数を減らして行間を確保
   // OIL.P WARN の詳細表示を2行で確保するため1行分多く確保
-  constexpr int MENU_LINES = SENSOR_AMBIENT_LIGHT_PRESENT ? 7 : 5;                          // 表示行数
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+  constexpr int MENU_LINES = 7;  // 表示行数
+#else
+  constexpr int MENU_LINES = 5;  // 表示行数
+#endif
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
@@ -270,50 +272,41 @@ void drawMenuScreen()
   // 最高水温を表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
-  if (SENSOR_WATER_TEMP_PRESENT)
-  {
-    char valStr[8];
-    // 小数点を表示しない
-    snprintf(valStr, sizeof(valStr), "%6.0f", recordedMaxWaterTemp);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
+#if SENSOR_WATER_TEMP_PRESENT
+  char valStr[8];
+  // 小数点を表示しない
+  snprintf(valStr, sizeof(valStr), "%6.0f", recordedMaxWaterTemp);
+  mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+#else
+  // センサー無効時は Disabled と表示
+  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+#endif
 
   y += lineHeight;
   // 最高油温を表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
-  if (SENSOR_OIL_TEMP_PRESENT)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
+#if SENSOR_OIL_TEMP_PRESENT
+  char valStr[8];
+  snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
+  mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+#else
+  // センサー無効時は Disabled と表示
+  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+#endif
 
   y += lineHeight;
   // 最高油圧を表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.P MAX:");
-  if (SENSOR_OIL_PRESSURE_PRESENT)
-  {
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // センサー無効時は Disabled と表示
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
+#if SENSOR_OIL_PRESSURE_PRESENT
+  char valStr[8];
+  snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
+  mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+#else
+  // センサー無効時は Disabled と表示
+  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+#endif
 
   y += lineHeight;
   // 直近の低油圧イベント情報を2行で表示
@@ -359,33 +352,30 @@ void drawMenuScreen()
 
   y += lineHeight;
   mainCanvas.setCursor(10, y);
-  if (SENSOR_AMBIENT_LIGHT_PRESENT)
-  {
-    // 現在のLUX値を表示
-    mainCanvas.print("LUX LATEST:");
-    char valStr[8];
-    snprintf(valStr, sizeof(valStr), "%6d", latestLux);
-    mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+  // 現在のLUX値を表示
+  mainCanvas.print("LUX LATEST:");
+  char valStr[8];
+  snprintf(valStr, sizeof(valStr), "%6d", latestLux);
+  mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 
-    y += lineHeight;
-    mainCanvas.setCursor(10, y);
-    // 照度の中央値を表示
-    mainCanvas.print("LUX MEDIAN:");
-    char medStr[8];
-    snprintf(medStr, sizeof(medStr), "%6d", medianLuxValue);
-    mainCanvas.drawRightString(medStr, LCD_WIDTH - 10, y);
-  }
-  else
-  {
-    // LUX センサーが無い場合は両方 Disabled を表示
-    mainCanvas.print("LUX LATEST:");
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  y += lineHeight;
+  mainCanvas.setCursor(10, y);
+  // 照度の中央値を表示
+  mainCanvas.print("LUX MEDIAN:");
+  char medStr[8];
+  snprintf(medStr, sizeof(medStr), "%6d", medianLuxValue);
+  mainCanvas.drawRightString(medStr, LCD_WIDTH - 10, y);
+#else
+  // LUX センサーが無い場合は両方 Disabled を表示
+  mainCanvas.print("LUX LATEST:");
+  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
 
-    y += 25;
-    mainCanvas.setCursor(10, y);
-    mainCanvas.print("LUX MEDIAN:");
-    mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-  }
+  y += 25;
+  mainCanvas.setCursor(10, y);
+  mainCanvas.print("LUX MEDIAN:");
+  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+#endif
 
   // 戻る案内を左下へ配置
   mainCanvas.setCursor(10, LCD_HEIGHT - 20);

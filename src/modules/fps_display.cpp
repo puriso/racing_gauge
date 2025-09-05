@@ -12,11 +12,10 @@ static unsigned long lastFpsDrawTime = 0;
 // ────────────────────── FPS表示 ──────────────────────
 auto drawFpsOverlay() -> bool
 {
-  if (!FPS_DISPLAY_ENABLED)
-  {
-    // FPS表示が無効な場合は何もしない
-    return false;
-  }
+#if !FPS_DISPLAY_ENABLED
+  // FPS表示が無効な場合は何もしない
+  return false;
+#endif
 
   mainCanvas.setFont(&fonts::Font0);
   mainCanvas.setTextSize(0);

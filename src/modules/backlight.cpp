@@ -40,14 +40,13 @@ void applyBrightnessMode(BrightnessMode mode)
 // ────────────────────── 輝度更新 ──────────────────────
 void updateBacklightLevel()
 {
-  if (!SENSOR_AMBIENT_LIGHT_PRESENT)
+#if !SENSOR_AMBIENT_LIGHT_PRESENT
+  if (currentBrightnessMode != BrightnessMode::Day)
   {
-    if (currentBrightnessMode != BrightnessMode::Day)
-    {
-      applyBrightnessMode(BrightnessMode::Day);
-    }
-    return;
+    applyBrightnessMode(BrightnessMode::Day);
   }
+  return;
+#endif
 
   int currentLux = CoreS3.Ltr553.getAlsValue();
   latestLux = currentLux;
@@ -59,10 +58,9 @@ void updateBacklightLevel()
   medianLuxValue = medianLux;
 
   // デバッグモードでは照度を出力
-  if (DEBUG_MODE_ENABLED)
-  {
-    Serial.printf("[ALS] lux:%u, median:%u\n", currentLux, medianLux);
-  }
+#if DEBUG_MODE_ENABLED
+  Serial.printf("[ALS] lux:%u, median:%u\n", currentLux, medianLux);
+#endif
 
   BrightnessMode newMode = (medianLux >= LUX_THRESHOLD_DAY)    ? BrightnessMode::Day
                            : (medianLux >= LUX_THRESHOLD_DUSK) ? BrightnessMode::Dusk

@@ -5,21 +5,21 @@
 
 // ────────────────────── 設定 ──────────────────────
 // デバッグ用メッセージ表示の有無
-constexpr bool DEBUG_MODE_ENABLED = false;
+#define DEBUG_MODE_ENABLED 0
 
 // デモモードを有効にするかどうか
-constexpr bool DEMO_MODE_ENABLED = false;
+#define DEMO_MODE_ENABLED 0
 
 // FPS表示を行うかどうか
-constexpr bool FPS_DISPLAY_ENABLED = false;
+#define FPS_DISPLAY_ENABLED 0
 
-// ── センサー接続可否（false にするとその項目は常に 0 表示） ──
-constexpr bool SENSOR_OIL_PRESSURE_PRESENT = true;
-constexpr bool SENSOR_WATER_TEMP_PRESENT = true;
+// ── センサー接続可否（0 にするとその項目は常に 0 表示） ──
+#define SENSOR_OIL_PRESSURE_PRESENT 1
+#define SENSOR_WATER_TEMP_PRESENT 1
 // 油温センサーを使用するかどうか
-constexpr bool SENSOR_OIL_TEMP_PRESENT = true;
-// 照度センサーを使用する場合は true
-constexpr bool SENSOR_AMBIENT_LIGHT_PRESENT = true;
+#define SENSOR_OIL_TEMP_PRESENT 1
+// 照度センサーを使用する場合は 1
+#define SENSOR_AMBIENT_LIGHT_PRESENT 1
 
 // ── 電圧降下補正 ──
 // 0.3sq ケーブル往復14mで約0.137Vの降下を想定
