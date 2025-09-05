@@ -3,6 +3,8 @@
 
 #include <M5CoreS3.h>
 
+#include <cstdint>  // 整数型定義
+
 // ────────────────────── 設定 ──────────────────────
 // デバッグ用メッセージ表示の有無
 #define DEBUG_MODE_ENABLED 0
