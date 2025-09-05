@@ -229,74 +229,75 @@ void acquireSensorData()
   }
 
   // デモモード処理
-  if (DEMO_MODE_ENABLED)
+#if DEMO_MODE_ENABLED
+  // 上昇フェーズ
+  if (!inPattern)
   {
-    // 上昇フェーズ
-    if (!inPattern)
+    if (now - demoTick >= 1000)
     {
-      if (now - demoTick >= 1000)
+      demoVoltage += 0.25F;
+      if (demoVoltage >= 5.0F)
       {
-        demoVoltage += 0.25F;
-        if (demoVoltage >= 5.0F)
-        {
-          demoVoltage = 5.0F;
-          inPattern = true;
-          patternIndex = 0;
-        }
-        demoTick = now;
+        demoVoltage = 5.0F;
+        inPattern = true;
+        patternIndex = 0;
       }
+      demoTick = now;
     }
-    else
-    {
-      // パターンフェーズ
-      if (now - demoTick >= 500)
-      {
-        demoVoltage = patternSeq[patternIndex];
-        patternIndex++;
-        if (patternIndex >= sizeof(patternSeq) / sizeof(patternSeq[0]))
-        {
-          patternIndex = 0;
-          inPattern = false;
-          demoVoltage = 0.0F;
-        }
-        demoTick = now;
-      }
-    }
-
-    float demoPressure = convertVoltageToOilPressure(demoVoltage);
-    // 温度センサは電圧変化と逆の振る舞いにする
-    float demoTemp = convertVoltageToTemp(SUPPLY_VOLTAGE - demoVoltage);
-
-    oilPressureSamples[oilPressureIndex] = demoPressure;
-    updateSampleBuffer(demoTemp, waterTemperatureSamples, waterTempIndex, isFirstWaterTempSample);
-    updateSampleBuffer(demoTemp, oilTemperatureSamples, oilTempIndex, isFirstOilTempSample);
-
-    Serial.printf("[DEMO] V:%.2f P:%.2f T:%.1f\n", demoVoltage, demoPressure, demoTemp);
-
-    oilPressureIndex = (oilPressureIndex + 1) % PRESSURE_SAMPLE_SIZE;
-    return;
-  }
-
-  // ── 通常センサ読み取り ──
-  if (SENSOR_OIL_PRESSURE_PRESENT)
-  {
-    int16_t rawAdc = readAdcWithSettling(ADC_CH_OIL_PRESSURE);  // CH1: 油圧
-    float voltage = convertAdcToVoltage(rawAdc);
-    oilPressureOverVoltage = voltage >= 4.9F;
-    float pressureValue = oilPressureOverVoltage ? 0.0F : convertVoltageToOilPressure(voltage);
-    oilPressureSamples[oilPressureIndex] = pressureValue;
   }
   else
   {
-    oilPressureSamples[oilPressureIndex] = 0.0F;
-    oilPressureOverVoltage = false;
+    // パターンフェーズ
+    if (now - demoTick >= 500)
+    {
+      demoVoltage = patternSeq[patternIndex];
+      patternIndex++;
+      if (patternIndex >= sizeof(patternSeq) / sizeof(patternSeq[0]))
+      {
+        patternIndex = 0;
+        inPattern = false;
+        demoVoltage = 0.0F;
+      }
+      demoTick = now;
+    }
   }
+
+  float demoPressure = convertVoltageToOilPressure(demoVoltage);
+  // 温度センサは電圧変化と逆の振る舞いにする
+  float demoTemp = convertVoltageToTemp(SUPPLY_VOLTAGE - demoVoltage);
+
+  oilPressureSamples[oilPressureIndex] = demoPressure;
+  updateSampleBuffer(demoTemp, waterTemperatureSamples, waterTempIndex, isFirstWaterTempSample);
+  updateSampleBuffer(demoTemp, oilTemperatureSamples, oilTempIndex, isFirstOilTempSample);
+
+  Serial.printf("[DEMO] V:%.2f P:%.2f T:%.1f\n", demoVoltage, demoPressure, demoTemp);
+
+  oilPressureIndex = (oilPressureIndex + 1) % PRESSURE_SAMPLE_SIZE;
+  return;
+#endif
+
+  // ── 通常センサ読み取り ──
+#if SENSOR_OIL_PRESSURE_PRESENT
+  int16_t rawAdc = readAdcWithSettling(ADC_CH_OIL_PRESSURE);  // CH1: 油圧
+  float voltage = convertAdcToVoltage(rawAdc);
+  oilPressureOverVoltage = voltage >= 4.9F;
+  float pressureValue = oilPressureOverVoltage ? 0.0F : convertVoltageToOilPressure(voltage);
+  oilPressureSamples[oilPressureIndex] = pressureValue;
+#else
+  oilPressureSamples[oilPressureIndex] = 0.0F;
+  oilPressureOverVoltage = false;
+#endif
   oilPressureIndex = (oilPressureIndex + 1) % PRESSURE_SAMPLE_SIZE;
 
   // 水温
   if (now - lastWaterTempSampleTime >= TEMP_SAMPLE_INTERVAL_MS)
   {
-    float value = SENSOR_WATER_TEMP_PRESENT ? readTemperatureChannel(ADC_CH_WATER_TEMP) : 0.0f;
+    float value;
+#if SENSOR_WATER_TEMP_PRESENT
+    value = readTemperatureChannel(ADC_CH_WATER_TEMP);
+#else
+    value = 0.0f;
+#endif
     updateSampleBuffer(value, waterTemperatureSamples, waterTempIndex, isFirstWaterTempSample);
     lastWaterTempSampleTime = now;
   }
@@ -304,7 +305,12 @@ void acquireSensorData()
   // 油温
   if (now - lastOilTempSampleTime >= TEMP_SAMPLE_INTERVAL_MS)
   {
-    float value = SENSOR_OIL_TEMP_PRESENT ? readTemperatureChannel(ADC_CH_OIL_TEMP) : 0.0f;
+    float value;
+#if SENSOR_OIL_TEMP_PRESENT
+    value = readTemperatureChannel(ADC_CH_OIL_TEMP);
+#else
+    value = 0.0f;
+#endif
     updateSampleBuffer(value, oilTemperatureSamples, oilTempIndex, isFirstOilTempSample);
     lastOilTempSampleTime = now;
   }

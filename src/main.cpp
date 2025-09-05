@@ -76,48 +76,44 @@ void setup()
   pinMode(8, INPUT_PULLUP);
   Wire.begin(9, 8);
 
-  if (!DEMO_MODE_ENABLED)
-  {
-    // デモモードでなければADS1015を初期化し、失敗時は画面にエラーを表示
-    if (!adsConverter.begin())
+#if !DEMO_MODE_ENABLED
+  // デモモードでなければADS1015を初期化し、失敗時は画面にエラーを表示
+  if (!adsConverter.begin()    {
+    // ADS1015の初期化に失敗した場合はユーザーに通知し処理を停止
+    Serial.println(
+        "Failed to start analog sensor.\n"
+        "Values will stay at 0");
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setTextColor(COLOR_RED);
+    M5.Lcd.setCursor(0, 0);
+    M5.Lcd.println("Failed to start analog sensor")
+    M5.Lcd.println("Please check wiring");
+    unsigned long errorStart = millis();  // エラー表示開始時刻
+    while (true)
     {
-      // ADS1015の初期化に失敗した場合はユーザーに通知し処理を停止
-      Serial.println(
-          "Failed to start analog sensor.\n"
-          "Values will stay at 0");
-      M5.Lcd.setTextSize(2);
-      M5.Lcd.setTextColor(COLOR_RED);
-      M5.Lcd.setCursor(0, 0);
-      M5.Lcd.println("Failed to start analog sensor");
-      M5.Lcd.println("Please check wiring");
-      unsigned long errorStart = millis();  // エラー表示開始時刻
-      while (true)
-      {
-        if (millis() - errorStart >= ADS_ERROR_RESTART_DELAY_MS)
-        {
-          ESP.restart();  // 1分後に再起動
-        }
-        delay(ADS_ERROR_UPDATE_DELAY_MS);
+      if (millis() - errorStart >= ADS_ERROR_RESTART_DELAY_MS) {
+        ESP.restart();  // 1分後に再起動
       }
+      delay(ADS_ERROR_UPDATE_DELAY_MS);
     }
-    else
+  else
     {
       adsConverter.setDataRate(RATE_ADS1015_1600SPS);
     }
   }
+#endif
 
-  if (SENSOR_AMBIENT_LIGHT_PRESENT)
-  {
-    // ALS のゲインと積分時間を設定してから初期化
-    Ltr5xx_Init_Basic_Para ltr553Params = LTR5XX_BASE_PARA_CONFIG_DEFAULT;
-    ltr553Params.ps_led_pulse_freq = LTR5XX_LED_PULSE_FREQ_40KHZ;
-    ltr553Params.als_gain = LTR5XX_ALS_GAIN_1X;
-    ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_100MS;
-    CoreS3.Ltr553.begin(&ltr553Params);
-    CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_ACTIVE_MODE);
-    // 初回起動時に照度を取得して輝度を決定
-    updateBacklightLevel();
-  }
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+  // ALS のゲインと積分時間を設定してから初期化
+  Ltr5xx_Init_Basic_Para ltr553Params = LTR5XX_BASE_PARA_CONFIG_DEFAULT;
+  ltr553Params.ps_led_pulse_freq = LTR5XX_LED_PULSE_FREQ_40KHZ;
+  ltr553Params.als_gain = LTR5XX_ALS_GAIN_1X;
+  ltr553Params.als_integration_time = LTR5XX_ALS_INTEGRATION_TIME_100MS;
+  CoreS3.Ltr553.begin(&ltr553Params);
+  CoreS3.Ltr553.setAlsMode(LTR5XX_ALS_ACTIVE_MODE);
+  // 初回起動時に照度を取得して輝度を決定
+  updateBacklightLevel();
+#endif
 }
 
 // ────────────────────── loop() ──────────────────────
@@ -203,18 +199,19 @@ void loop()
   if (now - lastFpsSecond >= FPS_INTERVAL_MS)
   {
     currentFps = fpsFrameCounter;
-    if (DEBUG_MODE_ENABLED)
-    {
-      Serial.printf("FPS:%d\n", currentFps);
-    }
+#if DEBUG_MODE_ENABLED
+    Serial.printf("FPS:%d\n", currentFps);
+#endif
     fpsFrameCounter = 0;
     lastFpsSecond = now;
   }
 
-  if (DEBUG_MODE_ENABLED && now - lastDebugPrint >= 1000UL)
+#if DEBUG_MODE_ENABLED
+  if (now - lastDebugPrint >= 1000UL)
   {
     // FPS更新とは別に1秒ごとにデータを出力
     printSensorDebugInfo();
     lastDebugPrint = now;
   }
+#endif
 }
