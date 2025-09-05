@@ -268,12 +268,12 @@ void drawMenuScreen()
   const int lineHeight = (LCD_HEIGHT - MENU_TOP_MARGIN - MENU_BOTTOM_MARGIN) / MENU_LINES;  // 行間
 
   int y = MENU_TOP_MARGIN;
+  char valStr[8];  // 数値表示用バッファ
 
   // 最高水温を表示
   mainCanvas.setCursor(10, y);
   mainCanvas.print("WATER.T MAX:");
 #if SENSOR_WATER_TEMP_PRESENT
-  char valStr[8];
   // 小数点を表示しない
   snprintf(valStr, sizeof(valStr), "%6.0f", recordedMaxWaterTemp);
   mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
@@ -287,7 +287,6 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
 #if SENSOR_OIL_TEMP_PRESENT
-  char valStr[8];
   snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
   mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 #else
@@ -300,7 +299,6 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.P MAX:");
 #if SENSOR_OIL_PRESSURE_PRESENT
-  char valStr[8];
   snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
   mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 #else
@@ -355,7 +353,6 @@ void drawMenuScreen()
 #if SENSOR_AMBIENT_LIGHT_PRESENT
   // 現在のLUX値を表示
   mainCanvas.print("LUX LATEST:");
-  char valStr[8];
   snprintf(valStr, sizeof(valStr), "%6d", latestLux);
   mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 
