@@ -2,7 +2,9 @@
 #define SENSOR_H
 
 #include <Adafruit_ADS1X15.h>
-#include <stdint.h>
+
+#include <cstddef>
+#include <cstdint>
 
 #include "config.h"
 
