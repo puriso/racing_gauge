@@ -19,6 +19,8 @@ static bool wasTouched = false;                                      // 前回�
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
 static unsigned long racingStartMs = 0;                              // レーシング開始時刻
 static BrightnessMode racingPrevMode = BrightnessMode::Day;          // レーシング開始前の輝度
+static constexpr int ADS_ERROR_UPDATE_DELAY_MS = 100;                // エラー表示維持のための遅延時間
+static constexpr int ADS_ERROR_RESTART_DELAY_MS = 60000;             // エラー表示後に再起動するまでの時間
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -79,12 +81,25 @@ void setup()
     // デモモードでなければADS1015を初期化し、失敗時は画面にエラーを表示
     if (!adsConverter.begin())
     {
-      Serial.println("[ADS1015] init failed… all analog values will be 0");
+      // ADS1015の初期化に失敗した場合はユーザーに通知し処理を停止
+      Serial.println(
+          "Failed to start analog sensor.\n"
+          "Values will stay at 0");
       M5.Lcd.setTextSize(2);
       M5.Lcd.setTextColor(COLOR_RED);
       M5.Lcd.setCursor(0, 0);
-      M5.Lcd.println("ADS1015 init failed");
-      M5.Lcd.println("Check wiring");
+      M5.Lcd.println("Failed to start analog sensor");
+      M5.Lcd.println("Please check wiring");
+      unsigned long errorStart = millis();  // エラー表示開始時刻
+      while (true)
+      {
+        M5.update();
+        if (millis() - errorStart >= ADS_ERROR_RESTART_DELAY_MS)
+        {
+          ESP.restart();  // 1分後に再起動
+        }
+        delay(ADS_ERROR_UPDATE_DELAY_MS);
+      }
     }
     else
     {
