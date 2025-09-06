@@ -1,5 +1,6 @@
 #include <M5CoreS3.h>
-#include <WiFi.h>  // WiFi 無効化用
+#include <Preferences.h>  // NVS へ状態保存用
+#include <WiFi.h>         // WiFi 無効化用
 #include <Wire.h>
 
 #include "config.h"
@@ -14,6 +15,10 @@ int currentFps = 0;
 unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
 unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
 
+Preferences preferences;        // NVS へのアクセス用
+bool racingMode = false;        // レーシングモードの状態
+static int lastTouchCount = 0;  // タッチイベント検出用
+
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
 {
@@ -23,6 +28,21 @@ static void printSensorDebugInfo()
   Serial.printf("Oil.P: %.2f bar, Water.T: %.1f C, Oil.T: %.1f C\n", pressure, water, oil);
 }
 
+// ────────────────────── タッチ処理 ──────────────────────
+static void handleTouch()
+{
+  M5.update();
+  int count = M5.Touch.getCount();
+  if (count > 0 && lastTouchCount == 0)
+  {
+    // タップでモードを切り替え、NVS へ保存
+    racingMode = !racingMode;
+    preferences.putBool("r_mode", racingMode);
+    Serial.printf("RacingMode: %s\n", racingMode ? "ON" : "OFF");
+  }
+  lastTouchCount = count;
+}
+
 // ────────────────────── setup() ──────────────────────
 void setup()
 {
@@ -30,6 +50,10 @@ void setup()
 
   M5.begin();
   CoreS3.begin(M5.config());
+
+  // NVS からモード状態を読み込み
+  preferences.begin("rgauge", false);
+  racingMode = preferences.getBool("r_mode", false);
 
   // WiFi を完全に停止
   WiFi.mode(WIFI_OFF);
@@ -97,6 +121,8 @@ void loop()
   }
   lastFrameTimeUs = nowUs;
   unsigned long now = millis();
+
+  handleTouch();  // タッチ入力を処理
 
   if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
