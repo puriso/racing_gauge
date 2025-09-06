@@ -138,13 +138,13 @@ void acquireSensorData()
   float ax = 0.0F, ay = 0.0F, az = 0.0F;
   M5.Imu.getAccelData(&ax, &ay, &az);
 
-  // ── 起動直後は複数サンプルからオフセットを平均化し縦軸を判定 ──
+  // ── 起動直後は複数サンプルからオフセットを平均化 ──
   static bool gForceOffsetInitialized = false;
   static float axOffset = 0.0F;
   static float ayOffset = 0.0F;
   static float azOffset = 0.0F;
   static int offsetSampleCount = 0;
-  static int verticalAxis = 2;  // 0:X, 1:Y, 2:Z
+  constexpr int verticalAxis = 2;  // 0:X, 1:Y, 2:Z（上下G検知は無効）
   if (!gForceOffsetInitialized)
   {
     axOffset += ax;
@@ -156,13 +156,7 @@ void acquireSensorData()
       axOffset /= offsetSampleCount;
       ayOffset /= offsetSampleCount;
       azOffset /= offsetSampleCount;
-
-      // 最大オフセットを持つ軸を縦方向とみなす
-      float absOffsets[3] = {fabsf(axOffset), fabsf(ayOffset), fabsf(azOffset)};
-      verticalAxis = 0;
-      if (absOffsets[1] > absOffsets[verticalAxis]) verticalAxis = 1;
-      if (absOffsets[2] > absOffsets[verticalAxis]) verticalAxis = 2;
-
+      // 縦軸判定は無効化のため処理なし
       gForceOffsetInitialized = true;
     }
     else
