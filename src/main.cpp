@@ -129,30 +129,43 @@ void loop()
   bool touched = M5.Touch.getCount() > 0;
   if (touched && !wasTouched)
   {
-    isMenuVisible = !isMenuVisible;
-    if (isMenuVisible)
+    if (isRacingMode)
     {
-      previousBrightnessMode = currentBrightnessMode;  // 現在の輝度モードを保存
-      drawMenuScreen();
-      // メニュー表示中は輝度を最大にする
-      applyBrightnessMode(BrightnessMode::Day);
+      // タップでレーシングモードを即座に終了
+      isRacingMode = false;
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+      updateBacklightLevel();
+#else
+      applyBrightnessMode(racingPrevMode);
+#endif
     }
     else
     {
-      resetGaugeState();
-      // メニュー終了後は元の輝度に戻す
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-      if (isRacingMode)
+      isMenuVisible = !isMenuVisible;
+      if (isMenuVisible)
       {
+        previousBrightnessMode = currentBrightnessMode;  // 現在の輝度モードを保存
+        drawMenuScreen();
+        // メニュー表示中は輝度を最大にする
         applyBrightnessMode(BrightnessMode::Day);
       }
       else
       {
-        updateBacklightLevel();
-      }
+        resetGaugeState();
+        // メニュー終了後は元の輝度に戻す
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+        if (isRacingMode)
+        {
+          applyBrightnessMode(BrightnessMode::Day);
+        }
+        else
+        {
+          updateBacklightLevel();
+        }
 #else
-      applyBrightnessMode(isRacingMode ? BrightnessMode::Day : previousBrightnessMode);
+        applyBrightnessMode(isRacingMode ? BrightnessMode::Day : previousBrightnessMode);
 #endif
+      }
     }
   }
   wasTouched = touched;
