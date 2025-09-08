@@ -2,11 +2,10 @@
 #include <WiFi.h>  // WiFi 無効化用
 #include <Wire.h>
 
-#include <cmath>
-
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/racing_mode.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -117,18 +116,7 @@ void loop()
   {
     float ax, ay, az;
     M5.Imu.getAccelData(&ax, &ay, &az);
-    float dx = ax - baseAccelX;
-    float dy = ay - baseAccelY;
-    float dz = az - baseAccelZ;
-    float diff = std::sqrt(dx * dx + dy * dy + dz * dz);
-    if (diff >= RACING_MODE_ACCEL_THRESHOLD_G)
-    {
-      racingModeStartTime = now;  // 1g超過で時間延長
-    }
-    if (now - racingModeStartTime >= RACING_MODE_DURATION_MS)
-    {
-      racingModeActive = false;  // レーシングモード終了
-    }
+    racingModeActive = updateRacingMode(racingModeStartTime, now, ax, ay, az, baseAccelX, baseAccelY, baseAccelZ);
   }
 
   if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
