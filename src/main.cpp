@@ -132,7 +132,8 @@ void loop()
     isMenuVisible = !isMenuVisible;
     if (isMenuVisible)
     {
-      previousBrightnessMode = currentBrightnessMode;  // 現在の輝度モードを保存
+      previousBrightnessMode = isRacingMode ? racingPrevMode : currentBrightnessMode;  // 現在の輝度モードを保存
+      isRacingMode = false;                                                            // 詳細画面ではレーシングモードを解除
       drawMenuScreen();
       // メニュー表示中は輝度を最大にする
       applyBrightnessMode(BrightnessMode::Day);
