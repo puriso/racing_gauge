@@ -9,8 +9,10 @@ bool updateRacingMode(unsigned long &startTime, unsigned long now, float ax, flo
   float dx = ax - baseAx;
   float dy = ay - baseAy;
   float dz = az - baseAz;
-  float diff = std::sqrt(dx * dx + dy * dy + dz * dz);
-  if (diff >= RACING_MODE_ACCEL_THRESHOLD_G)
+  // ルート計算を避けるため二乗値で比較
+  float diffSq = dx * dx + dy * dy + dz * dz;
+  float thresholdSq = RACING_MODE_ACCEL_THRESHOLD_G * RACING_MODE_ACCEL_THRESHOLD_G;
+  if (diffSq >= thresholdSq)
   {
     startTime = now;  // 1g超過で時間延長
   }

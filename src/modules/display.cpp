@@ -18,7 +18,6 @@ static bool waterGaugeInitialized = false;
 float recordedMaxOilPressure = 0.0F;
 float recordedMaxWaterTemp = 0.0F;
 int recordedMaxOilTempTop = 0;
-extern bool racingModeActive;
 
 // 前回描画したゲージ値
 static float prevPressureValue = std::numeric_limits<float>::quiet_NaN();
