@@ -5,6 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/racing_mode.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -13,6 +14,13 @@ int fpsFrameCounter = 0;
 int currentFps = 0;
 unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
 unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
+
+// ── レーシングモード管理 ──
+bool racingModeActive = true;           // レーシングモードが有効か
+unsigned long racingModeStartTime = 0;  // レーシングモード開始時刻
+float baseAccelX = 0.0F;                // 初期加速度X
+float baseAccelY = 0.0F;                // 初期加速度Y
+float baseAccelZ = 0.0F;                // 初期加速度Z
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -58,7 +66,12 @@ void setup()
   M5.Lcd.fillScreen(COLOR_BLACK);
 
   // M5.Speaker.begin();  // スピーカーを使用しないため無効化
-  // M5.Imu.begin();      // IMU を使用しないため無効化
+  M5.Imu.begin();  // IMU を使用して加速度を取得
+  M5.Imu.getAccelData(&baseAccelX, &baseAccelY, &baseAccelZ);
+  racingModeStartTime = millis();  // レーシングモード開始時刻を記録
+  recordedMaxOilPressure = 0.0F;
+  recordedMaxWaterTemp = 0.0F;
+  recordedMaxOilTempTop = 0;
   btStop();
 
   pinMode(9, INPUT_PULLUP);
@@ -97,6 +110,14 @@ void loop()
   }
   lastFrameTimeUs = nowUs;
   unsigned long now = millis();
+
+  // レーシングモードが有効なら終了判定と延長処理を行う
+  if (racingModeActive)
+  {
+    float ax, ay, az;
+    M5.Imu.getAccelData(&ax, &ay, &az);
+    racingModeActive = updateRacingMode(racingModeStartTime, now, ax, ay, az, baseAccelX, baseAccelY, baseAccelZ);
+  }
 
   if (now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
