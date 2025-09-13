@@ -3,7 +3,7 @@
 // スタブヘッダーと対象モジュールをインクルード
 // clang-format off
 #include "M5CoreS3.h"
-#include "../../src/modules/power_monitor.cpp"
+#include "../../src/modules/power_monitor.h"
 // clang-format on
 
 MockM5 M5;  // スタブの実体
