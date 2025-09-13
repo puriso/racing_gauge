@@ -9,6 +9,10 @@
 extern M5GFX display;
 extern M5Canvas mainCanvas;
 extern int currentFps;
+extern float recordedMaxOilPressure;
+extern float recordedMaxWaterTemp;
+extern int recordedMaxOilTempTop;
+extern bool racingModeActive;
 
 void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp);
 void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, int16_t maxOilTemp);
