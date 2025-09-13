@@ -19,6 +19,22 @@ int latestLux = 0;
 // 中央値フィルタ適用後の照度値
 int medianLuxValue = 0;
 
+// 現在の輝度レベル
+static int currentBrightnessLevel = BACKLIGHT_DAY;
+
+// 輝度を段階的に変更する
+static void setBrightnessSmooth(int target)
+{
+  int step = (target > currentBrightnessLevel) ? 1 : -1;
+  for (int level = currentBrightnessLevel; level != target; level += step)
+  {
+    display.setBrightness(level);
+    delay(5);  // 電流変動を抑えるため少し待機
+  }
+  display.setBrightness(target);
+  currentBrightnessLevel = target;
+}
+
 // ────────────────────── 中央値計算 ──────────────────────
 // サンプル配列から中央値を計算する
 static auto calculateMedian(const int *samples) -> int
@@ -36,7 +52,7 @@ void applyBrightnessMode(BrightnessMode mode)
   int targetBrightness = (mode == BrightnessMode::Day)    ? BACKLIGHT_DAY
                          : (mode == BrightnessMode::Dusk) ? BACKLIGHT_DUSK
                                                           : BACKLIGHT_NIGHT;
-  display.setBrightness(targetBrightness);
+  setBrightnessSmooth(targetBrightness);
 }
 
 // ────────────────────── 輝度更新 ──────────────────────

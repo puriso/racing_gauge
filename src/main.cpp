@@ -5,6 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/power_monitor.h"
 #include "modules/racing_indicator.h"
 #include "modules/sensor.h"
 
@@ -48,6 +49,7 @@ void setup()
   M5.Power.setExtOutput(true);   // センサー用に 5V ピン出力を有効化
   M5.Power.setLed(0);            // 基板のLEDを消灯
   M5.Power.setUsbOutput(false);  // USB 給電を停止
+  initPowerMonitor();            // 電源警告の初期化
 
   display.init();
   // DMA を初期化
@@ -120,6 +122,7 @@ void loop()
   unsigned long now = millis();
 
   M5.update();
+  checkPowerWarnings();  // 電源ICの警告を監視
 
   if (!isMenuVisible && !isRacingMode && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
