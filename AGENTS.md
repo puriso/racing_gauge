@@ -8,7 +8,7 @@
 - PRレビューやレビューコメントは日本語で返してください。/ Provide PR reviews and review comments in Japanese.
 - Copilot のレビューコメントは日本語で行い、以下の重要度区分を使用してください。/ Write Copilot review comments in Japanese and use the following importance levels.
   - [MUST]: 不具合やメンテコストを意識すると修正が必須 / Fix is mandatory when considering bugs or maintenance costs.
-  - [IMO★3]: できれば修正したい内容 / Prefer to fix; mark with ★3.
+  - [IMO] ★☆☆: できれば修正したい内容を☆の数で表現する / Prefer to fix; mark with ★★☆(ex.)
   - [NITS]: 細かい指摘で、サジェストを承認すればすぐ修正できる形式にしてください。/ Minor suggestions that should be provided in an easily applicable suggestion format.
 - コミットする前に `.clang-format` と `.clang-tidy` を実行してください。/ Run `.clang-format` and `.clang-tidy` before committing.
 - 二回目以降のコード作成を行う場合、`git pull && git merge main` を実行して競合を解決してください。/ When working on code again, run `git pull && git merge main` to resolve conflicts.
