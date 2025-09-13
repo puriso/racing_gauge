@@ -17,8 +17,8 @@ static inline T clampValue(T val, T low, T high)
   return val;
 }
 
-void drawFillArcMeter(M5Canvas /*unused*/ &canvas, float value, float minValue, float maxValue, float threshold,
-                      uint16_t overThresholdColor, const char *unit, const char *label, float &maxRecordedValue,
+void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxValue, float threshold,
+                      uint16_t overThresholdColor, const char *unit, const char *label,
                       float &previousValue,  // 前回描画した値
                       float tickStep,        // 目盛の間隔（細かい目盛り）
                       bool isUseDecimal,     // 小数点を表示するかどうか
