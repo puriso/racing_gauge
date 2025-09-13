@@ -110,7 +110,7 @@ void loop()
 {
   static unsigned long lastAlsMeasurementTime = 0;
   unsigned long nowUs = micros();
-  // 前のフレームから16.6ms未満なら待機
+  // 前のフレームから33.3ms未満なら待機
   if (lastFrameTimeUs != 0 && nowUs - lastFrameTimeUs < FRAME_INTERVAL_US)
   {
     delayMicroseconds(FRAME_INTERVAL_US - (nowUs - lastFrameTimeUs));
