@@ -77,6 +77,13 @@ constexpr uint8_t BACKLIGHT_NIGHT = 60;
 
 constexpr int MEDIAN_BUFFER_SIZE = 10;
 
+// レーシングモード継続時間 [ms]
+constexpr unsigned long RACING_MODE_DURATION_MS = 180000UL;
+// 静止時の加速度との差がこの値を超えたらレーシングモードを延長・開始する [g]
+constexpr float RACING_MODE_ACCEL_THRESHOLD_G = 1.0F;
+// 加速度が閾値を0.1秒以上超えたらレーシングモードを開始する [ms]
+constexpr unsigned long RACING_MODE_START_DELAY_MS = 100UL;
+
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
 
