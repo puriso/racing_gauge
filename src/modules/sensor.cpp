@@ -24,6 +24,22 @@ static int oilTempIndex = 0;
 static bool isFirstWaterTempSample = true;
 static bool isFirstOilTempSample = true;
 
+static unsigned long lastWaterTempSampleTime = 0;
+static unsigned long lastOilTempSampleTime = 0;
+
+// デモモード用の変数
+static float demoVoltage = 0.0F;
+static unsigned long demoTick = 0;
+static bool inPattern = false;
+static size_t patternIndex = 0;
+
+// 加速度オフセット算出用
+static bool gForceOffsetInitialized = false;
+static float axOffset = 0.0F;
+static float ayOffset = 0.0F;
+static float azOffset = 0.0F;
+static int offsetSampleCount = 0;
+
 // ADC セトリング待ち時間 [us]
 constexpr int ADC_SETTLING_US = 50;
 
@@ -115,18 +131,33 @@ static void updateSampleBuffer(float value, float (&buffer)[N], int &index, bool
   }
 }
 
+// ────────────────────── 状態リセット ──────────────────────
+// 例外発生時にセンサ関連の状態を初期化
+void resetSensorState()
+{
+  std::fill(std::begin(oilPressureSamples), std::end(oilPressureSamples), 0.0F);
+  std::fill(std::begin(waterTemperatureSamples), std::end(waterTemperatureSamples), 0.0F);
+  std::fill(std::begin(oilTemperatureSamples), std::end(oilTemperatureSamples), 0.0F);
+  oilPressureOverVoltage = false;
+  currentGForce = 0.0F;
+  currentGDirection = "Right";
+  oilPressureIndex = waterTempIndex = oilTempIndex = 0;
+  isFirstWaterTempSample = true;
+  isFirstOilTempSample = true;
+  lastWaterTempSampleTime = 0;
+  lastOilTempSampleTime = 0;
+  demoVoltage = 0.0F;
+  demoTick = 0;
+  inPattern = false;
+  patternIndex = 0;
+  gForceOffsetInitialized = false;
+  axOffset = ayOffset = azOffset = 0.0F;
+  offsetSampleCount = 0;
+}
+
 // ────────────────────── センサ取得 ──────────────────────
 void acquireSensorData()
 {
-  static unsigned long lastWaterTempSampleTime = 0;
-  static unsigned long lastOilTempSampleTime = 0;
-
-  // デモモード用の変数
-  // デモ用電圧とシーケンス管理変数
-  static float demoVoltage = 0.0F;    // 現在のデモ電圧
-  static unsigned long demoTick = 0;  // 更新タイマ
-  static bool inPattern = false;      // 0→5V上昇後のパターンフェーズか
-  static size_t patternIndex = 0;     // パターンインデックス
   // デモモードでの電圧変化パターン
   // 5V到達後に 5,0,5,4,3,2,1,0,1,2,3,4,5,0,0,2.5 と0.5秒ごとに変化させる
   constexpr float patternSeq[] = {5.0F, 0.0F, 5.0F, 4.0F, 3.0F, 2.0F, 1.0F, 0.0F,
@@ -137,13 +168,7 @@ void acquireSensorData()
   // IMU から加速度を取得
   float ax = 0.0F, ay = 0.0F, az = 0.0F;
   M5.Imu.getAccelData(&ax, &ay, &az);
-
   // ── 起動直後は複数サンプルからオフセットを平均化 ──
-  static bool gForceOffsetInitialized = false;
-  static float axOffset = 0.0F;
-  static float ayOffset = 0.0F;
-  static float azOffset = 0.0F;
-  static int offsetSampleCount = 0;
   constexpr int verticalAxis = 2;  // 0:X, 1:Y, 2:Z（上下G検知は無効）
   if (!gForceOffsetInitialized)
   {

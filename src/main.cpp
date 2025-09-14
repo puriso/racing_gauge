@@ -211,17 +211,22 @@ void loop()
   }
   catch (...)
   {
-    // loop 内で例外が発生したらエラーを画面に表示して停止
-    Serial.println("[loop] 例外発生");
-    M5.Lcd.fillScreen(COLOR_BLACK);
-    M5.Lcd.setTextColor(COLOR_RED);
-    M5.Lcd.setTextSize(3);
-    M5.Lcd.setCursor(0, 0);
-    M5.Lcd.println("loop例外発生");
-    M5.Lcd.println("再起動してください");
-    while (true)
-    {
-      delay(1000);  // 無限待機で停止
-    }
+    // loop 内で例外が発生したら状態を初期化して処理を継続
+    Serial.println("[loop] 例外発生: 状態を初期化");
+    resetSensorState();
+    resetGaugeState();
+    isMenuVisible = false;
+    wasTouched = false;
+    previousBrightnessMode = BrightnessMode::Day;
+    racingStartMs = 0;
+    racingPrevMode = BrightnessMode::Day;
+    isRacingMode = false;
+    lastFpsSecond = 0;
+    fpsFrameCounter = 0;
+    currentFps = 0;
+    lastDebugPrint = 0;
+    lastFrameTimeUs = 0;
+    lastAlsMeasurementTime = 0;
+    applyBrightnessMode(BrightnessMode::Day);
   }
 }

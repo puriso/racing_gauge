@@ -18,6 +18,7 @@ extern float currentGForce;            // 起動時からの水平加速度変�
 extern const char *currentGDirection;  // 現在の加速度の向き (FR/RR/FL/RL, Front, Rear など)
 
 void acquireSensorData();
+void resetSensorState();
 
 // 平均計算テンプレート
 template <size_t N>
