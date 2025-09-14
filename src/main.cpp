@@ -2,6 +2,8 @@
 #include <WiFi.h>  // WiFi 無効化用
 #include <Wire.h>
 
+#include <exception>
+
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
@@ -109,101 +111,134 @@ void setup()
 // ────────────────────── loop() ──────────────────────
 void loop()
 {
-  static unsigned long lastAlsMeasurementTime = 0;
-  unsigned long nowUs = micros();
-  // 前のフレームから16.6ms未満なら待機
-  if (lastFrameTimeUs != 0 && nowUs - lastFrameTimeUs < FRAME_INTERVAL_US)
+  static bool hasError = false;  // 例外発生後かどうか
+  if (hasError)
   {
-    delayMicroseconds(FRAME_INTERVAL_US - (nowUs - lastFrameTimeUs));
-    nowUs = micros();
-  }
-  lastFrameTimeUs = nowUs;
-  unsigned long now = millis();
-
-  M5.update();
-
-  if (!isMenuVisible && !isRacingMode && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
-  {
-    updateBacklightLevel();
-    lastAlsMeasurementTime = now;
+    // 例外発生後は処理を停止
+    delay(1000);
+    return;
   }
 
-  bool touched = M5.Touch.getCount() > 0;
-  if (touched && !wasTouched)
+  try
   {
-    isMenuVisible = !isMenuVisible;
-    if (isMenuVisible)
+    static unsigned long lastAlsMeasurementTime = 0;
+    unsigned long nowUs = micros();
+    // 前のフレームから16.6ms未満なら待機
+    if (lastFrameTimeUs != 0 && nowUs - lastFrameTimeUs < FRAME_INTERVAL_US)
     {
-      previousBrightnessMode = isRacingMode ? racingPrevMode : currentBrightnessMode;  // 現在の輝度モードを保存
-      isRacingMode = false;                                                            // 詳細画面ではレーシングモードを解除
-      racingStartMs = 0;  // レーシングモードのタイマーをリセット
-      drawMenuScreen();
-      // メニュー表示中は輝度を最大にする
-      applyBrightnessMode(BrightnessMode::Day);
+      delayMicroseconds(FRAME_INTERVAL_US - (nowUs - lastFrameTimeUs));
+      nowUs = micros();
     }
-    else
+    lastFrameTimeUs = nowUs;
+    unsigned long now = millis();
+
+    M5.update();
+
+    if (!isMenuVisible && !isRacingMode && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
     {
-      resetGaugeState();
-      // メニュー終了後は元の輝度に戻す
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-      if (isRacingMode)
+      updateBacklightLevel();
+      lastAlsMeasurementTime = now;
+    }
+
+    bool touched = M5.Touch.getCount() > 0;
+    if (touched && !wasTouched)
+    {
+      isMenuVisible = !isMenuVisible;
+      if (isMenuVisible)
       {
+        previousBrightnessMode = isRacingMode ? racingPrevMode : currentBrightnessMode;  // 現在の輝度モードを保存
+        isRacingMode = false;  // 詳細画面ではレーシングモードを解除
+        racingStartMs = 0;     // レーシングモードのタイマーをリセット
+        drawMenuScreen();
+        // メニュー表示中は輝度を最大にする
         applyBrightnessMode(BrightnessMode::Day);
       }
       else
       {
-        updateBacklightLevel();
-      }
+        resetGaugeState();
+        // メニュー終了後は元の輝度に戻す
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+        if (isRacingMode)
+        {
+          applyBrightnessMode(BrightnessMode::Day);
+        }
+        else
+        {
+          updateBacklightLevel();
+        }
 #else
-      applyBrightnessMode(isRacingMode ? BrightnessMode::Day : previousBrightnessMode);
+        applyBrightnessMode(isRacingMode ? BrightnessMode::Day : previousBrightnessMode);
+#endif
+      }
+    }
+    wasTouched = touched;
+
+    acquireSensorData();
+
+    if (!isRacingMode && currentGForce > 1.0F)
+    {
+      // 1Gを超えたらレーシングモードを開始
+      isRacingMode = true;
+      racingStartMs = now;
+      racingPrevMode = currentBrightnessMode;
+      applyBrightnessMode(BrightnessMode::Day);
+    }
+    else if (isRacingMode && now - racingStartMs >= RACING_MODE_DURATION_MS)
+    {
+      // 3分経過でレーシングモードを終了
+      isRacingMode = false;
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+      updateBacklightLevel();
+#else
+      applyBrightnessMode(racingPrevMode);
 #endif
     }
-  }
-  wasTouched = touched;
 
-  acquireSensorData();
+    if (!isMenuVisible)
+    {
+      updateGauges();
+    }
 
-  if (!isRacingMode && currentGForce > 1.0F)
-  {
-    // 1Gを超えたらレーシングモードを開始
-    isRacingMode = true;
-    racingStartMs = now;
-    racingPrevMode = currentBrightnessMode;
-    applyBrightnessMode(BrightnessMode::Day);
-  }
-  else if (isRacingMode && now - racingStartMs >= RACING_MODE_DURATION_MS)
-  {
-    // 3分経過でレーシングモードを終了
-    isRacingMode = false;
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-    updateBacklightLevel();
-#else
-    applyBrightnessMode(racingPrevMode);
-#endif
-  }
-
-  if (!isMenuVisible)
-  {
-    updateGauges();
-  }
-
-  fpsFrameCounter++;
-  if (now - lastFpsSecond >= FPS_INTERVAL_MS)
-  {
-    currentFps = fpsFrameCounter;
+    fpsFrameCounter++;
+    if (now - lastFpsSecond >= FPS_INTERVAL_MS)
+    {
+      currentFps = fpsFrameCounter;
 #if DEBUG_MODE_ENABLED
-    Serial.printf("FPS:%d\n", currentFps);
+      Serial.printf("FPS:%d\n", currentFps);
 #endif
-    fpsFrameCounter = 0;
-    lastFpsSecond = now;
-  }
+      fpsFrameCounter = 0;
+      lastFpsSecond = now;
+    }
 
 #if DEBUG_MODE_ENABLED
-  if (now - lastDebugPrint >= 1000UL)
-  {
-    // FPS更新とは別に1秒ごとにデータを出力
-    printSensorDebugInfo();
-    lastDebugPrint = now;
-  }
+    if (now - lastDebugPrint >= 1000UL)
+    {
+      // FPS更新とは別に1秒ごとにデータを出力
+      printSensorDebugInfo();
+      lastDebugPrint = now;
+    }
 #endif
+  }
+  catch (const std::exception &e)
+  {
+    // 例外内容を画面とシリアルに表示し、以降の処理を停止
+    Serial.printf("Error: %s\n", e.what());
+    M5.Lcd.fillScreen(COLOR_BLACK);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setTextColor(COLOR_RED);
+    M5.Lcd.setCursor(0, 0);
+    M5.Lcd.printf("Error: %s", e.what());
+    hasError = true;
+  }
+  catch (...)
+  {
+    // 不明な例外でも同様に表示
+    Serial.println("Error: unknown");
+    M5.Lcd.fillScreen(COLOR_BLACK);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setTextColor(COLOR_RED);
+    M5.Lcd.setCursor(0, 0);
+    M5.Lcd.println("Error: unknown");
+    hasError = true;
+  }
 }
