@@ -9,7 +9,7 @@ extern const char *lastLowEventDir;  // Gの向き
 extern float lastLowEventDuration;   // 継続時間[s]
 extern float lastLowEventPressure;   // そのときの油圧[bar]
 
-// 低油圧警告表示。現在の表示状態とその変更の有無を返す
+// 低油圧警告表示。解除後も3秒間表示を継続し、現在の表示状態とその変更の有無を返す
 bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool &stateChanged);
 
 #endif  // LOW_WARNING_H

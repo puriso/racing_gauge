@@ -17,6 +17,7 @@ float lastLowEventPressure = 0.0F;      // そのときの油圧[bar]
 struct LowWarningState
 {
   unsigned long startMs = 0;                              // 条件成立開始時刻
+  unsigned long showUntilMs = 0;                          // 表示継続終了時刻
   bool isShowing = false;                                 // 現在表示中か
   float peakG = 0.0F;                                     // 期間中の最大G
   float minPressure = std::numeric_limits<float>::max();  // 期間中の最低油圧
@@ -50,6 +51,7 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
   constexpr float G_FORCE_THRESHOLD = 1.0F;          // G判定値
   constexpr float PRESSURE_THRESHOLD = 3.0F;         // 油圧閾値
   constexpr unsigned long WARNING_DELAY_MS = 500UL;  // 継続時間
+  constexpr unsigned long WARNING_HOLD_MS = 3000UL;  // 表示継続時間
   bool conditionMet = (gForce > G_FORCE_THRESHOLD && pressure <= PRESSURE_THRESHOLD);
   unsigned long now = millis();
   bool shouldShow = false;
@@ -72,19 +74,19 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
     if (now - state.startMs >= WARNING_DELAY_MS)
     {
       // 0.5秒以上継続したら警告表示
-      if (state.isShowing)
+      if (!state.isShowing)
       {
-        canvas.fillRect(state.boxX, state.boxY, state.boxW, state.boxH, COLOR_BLACK);
+        canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_RED);
+        canvas.setTextColor(COLOR_WHITE, COLOR_RED);
+        canvas.setTextDatum(m5gfx::textdatum_t::middle_center);
+        canvas.drawString(WARN_TEXT, boxX + (boxW / 2), boxY + (boxH / 2));
+        canvas.setTextDatum(m5gfx::textdatum_t::top_left);
+        state.boxX = boxX;
+        state.boxY = boxY;
+        state.boxW = boxW;
+        state.boxH = boxH;
       }
-      canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_RED);
-      canvas.setTextColor(COLOR_WHITE, COLOR_RED);
-      canvas.setTextDatum(m5gfx::textdatum_t::middle_center);
-      canvas.drawString(WARN_TEXT, boxX + (boxW / 2), boxY + (boxH / 2));
-      canvas.setTextDatum(m5gfx::textdatum_t::top_left);
-      state.boxX = boxX;
-      state.boxY = boxY;
-      state.boxW = boxW;
-      state.boxH = boxH;
+      state.showUntilMs = now + WARNING_HOLD_MS;  // 表示を3秒維持
       shouldShow = true;
     }
   }
@@ -97,14 +99,22 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
       lastLowEventDir = state.eventDir;
       lastLowEventDuration = (now - state.startMs) / 1000.0F;
       lastLowEventPressure = state.minPressure;
+      state.startMs = 0;  // 再記録防止
     }
-    if (prevShowing)
+    if (now >= state.showUntilMs)
     {
-      // 前回表示していた警告を消去
-      canvas.fillRect(state.boxX, state.boxY, state.boxW, state.boxH, COLOR_BLACK);
+      if (prevShowing)
+      {
+        // 表示継続時間が過ぎたので警告を消去
+        canvas.fillRect(state.boxX, state.boxY, state.boxW, state.boxH, COLOR_BLACK);
+      }
+      // 次回のイベントに備えて状態をリセット
+      state = {};
     }
-    // 次回のイベントに備えて状態をリセット
-    state = {};
+    else
+    {
+      shouldShow = true;  // 表示継続期間内
+    }
   }
 
   stateChanged = (shouldShow != prevShowing);
