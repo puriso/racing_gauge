@@ -144,9 +144,25 @@ void acquireSensorData()
   static float ayOffset = 0.0F;
   static float azOffset = 0.0F;
   static int offsetSampleCount = 0;
-  constexpr int verticalAxis = 2;  // 0:X, 1:Y, 2:Z（上下G検知は無効）
+  static unsigned long imuSettlingStart = 0;      // IMU 初期化時刻
+  constexpr unsigned long IMU_SETTLING_MS = 200;  // IMU安定化待ち時間 [ms]
+  constexpr int verticalAxis = 2;                 // 0:X, 1:Y, 2:Z（上下G検知は無効）
   if (!gForceOffsetInitialized)
   {
+    // 初回呼び出し時に開始時刻を記録
+    if (imuSettlingStart == 0)
+    {
+      imuSettlingStart = now;
+    }
+
+    // センサが安定するまで待機
+    if (now - imuSettlingStart < IMU_SETTLING_MS)
+    {
+      currentGForce = 0.0F;
+      currentGDirection = "Right";
+      return;
+    }
+
     axOffset += ax;
     ayOffset += ay;
     azOffset += az;
