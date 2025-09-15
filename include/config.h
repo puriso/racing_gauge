@@ -1,6 +1,5 @@
 #ifndef CONFIG_H
 #define CONFIG_H
-
 #include <cstdint>  // 整数型定義
 
 // ────────────────────── 設定 ──────────────────────
