@@ -47,7 +47,7 @@ void setup()
   M5.Power.begin();                  // まず電源モジュールを初期化
   M5.Power.setExtOutput(true);       // センサー用に 5V ピン出力を有効化
   M5.Power.setLed(0);                // 基板のLEDを消灯
-  M5.Power.setUsbOutput(false);      // USB 給電を停止
+  M5.Power.setUsbOutput(false);      // USBポートの5V出力を無効化（入力モードにする）
   M5.Power.setBatteryCharge(false);  // バッテリー充電を無効化
 
   display.init();
