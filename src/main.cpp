@@ -12,15 +12,12 @@
 unsigned long lastFpsSecond = 0;  // 直近1秒判定用
 int fpsFrameCounter = 0;
 int currentFps = 0;
-unsigned long lastDebugPrint = 0;                                    // デバッグ表示用タイマー
-unsigned long lastFrameTimeUs = 0;                                   // 前回フレーム開始時刻
-bool isMenuVisible = false;                                          // メニュー表示中かどうか
-static bool wasTouched = false;                                      // 前回タッチされていたか
-static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
-static unsigned long racingStartMs = 0;                              // レーシング開始時刻
-static BrightnessMode racingPrevMode = BrightnessMode::Day;          // レーシング開始前の輝度
-static bool wasRacingMode = false;                                   // メニュー前にレーシングモードだったか
-static unsigned long savedRacingStartMs = 0;                         // メニュー前の開始時刻
+unsigned long lastDebugPrint = 0;                            // デバッグ表示用タイマー
+unsigned long lastFrameTimeUs = 0;                           // 前回フレーム開始時刻
+bool isMenuVisible = false;                                  // メニュー表示中かどうか
+static bool wasTouched = false;                              // 前回タッチされていたか
+static unsigned long racingStartMs = 0;                      // レーシング開始時刻
+static BrightnessMode racingPrevMode = BrightnessMode::Day;  // レーシング開始前の輝度
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -136,34 +133,21 @@ void loop()
     isMenuVisible = !isMenuVisible;
     if (isMenuVisible)
     {
-      wasRacingMode = isRacingMode;                                                    // メニュー前の状態を保存
-      savedRacingStartMs = racingStartMs;                                              // レーシング開始時刻を保存
-      previousBrightnessMode = isRacingMode ? racingPrevMode : currentBrightnessMode;  // 現在の輝度モードを保存
-      isRacingMode = false;                                                            // 詳細画面ではレーシングモードを解除
-      racingStartMs = 0;                                                               // レーシングモードのタイマーを停止
+      if (isRacingMode)
+      {
+        isRacingMode = false;                 // メニュー表示でレーシングモードを強制終了
+        racingStartMs = 0;                    // レーシングタイマーをリセット
+        applyBrightnessMode(racingPrevMode);  // 輝度を元に戻す
+        resetRacingIndicator();               // R表示状態をリセット
+      }
       drawMenuScreen();
-      // メニュー表示中は輝度を最大にする
-      applyBrightnessMode(BrightnessMode::Day);
     }
     else
     {
       resetGaugeState();
-      if (wasRacingMode)
-      {
-        isRacingMode = true;                       // レーシングモードを再開
-        racingStartMs = savedRacingStartMs;        // 開始時刻を復元
-        applyBrightnessMode(BrightnessMode::Day);  // レーシングモードでは常に最大輝度
-        wasRacingMode = false;
-      }
-      else
-      {
 #if SENSOR_AMBIENT_LIGHT_PRESENT
-        // メニュー終了後は元の輝度に戻す
-        updateBacklightLevel();
-#else
-        applyBrightnessMode(previousBrightnessMode);
+      updateBacklightLevel();  // メニュー終了時に輝度を再計算
 #endif
-      }
     }
   }
   wasTouched = touched;
