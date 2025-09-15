@@ -19,6 +19,8 @@ static bool wasTouched = false;                                      // 前回�
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
 static unsigned long racingStartMs = 0;                              // レーシング開始時刻
 static BrightnessMode racingPrevMode = BrightnessMode::Day;          // レーシング開始前の輝度
+static bool wasRacingMode = false;                                   // メニュー前にレーシングモードだったか
+static unsigned long savedRacingStartMs = 0;                         // メニュー前の開始時刻
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -134,9 +136,11 @@ void loop()
     isMenuVisible = !isMenuVisible;
     if (isMenuVisible)
     {
+      wasRacingMode = isRacingMode;                                                    // メニュー前の状態を保存
+      savedRacingStartMs = racingStartMs;                                              // レーシング開始時刻を保存
       previousBrightnessMode = isRacingMode ? racingPrevMode : currentBrightnessMode;  // 現在の輝度モードを保存
       isRacingMode = false;                                                            // 詳細画面ではレーシングモードを解除
-      racingStartMs = 0;  // レーシングモードのタイマーをリセット
+      racingStartMs = 0;                                                               // レーシングモードのタイマーを停止
       drawMenuScreen();
       // メニュー表示中は輝度を最大にする
       applyBrightnessMode(BrightnessMode::Day);
@@ -144,19 +148,22 @@ void loop()
     else
     {
       resetGaugeState();
-      // メニュー終了後は元の輝度に戻す
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-      if (isRacingMode)
+      if (wasRacingMode)
       {
-        applyBrightnessMode(BrightnessMode::Day);
+        isRacingMode = true;                       // レーシングモードを再開
+        racingStartMs = savedRacingStartMs;        // 開始時刻を復元
+        applyBrightnessMode(BrightnessMode::Day);  // レーシングモードでは常に最大輝度
+        wasRacingMode = false;
       }
       else
       {
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+        // メニュー終了後は元の輝度に戻す
         updateBacklightLevel();
-      }
 #else
-      applyBrightnessMode(isRacingMode ? BrightnessMode::Day : previousBrightnessMode);
+        applyBrightnessMode(previousBrightnessMode);
 #endif
+      }
     }
   }
   wasTouched = touched;

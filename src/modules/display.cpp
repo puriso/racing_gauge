@@ -389,6 +389,8 @@ void resetGaugeState()
   mainCanvas.fillScreen(COLOR_BLACK);
   mainCanvas.pushSprite(0, 0);
 
+  resetRacingIndicator();  // R表示状態をリセット
+
   pressureGaugeInitialized = false;
   waterGaugeInitialized = false;
   prevPressureValue = std::numeric_limits<float>::quiet_NaN();

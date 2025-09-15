@@ -33,3 +33,6 @@ bool drawRacingIndicator(M5Canvas &canvas)
   }
   return false;
 }
+
+// インジケータの描画状態をリセット
+void resetRacingIndicator() { indicatorDrawn = false; }
