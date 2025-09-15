@@ -26,6 +26,7 @@ struct LowWarningState
   int boxY = 0;
   int boxW = 0;
   int boxH = 0;
+  bool eventLogged = false;  // イベント記録済みか
 };
 
 // 油圧警告表示。現在の表示状態とその変更の有無を返す
@@ -59,62 +60,64 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
 
   if (conditionMet)
   {
-    if (state.startMs == 0)
+    if (state.startMs == 0 || state.eventLogged)
     {
+      // 新しいイベント開始
       state.startMs = now;
       state.peakG = gForce;
       state.minPressure = pressure;
       state.eventDir = currentGDirection;
+      state.eventLogged = false;
     }
     else
     {
+      // イベント継続中は最大/最小値を更新
       state.peakG = std::max(state.peakG, gForce);
       state.minPressure = std::min(state.minPressure, pressure);
     }
     if (now - state.startMs >= WARNING_DELAY_MS)
     {
       // 0.5秒以上継続したら警告表示
-      if (!state.isShowing)
-      {
-        canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_RED);
-        canvas.setTextColor(COLOR_WHITE, COLOR_RED);
-        canvas.setTextDatum(m5gfx::textdatum_t::middle_center);
-        canvas.drawString(WARN_TEXT, boxX + (boxW / 2), boxY + (boxH / 2));
-        canvas.setTextDatum(m5gfx::textdatum_t::top_left);
-        state.boxX = boxX;
-        state.boxY = boxY;
-        state.boxW = boxW;
-        state.boxH = boxH;
-      }
       state.showUntilMs = now + WARNING_HOLD_MS;  // 表示を3秒維持
       shouldShow = true;
     }
   }
   else
   {
-    if (state.startMs != 0)
+    if (state.startMs != 0 && !state.eventLogged)
     {
       // 条件解除時にイベント情報を記録
       lastLowEventG = state.peakG;
       lastLowEventDir = state.eventDir;
       lastLowEventDuration = (now - state.startMs) / 1000.0F;
       lastLowEventPressure = state.minPressure;
-      state.startMs = 0;  // 再記録防止
+      state.eventLogged = true;
     }
-    if (now >= state.showUntilMs)
-    {
-      if (prevShowing)
-      {
-        // 表示継続時間が過ぎたので警告を消去
-        canvas.fillRect(state.boxX, state.boxY, state.boxW, state.boxH, COLOR_BLACK);
-      }
-      // 次回のイベントに備えて状態をリセット
-      state = {};
-    }
-    else
+    if (now < state.showUntilMs)
     {
       shouldShow = true;  // 表示継続期間内
     }
+  }
+
+  if (shouldShow)
+  {
+    // 警告表示を毎フレーム再描画
+    canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_RED);
+    canvas.setTextColor(COLOR_WHITE, COLOR_RED);
+    canvas.setTextDatum(m5gfx::textdatum_t::middle_center);
+    canvas.drawString(WARN_TEXT, boxX + (boxW / 2), boxY + (boxH / 2));
+    canvas.setTextDatum(m5gfx::textdatum_t::top_left);
+    state.boxX = boxX;
+    state.boxY = boxY;
+    state.boxW = boxW;
+    state.boxH = boxH;
+  }
+  else if (prevShowing)
+  {
+    // 表示継続時間が過ぎたので警告を消去
+    canvas.fillRect(state.boxX, state.boxY, state.boxW, state.boxH, COLOR_BLACK);
+    // 次回のイベントに備えて状態をリセット
+    state = {};
   }
 
   stateChanged = (shouldShow != prevShowing);
