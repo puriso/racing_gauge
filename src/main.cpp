@@ -138,7 +138,7 @@ void loop()
         isRacingMode = false;                 // メニュー表示でレーシングモードを強制終了
         racingStartMs = 0;                    // レーシングタイマーをリセット
         applyBrightnessMode(racingPrevMode);  // 輝度を元に戻す
-        resetRacingIndicator();               // R表示状態をリセット
+        // resetRacingIndicator();            // R表示状態をリセット (handled by resetGaugeState())
       }
       drawMenuScreen();
     }
