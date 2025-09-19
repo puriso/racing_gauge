@@ -19,6 +19,7 @@ static bool wasTouched = false;                                      // 前回�
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
 static unsigned long racingStartMs = 0;                              // レーシング開始時刻
 static BrightnessMode racingPrevMode = BrightnessMode::Day;          // レーシング開始前の輝度
+static unsigned long racingJudgeStartMs = 0;                         // レーシング判定開始時刻
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -136,7 +137,8 @@ void loop()
     {
       previousBrightnessMode = isRacingMode ? racingPrevMode : currentBrightnessMode;  // 現在の輝度モードを保存
       isRacingMode = false;                                                            // 詳細画面ではレーシングモードを解除
-      racingStartMs = 0;  // レーシングモードのタイマーをリセット
+      racingStartMs = 0;       // レーシングモードのタイマーをリセット
+      racingJudgeStartMs = 0;  // レーシング判定タイマーをリセット
       drawMenuScreen();
       // メニュー表示中は輝度を最大にする
       applyBrightnessMode(BrightnessMode::Day);
@@ -163,15 +165,30 @@ void loop()
 
   acquireSensorData();
 
-  if (!isRacingMode && currentGForce > 1.0F)
+  if (!isRacingMode)
   {
-    // 1Gを超えたらレーシングモードを開始
-    isRacingMode = true;
-    racingStartMs = now;
-    racingPrevMode = currentBrightnessMode;
-    applyBrightnessMode(BrightnessMode::Day);
+    if (currentGForce > 1.0F)
+    {
+      if (racingJudgeStartMs == 0)
+      {
+        racingJudgeStartMs = now;
+      }
+      else if (now - racingJudgeStartMs >= RACING_MODE_START_DELAY_MS)
+      {
+        // 1Gを0.1秒以上継続したらレーシングモードを開始
+        isRacingMode = true;
+        racingStartMs = now;
+        racingPrevMode = currentBrightnessMode;
+        racingJudgeStartMs = 0;
+        applyBrightnessMode(BrightnessMode::Day);
+      }
+    }
+    else
+    {
+      racingJudgeStartMs = 0;
+    }
   }
-  else if (isRacingMode && now - racingStartMs >= RACING_MODE_DURATION_MS)
+  else if (now - racingStartMs >= RACING_MODE_DURATION_MS)
   {
     // 3分経過でレーシングモードを終了
     isRacingMode = false;
@@ -180,6 +197,7 @@ void loop()
 #else
     applyBrightnessMode(racingPrevMode);
 #endif
+    racingJudgeStartMs = 0;  // 判定タイマーをリセット
   }
 
   if (!isMenuVisible)

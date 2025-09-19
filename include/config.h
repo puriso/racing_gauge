@@ -1,8 +1,5 @@
 #ifndef CONFIG_H
 #define CONFIG_H
-
-#include <cstdint>  // 整数型定義
-
 #include <cstdint>  // 整数型定義
 
 // ────────────────────── 設定 ──────────────────────
@@ -84,6 +81,9 @@ constexpr int MEDIAN_BUFFER_SIZE = 6;
 
 // レーシングモード継続時間 [ms]
 constexpr unsigned long RACING_MODE_DURATION_MS = 180000UL;
+
+// レーシングモード開始判定の継続時間 [ms]
+constexpr unsigned long RACING_MODE_START_DELAY_MS = 100UL;
 
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
