@@ -183,7 +183,6 @@ void loop()
     racingStartMs = now;
     racingPrevMode = currentBrightnessMode;
     applyBrightnessMode(BrightnessMode::Day);
-    gForceAboveThresholdSince = 0;
   }
   else if (isRacingMode && now - racingStartMs >= RACING_MODE_DURATION_MS)
   {
