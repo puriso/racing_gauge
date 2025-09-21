@@ -19,6 +19,7 @@ static bool wasTouched = false;                                      // 前回�
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
 static unsigned long racingStartMs = 0;                              // レーシング開始時刻
 static BrightnessMode racingPrevMode = BrightnessMode::Day;          // レーシング開始前の輝度
+static unsigned long gForceAboveThresholdSince = 0;                  // レーシングモード判定用のG超過開始時刻
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -163,13 +164,26 @@ void loop()
 
   acquireSensorData();
 
-  if (!isRacingMode && currentGForce > 1.0F)
+  if (currentGForce > RACING_MODE_START_THRESHOLD_G)
   {
-    // 1Gを超えたらレーシングモードを開始
+    if (gForceAboveThresholdSince == 0)
+    {
+      gForceAboveThresholdSince = now;
+    }
+  }
+  else
+  {
+    gForceAboveThresholdSince = 0;
+  }
+
+  if (!isRacingMode && gForceAboveThresholdSince != 0 && now - gForceAboveThresholdSince >= RACING_MODE_START_HOLD_MS)
+  {
+    // 0.1秒継続して1Gを超えたらレーシングモードを開始
     isRacingMode = true;
     racingStartMs = now;
     racingPrevMode = currentBrightnessMode;
     applyBrightnessMode(BrightnessMode::Day);
+    gForceAboveThresholdSince = 0;
   }
   else if (isRacingMode && now - racingStartMs >= RACING_MODE_DURATION_MS)
   {
