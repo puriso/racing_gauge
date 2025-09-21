@@ -6,6 +6,7 @@
 #include "modules/backlight.h"
 #include "modules/display.h"
 #include "modules/racing_indicator.h"
+#include "modules/racing_mode.h"
 #include "modules/sensor.h"
 
 // ── FPS 計測用 ──
@@ -17,8 +18,6 @@ unsigned long lastFrameTimeUs = 0;                                   // 前回�
 bool isMenuVisible = false;                                          // メニュー表示中かどうか
 static bool wasTouched = false;                                      // 前回タッチされていたか
 static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
-static unsigned long racingStartMs = 0;                              // レーシング開始時刻
-static BrightnessMode racingPrevMode = BrightnessMode::Day;          // レーシング開始前の輝度
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -134,9 +133,9 @@ void loop()
     isMenuVisible = !isMenuVisible;
     if (isMenuVisible)
     {
-      previousBrightnessMode = isRacingMode ? racingPrevMode : currentBrightnessMode;  // 現在の輝度モードを保存
-      isRacingMode = false;                                                            // 詳細画面ではレーシングモードを解除
-      racingStartMs = 0;  // レーシングモードのタイマーをリセット
+      previousBrightnessMode =
+          isRacingMode ? getRacingModePrevBrightness() : currentBrightnessMode;  // 現在の輝度モードを保存
+      resetRacingModeState();                                                    // 詳細画面ではレーシングモードを解除
       drawMenuScreen();
       // メニュー表示中は輝度を最大にする
       applyBrightnessMode(BrightnessMode::Day);
@@ -163,24 +162,7 @@ void loop()
 
   acquireSensorData();
 
-  if (!isRacingMode && currentGForce > 1.0F)
-  {
-    // 1Gを超えたらレーシングモードを開始
-    isRacingMode = true;
-    racingStartMs = now;
-    racingPrevMode = currentBrightnessMode;
-    applyBrightnessMode(BrightnessMode::Day);
-  }
-  else if (isRacingMode && now - racingStartMs >= RACING_MODE_DURATION_MS)
-  {
-    // 3分経過でレーシングモードを終了
-    isRacingMode = false;
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-    updateBacklightLevel();
-#else
-    applyBrightnessMode(racingPrevMode);
-#endif
-  }
+  updateRacingModeState(now);
 
   if (!isMenuVisible)
   {

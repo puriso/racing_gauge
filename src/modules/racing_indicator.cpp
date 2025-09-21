@@ -1,8 +1,5 @@
 #include "racing_indicator.h"
 
-// レーシングモードかどうかを保持
-bool isRacingMode = false;
-
 // Rマークが描画済みかどうか
 static bool indicatorDrawn = false;
 
