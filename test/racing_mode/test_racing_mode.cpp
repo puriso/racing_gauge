@@ -71,6 +71,19 @@ void test_racing_mode_starts_after_initial_hold()
   TEST_ASSERT_EQUAL(1, applyBrightnessCallCount);
 }
 
+// 閾値と同じGでも保持時間経過で起動することを確認
+void test_racing_mode_starts_when_g_equals_threshold()
+{
+  updateRacingMode(0UL, RACING_MODE_START_THRESHOLD_G);
+  TEST_ASSERT_FALSE(isRacingMode);
+
+  updateRacingMode(RACING_MODE_START_HOLD_MS, RACING_MODE_START_THRESHOLD_G);
+  TEST_ASSERT_TRUE(isRacingMode);
+  TEST_ASSERT_EQUAL(BrightnessMode::Day, currentBrightnessMode);
+  TEST_ASSERT_EQUAL(BrightnessMode::Night, getRacingPrevBrightnessMode());
+  TEST_ASSERT_EQUAL(1, applyBrightnessCallCount);
+}
+
 // 閾値未満に戻ると保持時間がリセットされることを確認
 void test_racing_mode_resets_hold_when_g_drops()
 {
@@ -119,6 +132,7 @@ void setup()
   UNITY_BEGIN();
   RUN_TEST(test_racing_mode_requires_hold);
   RUN_TEST(test_racing_mode_starts_after_initial_hold);
+  RUN_TEST(test_racing_mode_starts_when_g_equals_threshold);
   RUN_TEST(test_racing_mode_resets_hold_when_g_drops);
   RUN_TEST(test_force_stop_does_not_restore_brightness);
   RUN_TEST(test_racing_mode_auto_finish_restores_brightness);

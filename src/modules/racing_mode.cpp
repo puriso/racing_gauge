@@ -45,7 +45,7 @@ void updateRacingMode(unsigned long nowMs, float gForce)  // NOLINT(bugprone-eas
     return;
   }
 
-  if (gForce > RACING_MODE_START_THRESHOLD_G)
+  if (gForce >= RACING_MODE_START_THRESHOLD_G)
   {
     if (!isGForceHoldActive)
     {
