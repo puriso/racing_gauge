@@ -3,8 +3,6 @@
 
 #include <cstdint>  // 整数型定義
 
-#include <cstdint>  // 整数型定義
-
 // ────────────────────── 設定 ──────────────────────
 // デバッグ用メッセージ表示の有無
 #define DEBUG_MODE_ENABLED 0
@@ -84,6 +82,10 @@ constexpr int MEDIAN_BUFFER_SIZE = 6;
 
 // レーシングモード継続時間 [ms]
 constexpr unsigned long RACING_MODE_DURATION_MS = 180000UL;
+// レーシングモード開始判定の閾値 [G]
+constexpr float RACING_MODE_START_THRESHOLD_G = 1.0f;
+// レーシングモード開始判定で閾値超過が必要な継続時間 [ms]
+constexpr unsigned long RACING_MODE_START_HOLD_MS = 100UL;
 
 // FPS 更新間隔 [ms]
 constexpr unsigned long FPS_INTERVAL_MS = 1000UL;
