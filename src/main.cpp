@@ -13,11 +13,10 @@
 unsigned long lastFpsSecond = 0;  // 直近1秒判定用
 int fpsFrameCounter = 0;
 int currentFps = 0;
-unsigned long lastDebugPrint = 0;                                    // デバッグ表示用タイマー
-unsigned long lastFrameTimeUs = 0;                                   // 前回フレーム開始時刻
-bool isMenuVisible = false;                                          // メニュー表示中かどうか
-static bool wasTouched = false;                                      // 前回タッチされていたか
-static BrightnessMode previousBrightnessMode = BrightnessMode::Day;  // メニュー前の輝度モード
+unsigned long lastDebugPrint = 0;   // デバッグ表示用タイマー
+unsigned long lastFrameTimeUs = 0;  // 前回フレーム開始時刻
+bool isMenuVisible = false;         // メニュー表示中かどうか
+static bool wasTouched = false;     // 前回タッチされていたか
 
 // ────────────────────── デバッグ情報表示 ──────────────────────
 static void printSensorDebugInfo()
@@ -133,9 +132,7 @@ void loop()
     isMenuVisible = !isMenuVisible;
     if (isMenuVisible)
     {
-      previousBrightnessMode =
-          isRacingMode ? getRacingPrevBrightnessMode() : currentBrightnessMode;  // 現在の輝度モードを保存
-      forceStopRacingMode();                                                     // 詳細画面ではレーシングモードを解除
+      forceStopRacingMode();  // 詳細画面ではレーシングモードを解除
       drawMenuScreen();
       // メニュー表示中は輝度を最大にする
       applyBrightnessMode(BrightnessMode::Day);
@@ -154,7 +151,7 @@ void loop()
         updateBacklightLevel();
       }
 #else
-      applyBrightnessMode(isRacingMode ? BrightnessMode::Day : previousBrightnessMode);
+      applyBrightnessMode(getRacingPrevBrightnessMode());
 #endif
     }
   }

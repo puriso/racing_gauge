@@ -64,6 +64,11 @@ void updateRacingMode(unsigned long nowMs, float gForce)  // NOLINT(bugprone-eas
 
 void forceStopRacingMode()
 {
+  bool wasRacing = isRacingMode;  // 呼び出し直前の状態を保持
+  if (!wasRacing)
+  {
+    racingPrevMode = currentBrightnessMode;  // レーシングモード外では現在の輝度を保存
+  }
   isRacingMode = false;
   racingStartMs = 0;
   isGForceHoldActive = false;

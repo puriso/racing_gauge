@@ -112,6 +112,17 @@ void test_force_stop_does_not_restore_brightness()
   TEST_ASSERT_EQUAL(BrightnessMode::Day, currentBrightnessMode);
 }
 
+// レーシングモード外での強制停止時に現在の輝度を保持することを確認
+void test_force_stop_updates_prev_mode_when_not_racing()
+{
+  currentBrightnessMode = BrightnessMode::Dusk;
+
+  forceStopRacingMode();
+
+  TEST_ASSERT_EQUAL(BrightnessMode::Dusk, getRacingPrevBrightnessMode());
+  TEST_ASSERT_FALSE(isRacingMode);
+}
+
 // 規定時間経過で自動的に輝度が復帰することを確認
 void test_racing_mode_auto_finish_restores_brightness()
 {
@@ -136,6 +147,7 @@ void setup()
   RUN_TEST(test_racing_mode_starts_when_g_equals_threshold);
   RUN_TEST(test_racing_mode_resets_hold_when_g_drops);
   RUN_TEST(test_force_stop_does_not_restore_brightness);
+  RUN_TEST(test_force_stop_updates_prev_mode_when_not_racing);
   RUN_TEST(test_racing_mode_auto_finish_restores_brightness);
   UNITY_END();
 }
