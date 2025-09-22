@@ -27,11 +27,7 @@ static void finishRacingMode()
   racingStartMs = 0;
   isGForceHoldActive = false;
   gForceAboveThresholdSince = 0;
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-  updateBacklightLevel();
-#else
   applyBrightnessMode(racingPrevMode);
-#endif
 }
 
 void updateRacingMode(unsigned long nowMs, float gForce)  // NOLINT(bugprone-easily-swappable-parameters)

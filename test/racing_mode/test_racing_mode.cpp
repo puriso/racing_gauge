@@ -123,7 +123,8 @@ void test_racing_mode_auto_finish_restores_brightness()
   updateRacingMode(finishTime, 0.0F);
 
   TEST_ASSERT_FALSE(isRacingMode);
-  TEST_ASSERT_EQUAL(1, backlightUpdateCallCount);
+  TEST_ASSERT_EQUAL(0, backlightUpdateCallCount);
+  TEST_ASSERT_EQUAL(2, applyBrightnessCallCount);
   TEST_ASSERT_EQUAL(BrightnessMode::Night, currentBrightnessMode);
 }
 
