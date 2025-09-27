@@ -39,13 +39,29 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
 
   canvas.setFont(&fonts::FreeSansBold12pt7b);
   constexpr char WARN_TEXT[] = "LOW";  // 警告文字列
-  int textW = canvas.textWidth(WARN_TEXT);
-  int textH = canvas.fontHeight();
-  constexpr int PADDING = 4;  // ボックス余白
-  int boxW = textW + (PADDING * 2) - 1;
-  int boxH = textH + (PADDING * 2) - 2;
-  int boxX = GAUGE_X + ((GAUGE_W - boxW) / 2 - 8);
-  int boxY = GAUGE_Y + ((GAUGE_H - boxH) / 2);
+  constexpr int PADDING = 4;           // ボックス余白
+
+  // テキスト幅などを初回だけ計算し、以降はキャッシュした値を再利用して描画処理を軽量化する
+  struct WarningLayout
+  {
+    bool initialized = false;
+    int boxX = 0;
+    int boxY = 0;
+    int boxW = 0;
+    int boxH = 0;
+  };
+  static WarningLayout layout;
+
+  if (!layout.initialized)
+  {
+    int textW = canvas.textWidth(WARN_TEXT);
+    int textH = canvas.fontHeight();
+    layout.boxW = textW + (PADDING * 2) - 1;
+    layout.boxH = textH + (PADDING * 2) - 2;
+    layout.boxX = GAUGE_X + ((GAUGE_W - layout.boxW) / 2 - 8);
+    layout.boxY = GAUGE_Y + ((GAUGE_H - layout.boxH) / 2);
+    layout.initialized = true;
+  }
 
   static LowWarningState state;  // 表示状態
 
@@ -102,15 +118,15 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
   if (shouldShow)
   {
     // 警告表示を毎フレーム再描画
-    canvas.fillRect(boxX, boxY, boxW, boxH, COLOR_RED);
+    canvas.fillRect(layout.boxX, layout.boxY, layout.boxW, layout.boxH, COLOR_RED);
     canvas.setTextColor(COLOR_WHITE, COLOR_RED);
     canvas.setTextDatum(m5gfx::textdatum_t::middle_center);
-    canvas.drawString(WARN_TEXT, boxX + (boxW / 2), boxY + (boxH / 2));
+    canvas.drawString(WARN_TEXT, layout.boxX + (layout.boxW / 2), layout.boxY + (layout.boxH / 2));
     canvas.setTextDatum(m5gfx::textdatum_t::top_left);
-    state.boxX = boxX;
-    state.boxY = boxY;
-    state.boxW = boxW;
-    state.boxH = boxH;
+    state.boxX = layout.boxX;
+    state.boxY = layout.boxY;
+    state.boxW = layout.boxW;
+    state.boxH = layout.boxH;
   }
   else if (prevShowing)
   {
