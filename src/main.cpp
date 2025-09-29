@@ -29,6 +29,63 @@ static void printSensorDebugInfo()
                 water, oil);
 }
 
+// ────────────────────── メニュー操作ユーティリティ ──────────────────────
+static void restoreBrightnessAfterMenu()
+{
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+  // レーシングモード中は常に昼間モードを適用する
+  if (isRacingMode)
+  {
+    applyBrightnessMode(BrightnessMode::Day);
+  }
+  else
+  {
+    updateBacklightLevel();
+  }
+#else
+  // ALSが無い場合はメニューを開く直前の輝度に戻す
+  applyBrightnessMode(getRacingPrevBrightnessMode());
+#endif
+}
+
+static void handleMenuOpened()
+{
+  // メニューを開く際はレーシングモードを強制停止し、昼間モードで表示する
+  forceStopRacingMode();
+  drawMenuScreen();
+  applyBrightnessMode(BrightnessMode::Day);
+}
+
+static void handleMenuClosed()
+{
+  // メニュー終了後にゲージの初期化と輝度復帰を行う
+  resetGaugeState();
+  restoreBrightnessAfterMenu();
+}
+
+static void toggleMenuVisibility()
+{
+  isMenuVisible = !isMenuVisible;
+  if (isMenuVisible)
+  {
+    handleMenuOpened();
+  }
+  else
+  {
+    handleMenuClosed();
+  }
+}
+
+static void updateAmbientLightIfNeeded(unsigned long now, unsigned long &lastAlsMeasurementTime)
+{
+  // ALSはメニュー非表示かつレーシングモード外でのみ更新する
+  if (!isMenuVisible && !isRacingMode && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  {
+    updateBacklightLevel();
+    lastAlsMeasurementTime = now;
+  }
+}
+
 // ────────────────────── setup() ──────────────────────
 void setup()
 {
@@ -120,40 +177,12 @@ void loop()
 
   M5.update();
 
-  if (!isMenuVisible && !isRacingMode && now - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
-  {
-    updateBacklightLevel();
-    lastAlsMeasurementTime = now;
-  }
+  updateAmbientLightIfNeeded(now, lastAlsMeasurementTime);
 
   bool touched = M5.Touch.getCount() > 0;
   if (touched && !wasTouched)
   {
-    isMenuVisible = !isMenuVisible;
-    if (isMenuVisible)
-    {
-      forceStopRacingMode();  // 詳細画面ではレーシングモードを解除
-      drawMenuScreen();
-      // メニュー表示中は輝度を最大にする
-      applyBrightnessMode(BrightnessMode::Day);
-    }
-    else
-    {
-      resetGaugeState();
-      // メニュー終了後は元の輝度に戻す
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-      if (isRacingMode)
-      {
-        applyBrightnessMode(BrightnessMode::Day);
-      }
-      else
-      {
-        updateBacklightLevel();
-      }
-#else
-      applyBrightnessMode(getRacingPrevBrightnessMode());
-#endif
-    }
+    toggleMenuVisibility();
   }
   wasTouched = touched;
 

@@ -39,7 +39,7 @@ struct DisplayCache
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
 
 // ────────────────────── 油温バー描画 ──────────────────────
-void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
+void drawOilTemperatureTopBar(M5Canvas &canvas, float oilTemp, int maxOilTemp)
 {
   constexpr int MIN_TEMP = 80;
   constexpr int MAX_TEMP = 130;
@@ -269,48 +269,47 @@ void drawMenuScreen()
 
   int y = MENU_TOP_MARGIN;
   char valStr[8];  // 数値表示用バッファ
+  // メニューの各行描画を共通化
+  auto drawMenuLine = [&](const char *label, const char *value, int step)
+  {
+    mainCanvas.setCursor(10, y);
+    mainCanvas.print(label);
+    if (value != nullptr)
+    {
+      mainCanvas.drawRightString(value, LCD_WIDTH - 10, y);
+    }
+    y += step;
+  };
+  auto drawMenuLineDefaultStep = [&](const char *label, const char *value) { drawMenuLine(label, value, lineHeight); };
 
   // 最高水温を表示
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("WATER.T MAX:");
 #if SENSOR_WATER_TEMP_PRESENT
   // 小数点を表示しない
   snprintf(valStr, sizeof(valStr), "%6.0f", recordedMaxWaterTemp);
-  mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  drawMenuLineDefaultStep("WATER.T MAX:", valStr);
 #else
   // センサー無効時は Disabled と表示
-  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  drawMenuLineDefaultStep("WATER.T MAX:", DISABLED_STR);
 #endif
-
-  y += lineHeight;
   // 最高油温を表示
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.T MAX:");
 #if SENSOR_OIL_TEMP_PRESENT
   snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
-  mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  drawMenuLineDefaultStep("OIL.T MAX:", valStr);
 #else
   // センサー無効時は Disabled と表示
-  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  drawMenuLineDefaultStep("OIL.T MAX:", DISABLED_STR);
 #endif
-
-  y += lineHeight;
   // 最高油圧を表示
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P MAX:");
 #if SENSOR_OIL_PRESSURE_PRESENT
   snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
-  mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  drawMenuLineDefaultStep("OIL.P MAX:", valStr);
 #else
   // センサー無効時は Disabled と表示
-  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  drawMenuLineDefaultStep("OIL.P MAX:", DISABLED_STR);
 #endif
 
-  y += lineHeight;
   // 直近の低油圧イベント情報を2行で表示
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("OIL.P WARN:");
-  y += lineHeight;
+  drawMenuLineDefaultStep("OIL.P WARN:", nullptr);
   if (lastLowEventDuration > 0.0F)
   {
     // 方向, G値, 継続秒数, 油圧をカンマ区切りで作成（カンマ後にスペースを入れる）
@@ -349,29 +348,18 @@ void drawMenuScreen()
   }
 
   y += lineHeight;
-  mainCanvas.setCursor(10, y);
 #if SENSOR_AMBIENT_LIGHT_PRESENT
   // 現在のLUX値を表示
-  mainCanvas.print("LUX LATEST:");
   snprintf(valStr, sizeof(valStr), "%6d", latestLux);
-  mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
+  drawMenuLineDefaultStep("LUX LATEST:", valStr);
 
-  y += lineHeight;
-  mainCanvas.setCursor(10, y);
   // 照度の中央値を表示
-  mainCanvas.print("LUX MEDIAN:");
-  char medStr[8];
-  snprintf(medStr, sizeof(medStr), "%6d", medianLuxValue);
-  mainCanvas.drawRightString(medStr, LCD_WIDTH - 10, y);
+  snprintf(valStr, sizeof(valStr), "%6d", medianLuxValue);
+  drawMenuLineDefaultStep("LUX MEDIAN:", valStr);
 #else
   // LUX センサーが無い場合は両方 Disabled を表示
-  mainCanvas.print("LUX LATEST:");
-  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
-
-  y += 25;
-  mainCanvas.setCursor(10, y);
-  mainCanvas.print("LUX MEDIAN:");
-  mainCanvas.drawRightString(DISABLED_STR, LCD_WIDTH - 10, y);
+  drawMenuLine("LUX LATEST:", DISABLED_STR, 25);
+  drawMenuLineDefaultStep("LUX MEDIAN:", DISABLED_STR);
 #endif
 
   // 戻る案内を左下へ配置
