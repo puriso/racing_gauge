@@ -29,6 +29,16 @@ static unsigned long lastPressureCheckMs = 0;
 static float prevPressureValue = std::numeric_limits<float>::quiet_NaN();
 static float prevWaterTempValue = std::numeric_limits<float>::quiet_NaN();
 
+// 平滑化を行うヘルパー
+static auto smoothValue(float current, float target, float alpha) -> float
+{
+  if (std::isnan(current))
+  {
+    return target;
+  }
+  return current + alpha * (target - current);
+}
+
 struct DisplayCache
 {
   float pressureAvg;
@@ -211,22 +221,9 @@ void updateGauges()
     recordedMaxOilTempTop = 0;
   }
 
-  if (std::isnan(smoothWaterTemp))
-  {
-    smoothWaterTemp = targetWaterTemp;
-  }
-  if (std::isnan(smoothOilTemp))
-  {
-    smoothOilTemp = targetOilTemp;
-  }
-  if (std::isnan(smoothOilPressure))
-  {
-    smoothOilPressure = pressureAvg;
-  }
-
-  smoothWaterTemp += 0.1F * (targetWaterTemp - smoothWaterTemp);
-  smoothOilTemp += 0.1F * (targetOilTemp - smoothOilTemp);
-  smoothOilPressure += OIL_PRESSURE_SMOOTHING_ALPHA * (pressureAvg - smoothOilPressure);
+  smoothWaterTemp = smoothValue(smoothWaterTemp, targetWaterTemp, 0.1F);
+  smoothOilTemp = smoothValue(smoothOilTemp, targetOilTemp, 0.1F);
+  smoothOilPressure = smoothValue(smoothOilPressure, pressureAvg, OIL_PRESSURE_SMOOTHING_ALPHA);
 
   float oilTempValue = smoothOilTemp;
   float pressureValue = smoothOilPressure;

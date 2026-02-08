@@ -12,7 +12,8 @@
 BrightnessMode currentBrightnessMode = BrightnessMode::Day;
 // ALS サンプルバッファ
 int luxSamples[MEDIAN_BUFFER_SIZE] = {};
-int luxSampleIndex = 0;  // 次に書き込むインデックス
+int luxSampleIndex = 0;              // 次に書き込むインデックス
+bool luxSamplesInitialized = false;  // 初期サンプルを埋めたかどうか
 
 // 直近取得した照度値
 int latestLux = 0;
@@ -52,6 +53,16 @@ void updateBacklightLevel()
 
   int currentLux = CoreS3.Ltr553.getAlsValue();
   latestLux = currentLux;
+  if (!luxSamplesInitialized)
+  {
+    // 初回はサンプルを同じ値で埋めて中央値が0にならないようにする
+    for (int &sample : luxSamples)
+    {
+      sample = currentLux;
+    }
+    luxSampleIndex = 0;
+    luxSamplesInitialized = true;
+  }
   // サンプルをリングバッファへ格納
   luxSamples[luxSampleIndex] = currentLux;
   luxSampleIndex = (luxSampleIndex + 1) % MEDIAN_BUFFER_SIZE;
