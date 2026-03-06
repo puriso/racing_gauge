@@ -18,6 +18,10 @@ M5Canvas mainCanvas(&display);
 
 static bool pressureGaugeInitialized = false;
 static bool waterGaugeInitialized = false;
+// 各パーツの最短再描画間隔を管理し、不要な再描画を抑制する
+static unsigned long lastOilRedrawMs = 0;
+static unsigned long lastPressureRedrawMs = 0;
+static unsigned long lastWaterRedrawMs = 0;
 
 float recordedMaxOilPressure = 0.0F;
 float recordedMaxWaterTemp = 0.0F;
@@ -98,16 +102,26 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   const int TOPBAR_Y = 0;
   const int TOPBAR_H = 50;
   const int GAUGE_H = 170;
+  constexpr unsigned long OIL_REDRAW_INTERVAL_MS = 100UL;
+  constexpr unsigned long PRESSURE_REDRAW_INTERVAL_MS = 50UL;
+  constexpr unsigned long WATER_REDRAW_INTERVAL_MS = 100UL;
+  unsigned long nowMs = millis();
 
   // 水温は0.05度以上、油温は0.1度以上、油圧は0.05bar以上変化したら更新する
   bool oilChanged = std::isnan(displayCache.oilTemp) || fabs(oilTemp - displayCache.oilTemp) >= 0.1F ||
                     (maxOilTemp != displayCache.maxOilTemp);
   bool pressureChanged = std::isnan(displayCache.pressureAvg) || fabs(pressureAvg - displayCache.pressureAvg) >= 0.05F;
   bool waterChanged = std::isnan(displayCache.waterTempAvg) || fabs(waterTempAvg - displayCache.waterTempAvg) >= 0.05F;
+  bool shouldRedrawOil =
+      oilChanged && (std::isnan(displayCache.oilTemp) || nowMs - lastOilRedrawMs >= OIL_REDRAW_INTERVAL_MS);
+  bool shouldRedrawPressure =
+      pressureChanged && (!pressureGaugeInitialized || nowMs - lastPressureRedrawMs >= PRESSURE_REDRAW_INTERVAL_MS);
+  bool shouldRedrawWater =
+      waterChanged && (!waterGaugeInitialized || nowMs - lastWaterRedrawMs >= WATER_REDRAW_INTERVAL_MS);
 
   mainCanvas.setTextColor(COLOR_WHITE);
 
-  if (oilChanged)
+  if (shouldRedrawOil)
   {
     mainCanvas.fillRect(0, TOPBAR_Y, LCD_WIDTH, TOPBAR_H, COLOR_BLACK);
     if (oilTemp >= 199.0F)
@@ -122,9 +136,10 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     drawOilTemperatureTopBar(mainCanvas, oilTemp, maxOilTemp);
     displayCache.oilTemp = oilTemp;
     displayCache.maxOilTemp = maxOilTemp;
+    lastOilRedrawMs = nowMs;
   }
 
-  if (pressureChanged || !pressureGaugeInitialized)
+  if (shouldRedrawPressure || !pressureGaugeInitialized)
   {
     if (!pressureGaugeInitialized)
     {
@@ -135,9 +150,10 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
                      prevPressureValue, 0.5f, isUseDecimal, 0, 60, !pressureGaugeInitialized);
     pressureGaugeInitialized = true;
     displayCache.pressureAvg = pressureAvg;
+    lastPressureRedrawMs = nowMs;
   }
 
-  if (waterChanged || !waterGaugeInitialized)
+  if (shouldRedrawWater || !waterGaugeInitialized)
   {
     if (!waterGaugeInitialized)
     {
@@ -148,6 +164,7 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
                      WATER_TEMP_METER_MIN);
     waterGaugeInitialized = true;
     displayCache.waterTempAvg = waterTempAvg;
+    lastWaterRedrawMs = nowMs;
   }
 
   bool warnChanged = false;
@@ -167,7 +184,8 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   bool racingChanged = drawRacingIndicator(mainCanvas);
 
   // 値が更新されたときのみスプライトを転送する
-  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged || racingChanged)
+  if (shouldRedrawOil || shouldRedrawPressure || shouldRedrawWater || !pressureGaugeInitialized || !waterGaugeInitialized ||
+      fpsChanged || warnChanged || racingChanged)
   {
     mainCanvas.pushSprite(0, 0);
   }
