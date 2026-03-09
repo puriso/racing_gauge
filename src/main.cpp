@@ -73,6 +73,9 @@ void setup()
   pinMode(9, INPUT_PULLUP);
   pinMode(8, INPUT_PULLUP);
   Wire.begin(9, 8);
+  // クランキング時のノイズでI2Cが不安定になるため低速化とタイムアウトを設定
+  Wire.setClock(100000);
+  Wire.setTimeOut(5);
 
 #if !DEMO_MODE_ENABLED
   // デモモードでなければADS1015を初期化し、失敗時は画面にエラーを表示
