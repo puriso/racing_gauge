@@ -1,5 +1,5 @@
-#M5Stack CoreS3 Multi - Gauge
-#M5Stack CoreS3 マルチメーター
+# M5Stack CoreS3 Multi Gauge
+# M5Stack CoreS3 マルチメーター
 
 [![PlatformIO Build](https://github.com/puriso/racing_gauge/actions/workflows/pio-build.yml/badge.svg?branch=main)](https://github.com/puriso/racing_gauge/actions/workflows/pio-build.yml)
 
@@ -199,8 +199,8 @@ The temperature sensor is a thermistor; typical resistance values are shown belo
 ---
 
 ### License
-このプロジェクトは MIT ライセンスではありません。著作権は作者が保持します。
-This project is not licensed under the MIT License. All rights reserved by the author.
+このプロジェクトは MIT ライセンスではありません。著作権は作者が保持します。詳細は `LICENSE` を参照してください。
+This project is not licensed under the MIT License. All rights are reserved by the author. See `LICENSE` for details.
 
 ---
 
