@@ -4,6 +4,7 @@
 #include <M5GFX.h>  // 必要なライブラリをインクルード
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -136,11 +137,30 @@ void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxVa
   {
     // 目盛ラベルと目盛り線を描画
     int tickCount = static_cast<int>((maxValue - minValue) / tickStep) + 1;
-    for (float i = 0; i <= tickCount - 1; i += 1)
+    constexpr int TRIG_CACHE_MAX = 128;
+    static std::array<float, TRIG_CACHE_MAX> sinCache = {};
+    static std::array<float, TRIG_CACHE_MAX> cosCache = {};
+    static int cachedTickCount = -1;
+
+    // 目盛の角度に対応する三角関数を初期化時にキャッシュ
+    if (tickCount != cachedTickCount)
+    {
+      for (int i = 0; i < tickCount && i < TRIG_CACHE_MAX; ++i)
+      {
+        float angle = 270 - ((270.0f / (tickCount - 1)) * i);  // 開始位置のロジックを維持
+        float rad = radians(angle);
+        sinCache[i] = sinf(rad);
+        cosCache[i] = cosf(rad);
+      }
+      cachedTickCount = tickCount;
+    }
+
+    int drawableTickCount = std::min(tickCount, TRIG_CACHE_MAX);
+    for (int i = 0; i < drawableTickCount; ++i)
     {
       float scaledValue = minValue + (tickStep * i);
-      float angle = 270 - ((270.0 / (tickCount - 1)) * i);  // 開始位置のロジックを維持
-      float rad = radians(angle);
+      float sinVal = sinCache[i];
+      float cosVal = cosCache[i];
 
       // 主要目盛かどうかを判定（majorTickStep が負なら従来と同じ判定）
       bool isMajorTick;
@@ -158,10 +178,10 @@ void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxVa
       int innerRadius = isMajorTick ? (RADIUS - ARC_WIDTH - 10) : (RADIUS - ARC_WIDTH - 8);
       int outerRadius = isMajorTick ? (RADIUS - ARC_WIDTH - 5) : (RADIUS - ARC_WIDTH - 7);
 
-      int lineX1 = CENTER_X_CORRECTED + (cosf(rad) * innerRadius);
-      int lineY1 = CENTER_Y_CORRECTED - (sinf(rad) * innerRadius);
-      int lineX2 = CENTER_X_CORRECTED + (cosf(rad) * outerRadius);
-      int lineY2 = CENTER_Y_CORRECTED - (sinf(rad) * outerRadius);
+      int lineX1 = CENTER_X_CORRECTED + (cosVal * innerRadius);
+      int lineY1 = CENTER_Y_CORRECTED - (sinVal * innerRadius);
+      int lineX2 = CENTER_X_CORRECTED + (cosVal * outerRadius);
+      int lineY2 = CENTER_Y_CORRECTED - (sinVal * outerRadius);
 
       canvas.drawLine(lineX1, lineY1, lineX2, lineY2, COLOR_WHITE);
 
@@ -169,8 +189,8 @@ void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxVa
 
       if (drawLabel)
       {
-        int labelX = CENTER_X_CORRECTED + (cosf(rad) * (RADIUS - ARC_WIDTH - 15));
-        int labelY = CENTER_Y_CORRECTED - (sinf(rad) * (RADIUS - ARC_WIDTH - 15));
+        int labelX = CENTER_X_CORRECTED + (cosVal * (RADIUS - ARC_WIDTH - 15));
+        int labelY = CENTER_Y_CORRECTED - (sinVal * (RADIUS - ARC_WIDTH - 15));
 
         char labelText[6];
         snprintf(labelText, sizeof(labelText), "%.0f", scaledValue);
