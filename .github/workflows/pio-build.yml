@@ -47,6 +47,9 @@ jobs:
       - name: intelhex インストール
         run: pip install intelhex
 
+      - name: ネイティブ回帰テスト
+        run: pio test -e native
+
       - name: ビルド
         run: pio run -e m5stack-cores3
 

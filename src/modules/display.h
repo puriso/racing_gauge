@@ -12,7 +12,8 @@ extern int currentFps;
 
 void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp);
 void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, int16_t maxOilTemp);
-void updateGauges();
+// メニュー表示中も計測値と最大値を更新し、描画だけを省略できる
+void updateGauges(bool render = true);
 void drawMenuScreen();
 void resetGaugeState();
 

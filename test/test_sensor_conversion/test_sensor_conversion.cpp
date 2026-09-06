@@ -1,7 +1,7 @@
 #include <unity.h>
 
 // sensor.cppを直接インクルードして静的関数を利用
-#include "../src/modules/sensor.cpp"
+#include "../../src/modules/sensor.cpp"
 
 // ADC値から電圧への変換をテスト
 void test_convert_adc_to_voltage()
