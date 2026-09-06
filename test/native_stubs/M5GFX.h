@@ -19,6 +19,27 @@ inline float radians(float degrees) { return degrees * 0.01745329252F; }
 
 class M5GFX
 {
+ public:
+  void getClipRect(int32_t* x, int32_t* y, int32_t* width, int32_t* height)
+  {
+    *x = clipX_;
+    *y = clipY_;
+    *width = clipWidth_;
+    *height = clipHeight_;
+  }
+  void setClipRect(int32_t x, int32_t y, int32_t width, int32_t height)
+  {
+    clipX_ = x;
+    clipY_ = y;
+    clipWidth_ = width;
+    clipHeight_ = height;
+  }
+
+ private:
+  int32_t clipX_ = 0;
+  int32_t clipY_ = 0;
+  int32_t clipWidth_ = 320;
+  int32_t clipHeight_ = 240;
 };
 
 class M5Canvas
