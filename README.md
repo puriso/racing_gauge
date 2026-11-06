@@ -135,26 +135,29 @@ CoreS3〜ADS1015のI²C配線は、実機では3cm未満です。
 
 **DC入力給電では、CoreS3から外部へ5Vを出す設定と給電方向を合わせる必要があります。**
 [公式の電源サンプル](https://github.com/m5stack/M5CoreS3/blob/main/examples/Basic/power/power.ino)は、DC入力・Groveからの給電時に`cfg.output_power = false`を指定しています。
-現行の`setup()`は外部出力を強制ONにしているため、DC給電向けには初期化設定と後段の指定を両方見直してください。
+外部出力を強制ONにする処理の修正は[#374](https://github.com/puriso/racing_gauge/pull/374)で管理しています。
+同PRでは`EXTERNAL_5V_OUTPUT_ENABLED`を共通設定にし、初期値を`false`にしています。取り込み状況を確認してください。
 
 ```cpp
-// 現行コードの外部出力指定
+// 修正前の外部出力指定
 M5.Power.setExtOutput(true);
 ```
 
 ```cpp
-// DC入力給電に合わせる設定の要点
+// #374適用後のconfig.h：DinBaseのDC給電向けの既定値
+constexpr bool EXTERNAL_5V_OUTPUT_ENABLED = false;
+
+// setupの設定の要点
 auto cfg = M5.config();
-cfg.output_power = false;
-M5.begin(cfg);
+cfg.output_power = EXTERNAL_5V_OUTPUT_ENABLED;
 CoreS3.begin(cfg);
 
 // 後段の外部出力指定も、初期化設定と揃える
-M5.Power.setExtOutput(false);
+M5.Power.setExtOutput(EXTERNAL_5V_OUTPUT_ENABLED);
 ```
 
-これはDC給電向けの設定案です。変更後はADC・センサー側の5V供給も実機で確認してください。
-USB・バッテリーから外部へ5Vを出す構成では、給電方向に合わせた別の設定になります。
+変更後はADC・センサー側の5V供給も実機で確認してください。
+USB・バッテリーからCoreS3経由でセンサーへ5Vを出す構成では、同定数を`true`に変更して再ビルドします。
 5Vピンへ直接外部給電する場合も、外部出力を有効にした状態で別電源を同時接続しないでください。
 
 コードの`setBatteryCharge(false)`はPMU側への充電停止設定です。
@@ -261,6 +264,7 @@ Markdownだけの変更は、現在のワークフローでは実行対象外で
 | [#370](https://github.com/puriso/racing_gauge/pull/370) | 更新範囲に限定した画面転送 |
 | [#371](https://github.com/puriso/racing_gauge/pull/371) | 低油圧警告の再発・表示保持・時刻折り返しの修正 |
 | [#372](https://github.com/puriso/racing_gauge/pull/372) | ADC通信異常時の無期限待機防止・再接続 |
+| [#374](https://github.com/puriso/racing_gauge/pull/374) | DinBaseのDC給電に合わせた外部5V出力設定の統一 |
 
 描画は最大60FPSとなるよう制御していますが、実際のフレームレートはADC取得・描画・画面転送の時間に依存します。
 ビルドやホストテストの成功は、実機でのセンサー精度・電源変動・ノイズ耐性の確認とは別です。
@@ -296,7 +300,7 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **ADC inputs:** A0/CH0 oil temperature, A1/CH1 water temperature, A2/CH2 oil pressure; default address `0x48`.
 - **I²C pins:** GPIO9 SDA and GPIO8 SCL. Match the 3.3V GPIO and 5V ADC logic levels; see the [wiring section](#ハードウェアと配線) and the linked device datasheets.
 - **Temperature inputs:** NTC dividers with a 10kΩ resistor on the supply side and the NTC on the GND side. They are not 0.5–4.5V voltage-output sensors.
-- **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. For DC input, the official example sets `cfg.output_power = false`; align both initialization and the later `setExtOutput` call, which the current firmware forces to `true`. Verify sensor-side 5V after the change. See the [power section](#電源設定). Do not feed the 5V pin from another source while its output is enabled.
+- **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. [#374](https://github.com/puriso/racing_gauge/pull/374) aligns initialization and the later external-output setting using `EXTERNAL_5V_OUTPUT_ENABLED`, defaulting to `false`. For USB/battery-powered sensor output, set it to `true` and rebuild. Check the PR's merge status and verify sensor-side 5V after the change. See the [power section](#電源設定). Do not feed the 5V pin from another source while its output is enabled.
 - **Sampling:** Pressure uses five samples plus smoothing. Each temperature is sampled every 500ms and averaged over the latest two samples, then smoothed; the average changes every 500ms.
 - **Defaults:** Ambient-light dimming is enabled; demo mode, debug logging, and the FPS overlay are disabled. Edit [config.h](include/config.h) and rebuild to change them.
 - **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. A zero reading can also represent a detected fault.
