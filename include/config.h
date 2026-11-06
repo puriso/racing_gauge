@@ -21,6 +21,11 @@
 // 照度センサーを使用する場合は 1
 #define SENSOR_AMBIENT_LIGHT_PRESENT 1
 
+// ── 外部5V出力 ──
+// DinBaseのDC入力・5Vピンからの給電時はfalseにする。
+// USB・バッテリー給電でCoreS3からセンサーへ5Vを出す場合のみtrueにする。
+constexpr bool EXTERNAL_5V_OUTPUT_ENABLED = false;
+
 // ── 電圧降下補正 ──
 // 0.3sq ケーブル往復14mで約0.137Vの降下を想定
 constexpr float VOLTAGE_DROP = 0.137f;
