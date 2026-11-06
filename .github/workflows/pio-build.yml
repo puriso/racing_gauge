@@ -55,3 +55,6 @@ jobs:
         with:
           name: firmware
           path: .pio/build/m5stack-cores3/firmware.bin
+
+      - name: ADC通信異常の回帰テスト
+        run: python3 test/adc_reader/run_tests.py
