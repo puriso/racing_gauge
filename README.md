@@ -129,10 +129,36 @@ ADS1015のゲイン設定`±6.144V`も、電源電圧を超えるアナログ入
 
 ### 電源設定
 
-現在の`setup()`は`M5.Power.setExtOutput(true)`で外部5V出力を有効にしています。
-**CoreS3の5Vピンへ外部給電する構成では、事前に`setExtOutput(false)`へ変更してください。**
-出力を有効にした5Vピンへ、別の5V電源を同時に接続しないでください。
-バッテリー充電はコードで無効化しています。
+想定する実機の給電経路は、`車載12V → DinBaseのDC入力 → 内蔵降圧回路 → 5V → CoreS3・ADS1015`です。
+DinBaseはDC 9–24V入力と内蔵の降圧回路を備えています。[DinBase公式資料](https://docs.m5stack.com/en/base/Base_DIN)
+CoreS3〜ADS1015のI²C配線は、実機では3cm未満です。
+
+**DC入力給電では、CoreS3から外部へ5Vを出す設定と給電方向を合わせる必要があります。**
+[公式の電源サンプル](https://github.com/m5stack/M5CoreS3/blob/main/examples/Basic/power/power.ino)は、DC入力・Groveからの給電時に`cfg.output_power = false`を指定しています。
+現行の`setup()`は外部出力を強制ONにしているため、DC給電向けには初期化設定と後段の指定を両方見直してください。
+
+```cpp
+// 現行コードの外部出力指定
+M5.Power.setExtOutput(true);
+```
+
+```cpp
+// DC入力給電に合わせる設定の要点
+auto cfg = M5.config();
+cfg.output_power = false;
+M5.begin(cfg);
+CoreS3.begin(cfg);
+
+// 後段の外部出力指定も、初期化設定と揃える
+M5.Power.setExtOutput(false);
+```
+
+これはDC給電向けの設定案です。変更後はADC・センサー側の5V供給も実機で確認してください。
+USB・バッテリーから外部へ5Vを出す構成では、給電方向に合わせた別の設定になります。
+5Vピンへ直接外部給電する場合も、外部出力を有効にした状態で別電源を同時接続しないでください。
+
+コードの`setBatteryCharge(false)`はPMU側への充電停止設定です。
+DinBaseは別の充電ICも搭載するため、底座を含むすべての充電回路がこの指定で停止するとは扱いません。
 
 ## 設定
 
@@ -270,7 +296,7 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **ADC inputs:** A0/CH0 oil temperature, A1/CH1 water temperature, A2/CH2 oil pressure; default address `0x48`.
 - **I²C pins:** GPIO9 SDA and GPIO8 SCL. Match the 3.3V GPIO and 5V ADC logic levels; see the [wiring section](#ハードウェアと配線) and the linked device datasheets.
 - **Temperature inputs:** NTC dividers with a 10kΩ resistor on the supply side and the NTC on the GND side. They are not 0.5–4.5V voltage-output sensors.
-- **Power:** The firmware enables the external 5V output. Set `M5.Power.setExtOutput(false)` before powering the CoreS3 through its 5V pin. Do not connect an external source to that pin while its output is enabled.
+- **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. For DC input, the official example sets `cfg.output_power = false`; align both initialization and the later `setExtOutput` call, which the current firmware forces to `true`. Verify sensor-side 5V after the change. See the [power section](#電源設定). Do not feed the 5V pin from another source while its output is enabled.
 - **Sampling:** Pressure uses five samples plus smoothing. Each temperature is sampled every 500ms and averaged over the latest two samples, then smoothed; the average changes every 500ms.
 - **Defaults:** Ambient-light dimming is enabled; demo mode, debug logging, and the FPS overlay are disabled. Edit [config.h](include/config.h) and rebuild to change them.
 - **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. A zero reading can also represent a detected fault.
