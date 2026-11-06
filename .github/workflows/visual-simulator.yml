@@ -1,0 +1,65 @@
+name: SDL Visual Recording
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'simulator/**'
+      - '.github/workflows/visual-simulator.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'simulator/**'
+      - '.github/workflows/visual-simulator.yml'
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: '録画シナリオ'
+        type: choice
+        options: [all, ramp, warnings, menu]
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: simulator/requirements.txt
+      - name: SDL2 とビルドツール
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev pkg-config build-essential
+      - name: Python 依存
+        run: python -m pip install -r simulator/requirements.txt
+      - name: 本番描画を SDL 向けにビルド
+        run: pio run -d simulator -e desktop
+      - name: シナリオの録画と描画検証
+        env:
+          SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
+        run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --output simulator/out/ci
+      - name: MP4・PNG・HTML を保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-simulator
+          path: simulator/out/ci/
+          if-no-files-found: error
+          retention-days: 14
+      - name: 録画の開き方
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ### SDL 目視テスト録画
+          この実行の **Artifacts → visual-simulator** をダウンロード・展開し、`index.html` を開いてください。
+          シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
+          油温・水温・油圧の上昇、LOW/R、高温表示、詳細画面と復帰を確認できます。
+          本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
+          SUMMARY

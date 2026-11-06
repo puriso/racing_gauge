@@ -198,6 +198,15 @@ The temperature sensor is a thermistor; typical resistance values are shown belo
 
 ---
 
+### SDL シミュレーター・CI 録画 / SDL Simulator & CI Recordings
+
+実機なしで表示を動かし、油温・水温・油圧の上昇や警告表示を確認できます。
+CI では本番描画を MP4・PNG に保存します。セットアップと録画の見方は
+[シミュレーターのガイド](simulator/README.md)を参照してください。
+
+Run the production renderer on your desktop and review CI recordings of rising temperatures, oil pressure and warnings.
+See the [simulator guide](simulator/README.md) for setup and artifact downloads.
+
 ### License
 このプロジェクトは MIT ライセンスではありません。著作権は作者が保持します。詳細は `LICENSE` を参照してください。
 This project is not licensed under the MIT License. All rights are reserved by the author. See `LICENSE` for details.
