@@ -1,207 +1,287 @@
-# M5Stack CoreS3 Multi Gauge
-# M5Stack CoreS3 マルチメーター
+# M5Stack CoreS3 Racing Gauge
 
 [![PlatformIO Build](https://github.com/puriso/racing_gauge/actions/workflows/pio-build.yml/badge.svg?branch=main)](https://github.com/puriso/racing_gauge/actions/workflows/pio-build.yml)
 
-A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays:
+**油圧・水温・油温を、ひとつの画面で。** M5Stack CoreS3とADS1015を使用した、車載用デジタルメーターです。
+アナログ風ゲージ、低油圧警告、最高値の確認を備え、走行中の状態把握を補助します。
 
-* **Oil Pressure** via **Defi PDF00903S** (0 – 9.9 bar, 0.5 – 4.5 V)
-* **Oil / Water Temperature** via **Defi PDF00703S** (–40 – 150 °C, 0.5 – 4.5 V)  
+A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [English quick start](#english-quick-start)
 
-<img src="https://github.com/user-attachments/assets/d3a8bfdc-0bba-4519-b64a-f31a1ec9a9f4" width="640px">
+<img src="https://github.com/user-attachments/assets/d3a8bfdc-0bba-4519-b64a-f31a1ec9a9f4" alt="Racing Gaugeの表示例" width="640">
 
----
+[機能](#機能) · [セットアップ](#セットアップ) · [配線](#ハードウェアと配線) · [設定](#設定) · [開発・検証](#開発と検証)
 
-## 📘 日本語 README
+## 機能
 
-### 概要
-このプロジェクトは、**M5Stack CoreS3** と **ADS1015** ADC を用いて、Defi 製センサ **PDF00903S**・**PDF00703S** を表示する車載用マルチメーターです。
-サーキットでの簡易モニタリング用途に最適化しています。
+| 表示 | 内容 | 初期設定の目盛・しきい値 |
+| --- | --- | --- |
+| 油圧 | アナログ風ゲージと数値 | 0–10 bar、8 bar以上で赤色 |
+| 水温 | アナログ風ゲージと数値 | 85–115°C、110°C以上で赤色 |
+| 油温 | 画面上部のバーと数値 | 80–130°C、120°C以上で赤色 |
+| 詳細画面 | 最高油圧・最高水温・最高油温、直近の低油圧イベント、照度 | 画面タップで開閉 |
 
-### 主な機能
-- 油圧 (0–9.9 bar) 半円アナログメーター
-  - 本リポジトリでは **油圧**・**水温**・**油温** を表示
-- 油温 / 水温 (–40–150 °C) デジタル数値＋バー表示  
-- 各種設定は `include/config.h` の定数で変更可能
-- 水温・油温は500ms間隔で取得し、2サンプル平均を1秒ごとに更新
-- 周囲光センサーによる自動調光（デフォルト無効）
-- デモモードでセンサー無しでも動作確認可能
+- **低油圧警告**：水平Gが1.0 Gを超え、表示用の油圧が3.0 bar以下の状態が500ms継続すると、`LOW`を表示します。警告条件の最終検知から3秒間の表示保持を設けています。
+- **レーシングモード**：水平Gが1.0 G以上の状態が100ms継続すると、3分間、輝度を最大にして`R`を表示します。
+- **自動調光**：周囲光に応じて3段階の輝度に切り替えます。初期設定では有効です。
+- **デモモード**：外付けADC・センサーを接続せずに表示を確認できます。初期設定では無効です。
 
-### ハードウェア構成
-| モジュール       | 型番 / 仕様                       | 備考 |
-|------------------|----------------------------------|-------------------------|
-| MCU              | **M5Stack CoreS3** (ESP32-S3)    | USB-C, 2.0インチ IPS LCD |
-| ADC              | **ADS1015** 12bit / I²C / 4ch     | アナログ入力 |
-| 圧力センサ       | **PDF00903S** (Defi)              | CH2 / 0.5 – 4.5 V |
-| 温度センサ1      | **PDF00703S** (Defi)              | CH0 / 0.5 – 4.5 V |
-| 温度センサ2      | **PDF00703S** (Defi)              | CH1 / 0.5 – 4.5 V |
-| 電源             | 5V                               | CoreS3 USB経由 または 5Vピン |
+油圧の画面上の単位`x100kPa`はbarと同じ大きさです（1 bar = 100 kPa）。
+最高値・イベント履歴はメモリ上に保持し、再起動するとリセットされます。
 
-> 💡 5Vピンは入力(給電)と外部機器への出力の両方に利用できます。`M5.Power.setExtOutput(true)`で出力を有効化した状態では、外部から同時に給電しないでください。
-> 5Vピンから給電する場合は `M5.Power.setExtOutput(false)` として出力を無効にします。
+## セットアップ
 
-### 配線図 / Wiring Diagram
+### 1. 開発環境を用意する
 
-```mermaid
-graph TD
-    subgraph "M5Stack CoreS3"
-        V5{{5V}}
-        GND{{GND}}
-    end
-    ADS[ADS1015]
+[PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/index.html)をインストールします。
+VS CodeのPlatformIO IDEを利用する場合は、内蔵のPlatformIOターミナルで以下を実行できます。
 
-    V5 --> ADS
-    GND --> ADS
-
-    subgraph "Oil Temp"
-        R1[10kOhm]
-        NTC1[NTC]
-        V5 --> R1 --> AN0((A0))
-        AN0 --> NTC1 --> GND
-    end
-    AN0 -- CH0 --> ADS
-
-    subgraph "Water Temp"
-        R2[10kOhm]
-        NTC2[NTC]
-        V5 --> R2 --> AN1((A1))
-        AN1 --> NTC2 --> GND
-    end
-    AN1 -- CH1 --> ADS
-
-    subgraph "Oil Pressure"
-        OilP["0.5-4.5V"]
-        V5 --> OilP --> GND
-    end
-    OilP -- CH2 --> ADS
+```sh
+git clone https://github.com/puriso/racing_gauge.git
+cd racing_gauge
+pio run -e m5stack-cores3
 ```
 
-### センサー対応表
+生成されるファームウェアは`.pio/build/m5stack-cores3/firmware.bin`です。
+ボード定義とライブラリの指定は[platformio.ini](platformio.ini)で管理しています。
+`M5Unified@^0.2.7`などはバージョン範囲の指定であり、特定のバージョンへの固定ではありません。
 
-油圧センサは電圧出力式のため抵抗値はありません。参考として油圧と出力電圧の関係を下表に示します。
+### 2. USB接続して書き込む
 
-| 油圧 [bar] | 電圧 [V] |
-|-----------|---------|
-| 0 | 0.50 |
-| 1 | 0.90 |
-| 2 | 1.30 |
-| 3 | 1.70 |
-| 4 | 2.10 |
-| 5 | 2.50 |
-| 6 | 2.90 |
-| 7 | 3.30 |
-| 8 | 3.70 |
-| 9 | 4.10 |
-| 10 | 4.50 |
+```sh
+pio device list
+```
 
-温度センサ（サーミスタ）の抵抗値は以下の通りです。
+一覧からCoreS3のポートを確認し、書き込み時に指定します。以下はmacOSの例です。
+`/dev/cu.usbmodemXXXX`を実際のポート名に置き換えてください。
 
-| 温度 [°C] | 抵抗値 [Ω] |
-|-----------|-----------|
-| 0 | 28223.73 |
-| 10 | 18231.40 |
-| 20 | 12133.17 |
-| 30 | 8294.61 |
-| 40 | 5809.87 |
-| 50 | 4160.14 |
-| 60 | 3039.19 |
-| 70 | 2261.28 |
-| 80 | 1710.89 |
-| 90 | 1314.50 |
-| 100 | 1024.32 |
-| 110 | 808.66 |
-| 120 | 646.12 |
+```sh
+pio run -e m5stack-cores3 -t upload --upload-port /dev/cu.usbmodemXXXX
+pio device monitor --port /dev/cu.usbmodemXXXX --baud 115200
+```
 
-### ビルド方法
-1. [PlatformIO](https://platformio.org/) をインストール (VS Code 推奨)
-2. `platformio run` でビルドし、`platformio upload` で書き込み
-   - 本プロジェクトでは `M5Unified` ライブラリ **0.2.7** を使用しています。
-     2系 (0.2.x) へ更新することで、古いボード定義に関する警告が解消されます。
+Windowsでは`COM11`、Linuxでは`/dev/ttyACM0`など、環境に合ったポート名を使用します。
+現在の`platformio.ini`には`upload_port = COM11`が設定されているため、異なる環境では上記の`--upload-port`で上書きしてください。
+コマンドの詳細は[PlatformIOの公式リファレンス](https://docs.platformio.org/en/stable/core/userguide/cmd_run.html)を参照してください。
 
----
+### 3. 表示とセンサー値を確認する
 
-## English README
+起動直後はIMUの安定化待ちとオフセット推定を行うため、本体を静止させてください。
+センサーを接続する前に画面を確認したい場合は、[include/config.h](include/config.h)の`DEMO_MODE_ENABLED`を`1`に変更し、再ビルド・書き込みします。
+実測に戻す際は`0`に戻してください。
 
-### Overview
-This project turns an **M5Stack CoreS3** and **ADS1015 ADC** into a simple yet powerful multi-gauge that reads:
+## ハードウェアと配線
 
-- **Oil Pressure** using **Defi PDF00903S** (0.5–4.5 V, 0–9.9 bar)
-- **Oil / Water Temperature** using **Defi PDF00703S** (0.5–4.5 V, –40 to 150°C)  
+### 構成とチャンネル
 
-Perfect for vintage cars lacking modern instrumentation or for lightweight track-day data monitoring.
+| 機器・信号 | 使用対象・方式 | コード上の接続先 |
+| --- | --- | --- |
+| 本体 | M5Stack CoreS3 / ESP32-S3 | 320 × 240画素の内蔵ディスプレイ |
+| ADC | ADS1015 / 12bit・4チャンネル | I²Cアドレス`0x48` |
+| 油温 | Defi PDF00703Sを想定したNTC抵抗式 | ADS1015 A0 / CH0 |
+| 水温 | Defi PDF00703Sを想定したNTC抵抗式 | ADS1015 A1 / CH1 |
+| 油圧 | Defi PDF00903Sを想定した電圧出力式 | ADS1015 A2 / CH2 |
+| 外部I²C SDA | CoreS3 GPIO9 | ADS1015 SDAとのレベル整合が必要 |
+| 外部I²C SCL | CoreS3 GPIO8 | ADS1015 SCLとのレベル整合が必要 |
 
-### Features
-- Semi-circular analog gauge (0–9.9 bar, pressure)
-  - In this repository, **oil pressure**, **water temperature**, and **oil temperature** are implemented.
-- Digital + bar graph temperature display
-- Most settings are in `include/config.h`
-- Water and oil temperatures are sampled every 500 ms and averaged over 2 samples (updated every second)
-- Automatic backlight brightness using the ambient light sensor (disabled by default)
-- Demo mode lets you test without sensors connected
+上記は[config.h](include/config.h)と[setup()](src/main.cpp)の割り当てです。
+本体のコネクター・ピン配置は[M5Stack公式資料](https://docs.m5stack.com/en/core/CoreS3)と照合してください。
 
-### Hardware Configuration
-| Module           | Part / Spec                    | Notes                   |
-|------------------|-------------------------------|-------------------------|
-| MCU              | **M5Stack CoreS3** (ESP32-S3)  | 2.0" IPS, USB-C         |
-| ADC              | **ADS1015** 12-bit, I²C, 4ch    | Analog signal input     |
-| Pressure Sensor  | **PDF00903S** (Defi)           | CH2, 0.5–4.5V           |
-| Temp Sensor 1    | **PDF00703S** (Defi)           | CH0, 0.5–4.5V           |
-| Temp Sensor 2    | **PDF00703S** (Defi)           | CH1, 0.5–4.5V           |
-| Power Supply     | 5V                             | Powered via USB or 5V pin         |
+### 接続の考え方
 
-> 💡 The 5V pin can power the CoreS3 or supply external devices. When `M5.Power.setExtOutput(true)` is active, avoid feeding power from another 5V source at the same time.
-> To run from the 5V pin, keep `M5.Power.setExtOutput(false)` so the pin won't output power.
+温度入力は、5V側の10kΩ固定抵抗とGND側のNTCによる分圧を想定しています。
+油圧入力は0.5–4.5Vの電圧を換算します。温度センサーを同じ電圧出力式として接続しないでください。
 
-> 📌 A wiring diagram is available in the Japanese section above.
+```mermaid
+flowchart LR
+    CORE["CoreS3<br/>GPIO9: SDA / GPIO8: SCL"]
+    LEVEL["I²Cレベル変換<br/>3.3V ↔ 5V"]
+    ADC["ADS1015<br/>VDD: 5V / ADDR: GND / 0x48"]
+    SUPPLY["5V電源"]
+    GND["共通GND"]
+    RP_OIL["10kΩ固定抵抗"]
+    RP_WATER["10kΩ固定抵抗"]
+    OIL_NODE(("油温分圧点"))
+    WATER_NODE(("水温分圧点"))
+    OIL_NTC["油温NTC"]
+    WATER_NTC["水温NTC"]
+    PRESSURE["油圧センサー<br/>0.5–4.5V出力"]
 
-### Sensor Tables
+    CORE <-->|"SDA / SCL"| LEVEL
+    LEVEL <-->|"SDA / SCL"| ADC
+    SUPPLY --> ADC
+    SUPPLY --> RP_OIL --> OIL_NODE --> OIL_NTC --> GND
+    SUPPLY --> RP_WATER --> WATER_NODE --> WATER_NTC --> GND
+    SUPPLY --> PRESSURE
+    PRESSURE --> GND
+    OIL_NODE -->|"A0 / CH0"| ADC
+    WATER_NODE -->|"A1 / CH1"| ADC
+    PRESSURE -->|"A2 / CH2"| ADC
+    CORE --- GND
+    ADC --- GND
+```
 
-The pressure sensor outputs only voltage; the mapping between pressure and output voltage is below.
+これは接続関係のブロック図です。レベル変換回路の電源・プルアップ抵抗は、使用する基板の回路図に従って接続してください。
+レベル変換を内蔵するADC基板では、その基板の入出力仕様を確認します。
 
-| Pressure [bar] | Voltage [V] |
-|----------------|-------------|
-| 0 | 0.50 |
-| 1 | 0.90 |
-| 2 | 1.30 |
-| 3 | 1.70 |
-| 4 | 2.10 |
-| 5 | 2.50 |
-| 6 | 2.90 |
-| 7 | 3.30 |
-| 8 | 3.70 |
-| 9 | 4.10 |
-| 10 | 4.50 |
+ESP32-S3の3.3V系GPIOと、5V駆動のADS1015のI²C信号にはレベル整合が必要です。
+ADS1015のゲイン設定`±6.144V`も、電源電圧を超えるアナログ入力を許可するものではありません。
+電気的条件は[ESP32-S3データシート](https://documentation.espressif.com/esp32_s3_datasheet_en.pdf)と[ADS1015データシート](https://www.ti.com/lit/ds/symlink/ads1015.pdf)を参照してください。
 
-The temperature sensor is a thermistor; typical resistance values are shown below.
+### 電源設定
 
-| Temperature [°C] | Resistance [Ω] |
-|------------------|---------------|
-| 0 | 28223.73 |
-| 10 | 18231.40 |
-| 20 | 12133.17 |
-| 30 | 8294.61 |
-| 40 | 5809.87 |
-| 50 | 4160.14 |
-| 60 | 3039.19 |
-| 70 | 2261.28 |
-| 80 | 1710.89 |
-| 90 | 1314.50 |
-| 100 | 1024.32 |
-| 110 | 808.66 |
-| 120 | 646.12 |
+現在の`setup()`は`M5.Power.setExtOutput(true)`で外部5V出力を有効にしています。
+**CoreS3の5Vピンへ外部給電する構成では、事前に`setExtOutput(false)`へ変更してください。**
+出力を有効にした5Vピンへ、別の5V電源を同時に接続しないでください。
+バッテリー充電はコードで無効化しています。
 
-### Build Instructions
-1. Install [PlatformIO](https://platformio.org/) (VS Code recommended)
-2. Build with `platformio run` and flash with `platformio upload`
-   - This project uses `M5Unified` library version **0.2.7**.
-     Updating to the 0.2.x series clears warnings related to deprecated board definitions.
+## 設定
 
----
+主な設定は[include/config.h](include/config.h)を編集して変更します。変更後は再ビルド・書き込みが必要です。
 
-### License
-このプロジェクトは MIT ライセンスではありません。著作権は作者が保持します。詳細は `LICENSE` を参照してください。
-This project is not licensed under the MIT License. All rights are reserved by the author. See `LICENSE` for details.
+| 設定 | 初期値 | 内容 |
+| --- | --- | --- |
+| `DEMO_MODE_ENABLED` | `0` | デモ表示 |
+| `SENSOR_OIL_PRESSURE_PRESENT` | `1` | 油圧センサーの使用 |
+| `SENSOR_WATER_TEMP_PRESENT` | `1` | 水温センサーの使用 |
+| `SENSOR_OIL_TEMP_PRESENT` | `1` | 油温センサーの使用 |
+| `SENSOR_AMBIENT_LIGHT_PRESENT` | `1` | 周囲光センサーによる自動調光 |
+| `DEBUG_MODE_ENABLED` | `0` | シリアルへのセンサー値・FPS出力 |
+| `FPS_DISPLAY_ENABLED` | `0` | 画面上のFPS表示 |
+| `VOLTAGE_DROP` | `0.137V` | 油圧・温度の換算に使う電圧降下補正 |
+| `PRESSURE_SAMPLE_SIZE` | `5` | 油圧の平均サンプル数 |
+| `WATER_TEMP_SAMPLE_SIZE` / `OIL_TEMP_SAMPLE_SIZE` | `2` | 温度の平均サンプル数 |
 
----
+油圧は各フレームで取得し、直近5サンプルの平均に平滑化を適用します。
+水温・油温はそれぞれ500msごとに取得し、直近2サンプル、約1秒分を平均してから表示を平滑化します。
+温度平均は新しいサンプルが入る500msごとに更新されます。
 
-🚗 Built for performance, track use, and hobbyist tuning.
+低油圧警告・バーの赤色しきい値は[src/modules/low_warning.cpp](src/modules/low_warning.cpp)と[src/modules/display.cpp](src/modules/display.cpp)、
+温度の取得間隔・換算係数は[src/modules/sensor.cpp](src/modules/sensor.cpp)で定義しています。
+
+## センサーの換算と校正
+
+### 油圧
+
+補正後の電圧`V`に対して、`P [bar] = 2.5 × (V − 0.5)`で換算します。0.5V以下は0 barとして扱います。
+
+| 補正後の電圧 | 換算油圧 |
+| --- | --- |
+| 0.50V | 0 bar |
+| 1.30V | 2 bar |
+| 2.50V | 5 bar |
+| 4.50V | 10 bar |
+
+ADC入力で4.9V以上の過電圧を検出した場合などは、油圧を0扱いにします。
+この0表示だけでは、実際の低油圧と配線・センサーの異常を区別できません。
+
+### 水温・油温
+
+10kΩの基準抵抗、`R25 = 10kΩ`、`B = 3380K`のβ式を使用します。
+以下は実装の換算モデルから求めた参考値であり、センサー製造元の保証値や実測の校正データではありません。
+
+<details>
+<summary>温度とNTC抵抗値の参考表</summary>
+
+| 温度 | 抵抗値 |
+| --- | --- |
+| 0°C | 28,221.67Ω |
+| 10°C | 18,230.65Ω |
+| 20°C | 12,133.01Ω |
+| 30°C | 8,294.71Ω |
+| 40°C | 5,810.08Ω |
+| 50°C | 4,160.37Ω |
+| 60°C | 3,039.42Ω |
+| 70°C | 2,261.49Ω |
+| 80°C | 1,711.08Ω |
+| 90°C | 1,314.67Ω |
+| 100°C | 1,024.46Ω |
+| 110°C | 808.78Ω |
+| 120°C | 646.23Ω |
+
+</details>
+
+入力電圧が換算可能な範囲を外れる場合は、内部で200°Cを異常値として使用します。
+表示側には199°C以上を0扱いにする処理があります。異常サンプルの平均・最高値の扱いの修正は[#369](https://github.com/puriso/racing_gauge/pull/369)を参照してください。
+
+センサーの型番だけで測定精度が決まるわけではありません。
+使用するセンサーの特性、基準抵抗、実際の電源電圧・配線の電圧降下に合わせて、換算係数と`VOLTAGE_DROP`を確認してください。
+起動時の静止姿勢も水平Gの基準に影響します。
+
+## 開発と検証
+
+### ソース構成
+
+| パス | 役割 |
+| --- | --- |
+| [src/main.cpp](src/main.cpp) | 初期化・フレーム制御・タッチ操作 |
+| [src/modules/sensor.cpp](src/modules/sensor.cpp) | ADC・IMU取得、換算、サンプル管理 |
+| [src/modules/display.cpp](src/modules/display.cpp) | ゲージ・詳細画面・最高値 |
+| [src/modules/low_warning.cpp](src/modules/low_warning.cpp) | 低油圧警告・イベント情報 |
+| [src/modules/racing_mode.cpp](src/modules/racing_mode.cpp) | レーシングモードの判定 |
+| [src/modules/backlight.cpp](src/modules/backlight.cpp) | 周囲光による輝度制御 |
+| [include/config.h](include/config.h) | 機能フラグ・表示・サンプル数などの設定 |
+
+### CIと関連する改善
+
+[GitHub Actions](.github/workflows/pio-build.yml)では、CoreS3向けファームウェアをビルドし、`firmware`アーティファクトとして保存します。
+Markdownだけの変更は、現在のワークフローでは実行対象外です。
+
+次の改善は関連PRで管理しています。**このREADMEの基準であるmainへの取り込み状況と、各PRの検証範囲を確認してください。**
+追加テストの実行手順は各PR本文に記載しています。
+
+| PR | 内容 |
+| --- | --- |
+| [#369](https://github.com/puriso/racing_gauge/pull/369) | 温度異常・最高値・油温バーの修正、nativeテストの整備 |
+| [#370](https://github.com/puriso/racing_gauge/pull/370) | 更新範囲に限定した画面転送 |
+| [#371](https://github.com/puriso/racing_gauge/pull/371) | 低油圧警告の再発・表示保持・時刻折り返しの修正 |
+| [#372](https://github.com/puriso/racing_gauge/pull/372) | ADC通信異常時の無期限待機防止・再接続 |
+
+描画は最大60FPSとなるよう制御していますが、実際のフレームレートはADC取得・描画・画面転送の時間に依存します。
+ビルドやホストテストの成功は、実機でのセンサー精度・電源変動・ノイズ耐性の確認とは別です。
+
+## English quick start
+
+This project displays oil pressure, water temperature, and oil temperature on an M5Stack CoreS3 using an external ADS1015.
+Tap the screen to view recorded peaks and the latest low-pressure event. Records are held in RAM and reset on reboot.
+
+### Build and upload
+
+Install [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/index.html), then run:
+
+```sh
+git clone https://github.com/puriso/racing_gauge.git
+cd racing_gauge
+pio run -e m5stack-cores3
+pio device list
+```
+
+Replace the macOS example port below with the port reported for your device:
+
+```sh
+pio run -e m5stack-cores3 -t upload --upload-port /dev/cu.usbmodemXXXX
+pio device monitor --port /dev/cu.usbmodemXXXX --baud 115200
+```
+
+The project currently sets `upload_port = COM11`; the command-line option overrides it.
+Library versions in [platformio.ini](platformio.ini) use compatible ranges rather than exact pins.
+
+### Hardware and operation
+
+- **ADC inputs:** A0/CH0 oil temperature, A1/CH1 water temperature, A2/CH2 oil pressure; default address `0x48`.
+- **I²C pins:** GPIO9 SDA and GPIO8 SCL. Match the 3.3V GPIO and 5V ADC logic levels; see the [wiring section](#ハードウェアと配線) and the linked device datasheets.
+- **Temperature inputs:** NTC dividers with a 10kΩ resistor on the supply side and the NTC on the GND side. They are not 0.5–4.5V voltage-output sensors.
+- **Power:** The firmware enables the external 5V output. Set `M5.Power.setExtOutput(false)` before powering the CoreS3 through its 5V pin. Do not connect an external source to that pin while its output is enabled.
+- **Sampling:** Pressure uses five samples plus smoothing. Each temperature is sampled every 500ms and averaged over the latest two samples, then smoothed; the average changes every 500ms.
+- **Defaults:** Ambient-light dimming is enabled; demo mode, debug logging, and the FPS overlay are disabled. Edit [config.h](include/config.h) and rebuild to change them.
+- **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. A zero reading can also represent a detected fault.
+
+The sensor table above describes the firmware's conversion model, not manufacturer calibration data.
+See [related improvements](#ciと関連する改善) for the temperature, rendering, warning, and ADC fixes; check each PR's merge status before relying on its behavior or test commands.
+Hardware accuracy and vehicle behavior require separate verification.
+
+## ライセンス / License
+
+Copyright © 2025 purin. **All rights reserved.**
+
+利用・再配布の条件は[LICENSE](LICENSE)を参照してください。MITライセンスではありません。
+Use and redistribution require the author's explicit written permission under [LICENSE](LICENSE).
