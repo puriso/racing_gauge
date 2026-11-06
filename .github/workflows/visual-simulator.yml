@@ -27,6 +27,8 @@ permissions:
 
 jobs:
   record:
+    outputs:
+      artifact_url: ${{ steps.recording.outputs.artifact-url }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -47,6 +49,7 @@ jobs:
           SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
         run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --output simulator/out/ci
       - name: MP4・PNG・HTML を保存
+        id: recording
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -63,3 +66,59 @@ jobs:
           油温・水温・油圧の上昇、LOW/R、高温表示、詳細画面と復帰を確認できます。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
           SUMMARY
+
+  comment:
+    needs: record
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    concurrency:
+      group: sdl-visual-comment-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - name: 録画レポートへのリンクを PR に作成・更新
+        uses: actions/github-script@v8
+        env:
+          ARTIFACT_URL: ${{ needs.record.outputs.artifact_url }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const expectedSha = context.payload.pull_request.head.sha;
+            const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+            // 古いコミットの録画で最新コメントを上書きしない。
+            if (pull.state !== 'open' || pull.head.sha !== expectedSha) {
+              core.info('更新済み、またはクローズされた PR のためコメントを省略します。');
+              return;
+            }
+            const artifactUrl = process.env.ARTIFACT_URL;
+            if (!artifactUrl) throw new Error('録画成果物の URL がありません。');
+            const marker = '<!-- racing-gauge-sdl-recording -->';
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              marker,
+              '### SDL 目視テスト録画',
+              '',
+              `[録画レポートをダウンロード（MP4・index.html）](${artifactUrl})`,
+              '',
+              'ZIP を展開し、`index.html` をブラウザーで開いてください。各 `recording.mp4` も直接再生できます。',
+              '油温・水温・油圧の上昇、LOW/R・高温表示、詳細画面からの復帰を録画しています。',
+              '',
+              `対象: ${expectedSha.slice(0, 7)} · [CI の実行](${runUrl}) · 成果物の保存期間: 14日`,
+              '同じ PR の録画が成功するたび、このコメントを更新します。',
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const previous = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

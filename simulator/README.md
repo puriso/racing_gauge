@@ -84,6 +84,13 @@ MP4 が正常にデコードできることも確認します。見た目の正�
 [SDL Visual Recording](../.github/workflows/visual-simulator.yml) が、描画・設定・シミュレーターを変更した PR と
 main への push で実行されます。手動実行ではシナリオを選べます（ワークフローが main に入った後）。
 
+同じリポジトリ内の PR では、録画成功後に **録画レポートをダウンロード** というリンクを自動コメントします。
+リンク先の ZIP を展開して `index.html` を開いてください。再実行時はコメントを増やさず、同じコメントを更新します。
+HTML を公開ホスティングする機能はありません。
+
+fork と Dependabot の PR はコメントを省略し、Checks から成果物を開く方法を使用します。
+録画ジョブは読み取り権限で実行し、PR コメントの権限はコードを実行しない専用ジョブに限定しています。
+
 1. PR の Checks、または GitHub の Actions から **SDL Visual Recording** の実行を開きます。
 2. **Artifacts → visual-simulator** をダウンロード・展開します。
 3. `index.html` または各 `recording.mp4` を開きます。成果物は 14 日間保存されます。
