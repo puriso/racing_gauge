@@ -19,7 +19,7 @@ on:
       scenario:
         description: '録画シナリオ'
         type: choice
-        options: [all, ramp, warnings, menu]
+        options: [all, ramp, warnings, startup, warm-start, menu]
         default: all
 
 permissions:
@@ -63,7 +63,7 @@ jobs:
           ### SDL 目視テスト録画
           この実行の **Artifacts → visual-simulator** をダウンロード・展開し、`index.html` を開いてください。
           シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
-          油温・水温・油圧の上昇、LOW/R、高温表示、詳細画面と復帰を確認できます。
+          油温-10〜170℃・水温-10〜130℃・油圧0〜10bar、短い油圧低下、始動時70℃、詳細画面の復帰を確認できます。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
           SUMMARY
 
@@ -107,7 +107,7 @@ jobs:
               `[録画レポートをダウンロード（MP4・index.html）](${artifactUrl})`,
               '',
               'ZIP を展開し、`index.html` をブラウザーで開いてください。各 `recording.mp4` も直接再生できます。',
-              '油温・水温・油圧の上昇、LOW/R・高温表示、詳細画面からの復帰を録画しています。',
+              '油温-10〜170℃・水温-10〜130℃・油圧0〜10bar、LOW境界への瞬間的な低下と回復、始動時70℃を録画しています。',
               '',
               `対象: ${expectedSha.slice(0, 7)} · [CI の実行](${runUrl}) · 成果物の保存期間: 14日`,
               '同じ PR の録画が成功するたび、このコメントを更新します。',

@@ -53,7 +53,7 @@ struct Options
 {
   std::string scenario = "ramp";
   std::filesystem::path capture;
-  unsigned int seconds = DEFAULT_SECONDS;
+  unsigned int seconds = 0;
 };
 
 auto options() -> Options&
@@ -74,29 +74,112 @@ struct Inputs
 
 // シナリオの物理量と時点を、README の表と対応するリテラルで記載する。
 // NOLINTBEGIN(readability-magic-numbers)
-auto sample(float progress) -> Inputs
+auto defaultSeconds() -> unsigned int
 {
-  Inputs result{60.0F + (70.0F * progress), 60.0F + (60.0F * progress), 10.0F * progress, 0.0F, false};
+  if (options().scenario == "ramp")
+  {
+    return 100;
+  }
   if (options().scenario == "warnings")
   {
-    result = {100.0F + (25.0F * progress), 90.0F + (25.0F * progress), 5.0F, 0.0F, false};
-    if (progress >= 0.2F && progress < 0.6F)
-    {
-      result.acceleration = 1.2F;
-      result.pressure = 5.0F - (4.0F * std::clamp((progress - 0.2F) / 0.1F, 0.0F, 1.0F));
-    }
+    return 40;
   }
-  result.menu = options().scenario == "menu" && progress >= 0.4F && progress < 0.65F;
-  return result;
+  if (options().scenario == "startup" || options().scenario == "warm-start")
+  {
+    return 30;
+  }
+  return DEFAULT_SECONDS;
+}
+
+auto interpolate(float start, float end, float progress) -> float
+{
+  return start + ((end - start) * std::clamp(progress, 0.0F, 1.0F));
+}
+
+auto pressureDip(float seconds) -> float
+{
+  // 境界の直上・一致・直下を短時間通過してから、警告成立と回復を確認する。
+  if (seconds >= 8.0F && seconds < 8.25F)
+  {
+    return 3.1F;
+  }
+  if (seconds >= 12.0F && seconds < 12.25F)
+  {
+    return 3.0F;
+  }
+  if (seconds >= 16.0F && seconds < 16.25F)
+  {
+    return 2.9F;
+  }
+  if (seconds >= 22.0F && seconds < 24.0F)
+  {
+    return 2.9F;
+  }
+  return 5.0F;
+}
+
+auto sample(float progress) -> Inputs
+{
+  // 時間指定を変えても同じ順序のシナリオを伸縮する。
+  const float seconds = progress * static_cast<float>(defaultSeconds());
+  if (options().scenario == "warnings")
+  {
+    return {
+        interpolate(70.0F, 90.0F, progress),
+        interpolate(70.0F, 85.0F, progress),
+        pressureDip(seconds),
+        seconds >= 6.0F && seconds < 30.0F ? 1.2F : 0.0F,
+        false,
+    };
+  }
+  if (options().scenario == "startup")
+  {
+    // 始動直後だけ両温度が 70℃を示し、低温に戻ってからゆっくり暖まる。
+    const bool initialReading = seconds < 1.0F;
+    const float warming = (seconds - 1.0F) / 29.0F;
+    return {
+        initialReading ? 70.0F : interpolate(-10.0F, 50.0F, warming),
+        initialReading ? 70.0F : interpolate(-10.0F, 40.0F, warming),
+        interpolate(0.0F, 5.0F, seconds),
+        0.0F,
+        false,
+    };
+  }
+  if (options().scenario == "warm-start")
+  {
+    return {
+        interpolate(70.0F, 95.0F, progress),
+        interpolate(70.0F, 90.0F, progress),
+        interpolate(0.0F, 5.0F, seconds),
+        0.0F,
+        false,
+    };
+  }
+  if (options().scenario == "menu")
+  {
+    return {
+        interpolate(70.0F, 90.0F, progress), interpolate(70.0F, 85.0F, progress), 5.0F, 0.0F,
+        seconds >= 8.0F && seconds < 13.0F,
+    };
+  }
+  // 両端を保持し、平滑化後の低温・高温も目視しやすくする。
+  const float warming = (seconds - 2.0F) / 90.0F;
+  return {
+      interpolate(-10.0F, 170.0F, warming),
+      interpolate(-10.0F, 130.0F, warming),
+      interpolate(0.0F, 10.0F, (seconds - 2.0F) / 10.0F),
+      0.0F,
+      false,
+  };
 }
 
 // NOLINTEND(readability-magic-numbers)
 
 void inject(const Inputs& input)
 {
-  std::fill_n(oilTemperatureSamples, OIL_TEMP_SAMPLE_SIZE, input.oil);
-  std::fill_n(waterTemperatureSamples, WATER_TEMP_SAMPLE_SIZE, input.water);
-  std::fill_n(oilPressureSamples, PRESSURE_SAMPLE_SIZE, input.pressure);
+  std::fill_n(oilTemperatureSamples, OIL_TEMP_SAMPLE_SIZE, SENSOR_OIL_TEMP_PRESENT ? input.oil : 0.0F);
+  std::fill_n(waterTemperatureSamples, WATER_TEMP_SAMPLE_SIZE, SENSOR_WATER_TEMP_PRESENT ? input.water : 0.0F);
+  std::fill_n(oilPressureSamples, PRESSURE_SAMPLE_SIZE, SENSOR_OIL_PRESSURE_PRESENT ? input.pressure : 0.0F);
   currentGForce = input.acceleration;
 }
 
@@ -215,7 +298,9 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
     {
       manifest.open(options().capture / "inputs.json");
       manifest.exceptions(std::ios::failbit | std::ios::badbit);
-      manifest << R"({"scenario":")" << options().scenario << "\",\"fps\":10,\"frames\":[\n";
+      manifest << R"({"scenario":")" << options().scenario << R"(","fps":10,"sensors":{"oil_temp":)"
+               << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)" << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)"
+               << SENSOR_OIL_PRESSURE_PRESENT << "},\"frames\":[\n";
     }
     std::cout << "Scenario: " << options().scenario << " | Space: pause | Home: replay | M/click: menu\n";
     const auto totalTicks = options().seconds * TICKS_PER_SECOND;
@@ -230,7 +315,10 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       const auto tick = controls.tick;
       const auto input = sample(static_cast<float>(tick) / static_cast<float>(totalTicks));
       // 再生を戻しても時計は単調増加させ、警告の継続時間やピーク値を壊さない。
-      showingMenu = renderFrame(input, controls.manualMenu, showingMenu);
+      if (!controls.paused)
+      {
+        showingMenu = renderFrame(input, controls.manualMenu, showingMenu);
+      }
 
       if (recording && tick % CAPTURE_STRIDE == 0)
       {
@@ -286,7 +374,8 @@ auto main(int argc, char** argv) -> int
       const std::string argument = argv[i];
       if (argument == "--help")
       {
-        std::cout << "Usage: program [--scenario ramp|warnings|menu] [--seconds 20] [--capture NEW_DIRECTORY]\n";
+        std::cout << "Usage: program [--scenario ramp|warnings|startup|warm-start|menu] [--seconds N] [--capture "
+                     "NEW_DIRECTORY]\n";
         return 0;
       }
       if (i + 1 >= argc)
@@ -316,9 +405,14 @@ auto main(int argc, char** argv) -> int
         throw std::runtime_error("Unknown option or invalid duration: " + argument);
       }
     }
-    if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "menu")
+    if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
+        options().scenario != "warm-start" && options().scenario != "menu")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
+    }
+    if (options().seconds == 0)
+    {
+      options().seconds = defaultSeconds();
     }
     if (options().seconds < MIN_SECONDS || options().seconds > MAX_SECONDS)
     {
