@@ -101,6 +101,19 @@ CLIの `--seconds` ではシナリオ全体を伸縮できます。CI録画は�
 全レンジ録画では、130℃を超えた油温バーが数値領域へはみ出さないことも検証します。
 MP4 が正常にデコードできることも確認します。それ以外の見た目の判定は人が行います。
 
+## README の紹介用 GIF を更新する
+
+`record.py` で生成した録画の出力先を指定すると、本番描画のPNGから紹介用GIFを再生成できます。
+
+```sh
+python simulator/make_demo.py --recordings simulator/out/my-review
+```
+
+`ramp` と `warnings` の両方を含む録画が必要です（`record.py` の既定値 `all` で生成できます）。
+出力は `docs/images/gauge-demo.gif` です。全レンジの昇温を12.5倍速、
+油圧低下・LOW点灯・回復の21.5〜28.5秒を等速で抜粋し、再生速度を画面外の帯に表示します。
+GIFは紹介用の抜粋です。全シナリオの確認にはMP4または全PNGを使用してください。
+
 ## CI で確認する
 
 [SDL Visual Recording](../.github/workflows/visual-simulator.yml) が、描画・設定・シミュレーターを変更した PR と

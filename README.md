@@ -8,6 +8,13 @@ A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays
 * **Oil Pressure** via **Defi PDF00903S** (0 – 9.9 bar, 0.5 – 4.5 V)
 * **Oil / Water Temperature** via **Defi PDF00703S** (–40 – 150 °C, 0.5 – 4.5 V)  
 
+<img src="docs/images/gauge-demo.gif" alt="油温・水温の上昇と、油圧低下によるLOW警告・回復の動作デモ" width="640">
+
+油温・水温の上昇と、油圧低下時のLOW警告・回復を紹介するSDLシミュレーターの録画です。
+昇温は12.5倍速、LOW警告の場面は等速で再生します。[シミュレーターと録画の使い方](simulator/README.md)。
+
+SDL simulator preview: temperature sweep at 12.5× speed, followed by an oil-pressure drop, LOW warning and recovery at normal speed.
+
 <img src="https://github.com/user-attachments/assets/d3a8bfdc-0bba-4519-b64a-f31a1ec9a9f4" width="640px">
 
 ---
