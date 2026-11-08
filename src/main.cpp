@@ -35,16 +35,17 @@ void setup()
 {
   Serial.begin(115200);
 
-  M5.begin();
-  CoreS3.begin(M5.config());
+  // DinBaseのDC給電に合わせ、初期化時から外部5V出力を制御する。
+  auto cfg = M5.config();
+  cfg.output_power = EXTERNAL_5V_OUTPUT_ENABLED;
+  CoreS3.begin(cfg);
 
   // WiFi を完全に停止
   WiFi.mode(WIFI_OFF);
   WiFi.disconnect(true);
 
-  // 電源管理を初期化し、処理順序を明確にする
-  M5.Power.begin();                  // まず電源モジュールを初期化
-  M5.Power.setExtOutput(true);       // センサー用に 5V ピン出力を有効化
+  // 電源管理はCoreS3.beginで初期化済み。後段の指定も起動時と揃える。
+  M5.Power.setExtOutput(EXTERNAL_5V_OUTPUT_ENABLED);
   M5.Power.setLed(0);                // 基板のLEDを消灯
   M5.Power.setUsbOutput(false);      // USBポートの5V出力を無効化（入力モードにする）
   M5.Power.setBatteryCharge(false);  // バッテリー充電を無効化
