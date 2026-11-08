@@ -7,6 +7,13 @@
 
 A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [English quick start](#english-quick-start)
 
+<img src="docs/images/gauge-demo.gif" alt="油温・水温の上昇と、油圧低下によるLOW警告・回復の動作デモ" width="640">
+
+油温・水温の上昇と、油圧低下時のLOW警告・回復を紹介するSDLシミュレーターの録画です。
+昇温は12.5倍速、LOW警告の場面は等速で再生します。[シミュレーターと録画の使い方](simulator/README.md)。
+
+SDL simulator preview: temperature sweep at 12.5× speed, followed by an oil-pressure drop, LOW warning and recovery at normal speed.
+
 <img src="https://github.com/user-attachments/assets/d3a8bfdc-0bba-4519-b64a-f31a1ec9a9f4" alt="Racing Gaugeの表示例" width="640">
 
 [機能](#機能) · [セットアップ](#セットアップ) · [配線](#ハードウェアと配線) · [設定](#設定) · [開発・検証](#開発と検証)
@@ -268,6 +275,11 @@ Markdownだけの変更は、現在のワークフローでは実行対象外で
 
 描画は最大60FPSとなるよう制御していますが、実際のフレームレートはADC取得・描画・画面転送の時間に依存します。
 ビルドやホストテストの成功は、実機でのセンサー精度・電源変動・ノイズ耐性の確認とは別です。
+
+### SDLシミュレーターとCI録画
+
+実機なしで本番の描画を動かし、温度・油圧の変化と警告表示を確認できます。
+CIではMP4・PNG・HTMLのレポートを保存します。セットアップと録画の見方は[シミュレーターのガイド](simulator/README.md)を参照してください。
 
 ## English quick start
 
