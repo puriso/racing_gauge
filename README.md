@@ -8,6 +8,13 @@ A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays
 * **Oil Pressure** via **Defi PDF00903S** (0 – 9.9 bar, 0.5 – 4.5 V)
 * **Oil / Water Temperature** via **Defi PDF00703S** (–40 – 150 °C, 0.5 – 4.5 V)  
 
+<img src="docs/images/gauge-demo.gif" alt="油温・水温の上昇と、油圧低下によるLOW警告・回復の動作デモ" width="640">
+
+油温・水温の上昇と、油圧低下時のLOW警告・回復を紹介するSDLシミュレーターの録画です。
+昇温は12.5倍速、LOW警告の場面は等速で再生します。[シミュレーターと録画の使い方](simulator/README.md)。
+
+SDL simulator preview: temperature sweep at 12.5× speed, followed by an oil-pressure drop, LOW warning and recovery at normal speed.
+
 <img src="https://github.com/user-attachments/assets/d3a8bfdc-0bba-4519-b64a-f31a1ec9a9f4" width="640px">
 
 ---
@@ -201,6 +208,15 @@ The temperature sensor is a thermistor; typical resistance values are shown belo
      Updating to the 0.2.x series clears warnings related to deprecated board definitions.
 
 ---
+
+### SDL シミュレーター・CI 録画 / SDL Simulator & CI Recordings
+
+実機なしで表示を動かし、油温・水温・油圧の上昇や警告表示を確認できます。
+CI では本番描画を MP4・PNG に保存します。セットアップと録画の見方は
+[シミュレーターのガイド](simulator/README.md)を参照してください。
+
+Run the production renderer on your desktop and review CI recordings of rising temperatures, oil pressure and warnings.
+See the [simulator guide](simulator/README.md) for setup and artifact downloads.
 
 ### License
 このプロジェクトは MIT ライセンスではありません。著作権は作者が保持します。詳細は `LICENSE` を参照してください。

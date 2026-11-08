@@ -37,6 +37,8 @@ Thumbs.db
 /build/
 /.pioenvs/
 /.pio/
+/simulator/.pio/
+/simulator/out/
 /libdeps/
 /src/*.ino.cpp
 *.esp32.bin
@@ -71,3 +73,5 @@ __pycache__/
 *.tmp
 *.bak
 *.swp
+
+/simulator/compile_commands.json
