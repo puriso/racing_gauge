@@ -29,6 +29,7 @@ jobs:
   record:
     outputs:
       artifact_url: ${{ steps.recording.outputs.artifact-url }}
+      preview_artifact_id: ${{ steps.preview.outputs.artifact-id }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -48,6 +49,18 @@ jobs:
         env:
           SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
         run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --output simulator/out/ci
+      - name: 今回の録画から紹介 GIF を生成
+        if: (inputs.scenario || 'all') == 'all'
+        run: python simulator/make_demo.py --recordings simulator/out/ci --output simulator/out/preview/gauge-demo.gif
+      - name: コメント用 GIF を保存
+        if: (inputs.scenario || 'all') == 'all'
+        id: preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-preview
+          path: simulator/out/preview/gauge-demo.gif
+          if-no-files-found: error
+          retention-days: 14
       - name: MP4・PNG・HTML を保存
         id: recording
         if: always()
@@ -76,15 +89,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      actions: read
+      contents: write
       pull-requests: write
     concurrency:
       group: sdl-visual-comment-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     steps:
-      - name: 録画レポートへのリンクを PR に作成・更新
+      - name: 今回の実行で生成した GIF だけを取得
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.record.outputs.preview_artifact_id }}
+          path: ${{ runner.temp }}/visual-preview
+          merge-multiple: true
+      - name: GIF と録画レポートを PR に作成・更新
         uses: actions/github-script@v8
         env:
           ARTIFACT_URL: ${{ needs.record.outputs.artifact_url }}
+          PREVIEW_FILE: ${{ runner.temp }}/visual-preview/gauge-demo.gif
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -98,11 +120,70 @@ jobs:
             }
             const artifactUrl = process.env.ARTIFACT_URL;
             if (!artifactUrl) throw new Error('録画成果物の URL がありません。');
+            const fs = require('node:fs');
+            const info = fs.lstatSync(process.env.PREVIEW_FILE);
+            if (!info.isFile() || info.size > 1024 * 1024) {
+              throw new Error('プレビューは1MiB以下の通常ファイルが必要です。');
+            }
+            const gif = fs.readFileSync(process.env.PREVIEW_FILE);
+            if (!['GIF87a', 'GIF89a'].includes(gif.subarray(0, 6).toString('ascii'))) {
+              throw new Error('プレビューがGIF形式ではありません。');
+            }
+            // GIF は専用ブランチに保存し、main や PR のコードを書き換えない。
+            const branch = 'visual-previews';
+            const path = `previews/pr-${issue_number}.gif`;
+            try {
+              await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              try {
+                await github.rest.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: pull.base.sha });
+              } catch (creationError) {
+                // 別 PR の初回公開と競合した場合も、作成済みの参照を確認して続行する。
+                if (creationError.status !== 422) throw creationError;
+                await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+              }
+            }
+            let previewCommit;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              let existing;
+              try {
+                ({ data: existing } = await github.rest.repos.getContent({ owner, repo, path, ref: branch }));
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+              if (existing?.type === 'file' && Buffer.from(existing.content, 'base64').equals(gif)) {
+                // 同じ GIF の再実行では保存用コミットを増やさない。
+                const { data: reference } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+                previewCommit = reference.object.sha;
+                break;
+              }
+              try {
+                const { data: uploaded } = await github.rest.repos.createOrUpdateFileContents({
+                  owner, repo, path, branch, content: gif.toString('base64'),
+                  message: `PR #${issue_number}: SDL preview ${expectedSha.slice(0, 7)}`,
+                  ...(existing ? { sha: existing.sha } : {}),
+                });
+                previewCommit = uploaded.commit.sha;
+                break;
+              } catch (error) {
+                // 別 PR が専用ブランチを更新した場合は最新状態で再試行する。
+                if (error.status !== 409 || attempt === 2) throw error;
+              }
+            }
+            const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+            if (current.state !== 'open' || current.head.sha !== expectedSha) return;
+            // コミット固定 URL にして、画像キャッシュと後続の更新から録画を分離する。
+            const previewUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${previewCommit}/${path}`;
             const marker = '<!-- racing-gauge-sdl-recording -->';
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             const body = [
               marker,
               '### SDL 目視テスト録画',
+              '',
+              `[![昇温とLOW警告・回復の録画GIF](${previewUrl})](${artifactUrl})`,
+              '',
+              '今回のCI録画の抜粋です。昇温は12.5倍速、油圧低下・LOW警告・回復は等速で再生します。',
               '',
               `[録画レポートをダウンロード（MP4・index.html）](${artifactUrl})`,
               '',
