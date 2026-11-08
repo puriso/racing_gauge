@@ -38,6 +38,50 @@ struct DisplayCache
 } displayCache = {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(),
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
 
+// 更新された領域を1つの矩形にまとめ、SPI転送を1回に保つ
+struct DisplayRegion
+{
+  int32_t left;
+  int32_t top;
+  int32_t right;
+  int32_t bottom;
+
+  void include(const DisplayRegion& region)
+  {
+    left = std::min(left, region.left);
+    top = std::min(top, region.top);
+    right = std::max(right, region.right);
+    bottom = std::max(bottom, region.bottom);
+  }
+};
+
+static void pushDisplayRegion(const DisplayRegion& region)
+{
+  if (region.left >= region.right || region.top >= region.bottom)
+  {
+    return;
+  }
+
+  // 転送先だけをクリップする。キャンバスの描画範囲と元のクリップ設定は維持する
+  int32_t clipLeft = 0;
+  int32_t clipTop = 0;
+  int32_t clipWidth = 0;
+  int32_t clipHeight = 0;
+  display.getClipRect(&clipLeft, &clipTop, &clipWidth, &clipHeight);
+  int32_t left = std::max(region.left, clipLeft);
+  int32_t top = std::max(region.top, clipTop);
+  int32_t right = std::min(region.right, clipLeft + clipWidth);
+  int32_t bottom = std::min(region.bottom, clipTop + clipHeight);
+  if (left >= right || top >= bottom)
+  {
+    return;
+  }
+
+  display.setClipRect(left, top, right - left, bottom - top);
+  mainCanvas.pushSprite(0, 0);
+  display.setClipRect(clipLeft, clipTop, clipWidth, clipHeight);
+}
+
 // ────────────────────── 油温バー描画 ──────────────────────
 void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
 {
@@ -99,6 +143,14 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   const int TOPBAR_Y = 0;
   const int TOPBAR_H = 50;
   const int GAUGE_H = 170;
+  constexpr int GAUGE_TOP = 60;
+  constexpr int OVERLAY_HEIGHT = 16;
+  DisplayRegion updatedRegion = {LCD_WIDTH, LCD_HEIGHT, 0, 0};
+  if (!pressureGaugeInitialized || !waterGaugeInitialized || std::isnan(displayCache.oilTemp))
+  {
+    // 初回とメニュー復帰後は、余白や下端を含めて全画面を転送する
+    updatedRegion.include({0, 0, LCD_WIDTH, LCD_HEIGHT});
+  }
 
   // 水温は0.05度以上、油温は0.1度以上、油圧は0.05bar以上変化したら更新する
   bool oilChanged = std::isnan(displayCache.oilTemp) || fabs(oilTemp - displayCache.oilTemp) >= 0.1F ||
@@ -110,6 +162,7 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
 
   if (oilChanged)
   {
+    updatedRegion.include({0, TOPBAR_Y, LCD_WIDTH, TOPBAR_Y + TOPBAR_H});
     mainCanvas.fillRect(0, TOPBAR_Y, LCD_WIDTH, TOPBAR_H, COLOR_BLACK);
     drawOilTemperatureTopBar(mainCanvas, oilTemp, maxOilTemp);
     displayCache.oilTemp = oilTemp;
@@ -118,6 +171,7 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
 
   if (pressureChanged || !pressureGaugeInitialized)
   {
+    updatedRegion.include({0, GAUGE_TOP, LCD_WIDTH / 2, LCD_HEIGHT});
     if (!pressureGaugeInitialized)
     {
       mainCanvas.fillRect(0, 60, 160, GAUGE_H, COLOR_BLACK);
@@ -131,6 +185,7 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
 
   if (waterChanged || !waterGaugeInitialized)
   {
+    updatedRegion.include({LCD_WIDTH / 2, GAUGE_TOP, LCD_WIDTH, LCD_HEIGHT});
     if (!waterGaugeInitialized)
     {
       mainCanvas.fillRect(160, 60, 160, GAUGE_H, COLOR_BLACK);
@@ -144,6 +199,10 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
 
   bool warnChanged = false;
   bool isWarnShowing = drawLowPressureWarning(mainCanvas, currentGForce, pressureAvg, warnChanged);
+  if (warnChanged)
+  {
+    updatedRegion.include({0, GAUGE_TOP, LCD_WIDTH / 2, LCD_HEIGHT});
+  }
   if (warnChanged && !isWarnShowing)
   {
     // 警告が消えたら油圧ゲージを再描画して元に戻す
@@ -158,11 +217,11 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
 #endif
   bool racingChanged = drawRacingIndicator(mainCanvas);
 
-  // 値が更新されたときのみスプライトを転送する
-  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged || racingChanged)
+  if (fpsChanged || racingChanged)
   {
-    mainCanvas.pushSprite(0, 0);
+    updatedRegion.include({0, LCD_HEIGHT - OVERLAY_HEIGHT, LCD_WIDTH, LCD_HEIGHT});
   }
+  pushDisplayRegion(updatedRegion);
 }
 
 // ────────────────────── メーター描画更新 ──────────────────────
