@@ -7,15 +7,15 @@
 #include <cmath>
 #include <numeric>
 
-// ────────────────────── グローバル変数 ──────────────────────
-Adafruit_ADS1015 adsConverter;
+#include "adc_reader.h"
 
+// ────────────────────── グローバル変数 ──────────────────────
 float oilPressureSamples[PRESSURE_SAMPLE_SIZE] = {};
 float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE] = {};
 float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE] = {};
 bool oilPressureOverVoltage = false;
 float currentGForce = 0.0F;
-const char *currentGDirection = "Right";
+const char* currentGDirection = "Right";
 static int oilPressureIndex = 0;
 static int waterTempIndex = 0;
 static int oilTempIndex = 0;
@@ -23,9 +23,6 @@ static int oilTempIndex = 0;
 // 最初の水温・油温取得かどうかのフラグ
 static bool isFirstWaterTempSample = true;
 static bool isFirstOilTempSample = true;
-
-// ADC セトリング待ち時間 [us]
-constexpr int ADC_SETTLING_US = 50;
 
 // 温度サンプリング間隔 [ms]
 // 500msごとに取得し、10サンプルで約5秒平均となる
@@ -77,30 +74,35 @@ static auto convertVoltageToTemp(float voltage) -> float
   return std::isnan(kelvin) ? 200.0F : kelvin - 273.16F;
 }
 
-// ────────────────────── ADC 読み取り ──────────────────────
-static auto readAdcWithSettling(uint8_t ch) -> int16_t
-{
-  adsConverter.readADC_SingleEnded(ch);  // ダミー変換
-  delayMicroseconds(ADC_SETTLING_US);    // セトリング待ち
-  return adsConverter.readADC_SingleEnded(ch);
-}
-
 // ────────────────────── 温度読み取り ──────────────────────
 // 指定チャンネルから温度を取得して摂氏に変換
 static auto readTemperatureChannel(uint8_t ch) -> float
 {
-  int16_t raw = readAdcWithSettling(ch);
+  int16_t raw = 0;
+  if (!readAdcChannel(ch, raw))
+  {
+    return 200.0F;
+  }
   return convertVoltageToTemp(convertAdcToVoltage(raw));
 }
 
 // ────────────────────── サンプルバッファ更新 ──────────────────────
 // 初回は全要素を同じ値で埋め、その後はリングバッファ更新
 template <size_t N>
-static void updateSampleBuffer(float value, float (&buffer)[N], int &index, bool &first)
+static void updateSampleBuffer(float value, float (&buffer)[N], int& index, bool& first)
 {
+  constexpr float ERROR_THRESHOLD = 199.0F;
+  // 通信失敗を正常値と平均せず、復帰時も最初の正常値から再開する。
+  if (!std::isfinite(value) || value >= ERROR_THRESHOLD)
+  {
+    std::fill_n(buffer, N, 200.0F);
+    index = 0;
+    first = true;
+    return;
+  }
   if (first)
   {
-    for (float &v : buffer)
+    for (float& v : buffer)
     {
       v = value;
     }
@@ -113,6 +115,27 @@ static void updateSampleBuffer(float value, float (&buffer)[N], int &index, bool
     buffer[index] = value;
     index = (index + 1) % N;
   }
+}
+
+// ────────────────────── 油圧取得 ──────────────────────
+static void acquireOilPressure()
+{
+#if SENSOR_OIL_PRESSURE_PRESENT
+  int16_t rawAdc = 0;
+  bool pressureReadSucceeded = readAdcChannel(ADC_CH_OIL_PRESSURE, rawAdc);
+  float voltage = convertAdcToVoltage(rawAdc);
+  oilPressureOverVoltage = pressureReadSucceeded && voltage >= 4.9F;
+  if (!pressureReadSucceeded)
+  {
+    std::fill_n(oilPressureSamples, PRESSURE_SAMPLE_SIZE, 0.0F);
+  }
+  float pressureValue = !pressureReadSucceeded || oilPressureOverVoltage ? 0.0F : convertVoltageToOilPressure(voltage);
+  oilPressureSamples[oilPressureIndex] = pressureValue;
+#else
+  oilPressureSamples[oilPressureIndex] = 0.0F;
+  oilPressureOverVoltage = false;
+#endif
+  oilPressureIndex = (oilPressureIndex + 1) % PRESSURE_SAMPLE_SIZE;
 }
 
 // ────────────────────── センサ取得 ──────────────────────
@@ -287,17 +310,7 @@ void acquireSensorData()
 #endif
 
   // ── 通常センサ読み取り ──
-#if SENSOR_OIL_PRESSURE_PRESENT
-  int16_t rawAdc = readAdcWithSettling(ADC_CH_OIL_PRESSURE);  // CH1: 油圧
-  float voltage = convertAdcToVoltage(rawAdc);
-  oilPressureOverVoltage = voltage >= 4.9F;
-  float pressureValue = oilPressureOverVoltage ? 0.0F : convertVoltageToOilPressure(voltage);
-  oilPressureSamples[oilPressureIndex] = pressureValue;
-#else
-  oilPressureSamples[oilPressureIndex] = 0.0F;
-  oilPressureOverVoltage = false;
-#endif
-  oilPressureIndex = (oilPressureIndex + 1) % PRESSURE_SAMPLE_SIZE;
+  acquireOilPressure();
 
   // 水温
   if (now - lastWaterTempSampleTime >= TEMP_SAMPLE_INTERVAL_MS)
