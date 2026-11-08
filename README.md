@@ -142,7 +142,7 @@ CoreS3〜ADS1015のI²C配線は、実機では3cm未満です。
 
 **DC入力給電では、CoreS3から外部へ5Vを出す設定と給電方向を合わせる必要があります。**
 [公式の電源サンプル](https://github.com/m5stack/M5CoreS3/blob/main/examples/Basic/power/power.ino)は、DC入力・Groveからの給電時に`cfg.output_power = false`を指定しています。
-外部出力を強制ONにする処理の修正は[#374](https://github.com/puriso/racing_gauge/pull/374)で管理しています。
+外部出力を強制ONにする処理の修正は[#382](https://github.com/puriso/racing_gauge/pull/382)で管理しています。
 同PRでは`EXTERNAL_5V_OUTPUT_ENABLED`を共通設定にし、初期値を`false`にしています。取り込み状況を確認してください。
 
 ```cpp
@@ -151,7 +151,7 @@ M5.Power.setExtOutput(true);
 ```
 
 ```cpp
-// #374適用後のconfig.h：DinBaseのDC給電向けの既定値
+// #382適用後のconfig.h：DinBaseのDC給電向けの既定値
 constexpr bool EXTERNAL_5V_OUTPUT_ENABLED = false;
 
 // setupの設定の要点
@@ -237,7 +237,7 @@ ADC入力で4.9V以上の過電圧を検出した場合などは、油圧を0扱
 </details>
 
 入力電圧が換算可能な範囲を外れる場合は、内部で200°Cを異常値として使用します。
-表示側には199°C以上を0扱いにする処理があります。異常サンプルの平均・最高値の扱いの修正は[#369](https://github.com/puriso/racing_gauge/pull/369)を参照してください。
+表示側には199°C以上を0扱いにする処理があります。異常サンプルの平均・最高値の扱いの修正は[#378](https://github.com/puriso/racing_gauge/pull/378)を参照してください。
 
 センサーの型番だけで測定精度が決まるわけではありません。
 使用するセンサーの特性、基準抵抗、実際の電源電圧・配線の電圧降下に合わせて、換算係数と`VOLTAGE_DROP`を確認してください。
@@ -267,11 +267,11 @@ Markdownだけの変更は、現在のワークフローでは実行対象外で
 
 | PR | 内容 |
 | --- | --- |
-| [#369](https://github.com/puriso/racing_gauge/pull/369) | 温度異常・最高値・油温バーの修正、nativeテストの整備 |
-| [#370](https://github.com/puriso/racing_gauge/pull/370) | 更新範囲に限定した画面転送 |
-| [#371](https://github.com/puriso/racing_gauge/pull/371) | 低油圧警告の再発・表示保持・時刻折り返しの修正 |
-| [#372](https://github.com/puriso/racing_gauge/pull/372) | ADC通信異常時の無期限待機防止・再接続 |
-| [#374](https://github.com/puriso/racing_gauge/pull/374) | DinBaseのDC給電に合わせた外部5V出力設定の統一 |
+| [#378](https://github.com/puriso/racing_gauge/pull/378) | 温度異常・最高値・油温バーの修正、nativeテストの整備 |
+| [#379](https://github.com/puriso/racing_gauge/pull/379) | 更新範囲に限定した画面転送 |
+| [#380](https://github.com/puriso/racing_gauge/pull/380) | 低油圧警告の再発・表示保持・時刻折り返しの修正 |
+| [#381](https://github.com/puriso/racing_gauge/pull/381) | ADC通信異常時の無期限待機防止・再接続 |
+| [#382](https://github.com/puriso/racing_gauge/pull/382) | DinBaseのDC給電に合わせた外部5V出力設定の統一 |
 
 描画は最大60FPSとなるよう制御していますが、実際のフレームレートはADC取得・描画・画面転送の時間に依存します。
 ビルドやホストテストの成功は、実機でのセンサー精度・電源変動・ノイズ耐性の確認とは別です。
@@ -312,7 +312,7 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **ADC inputs:** A0/CH0 oil temperature, A1/CH1 water temperature, A2/CH2 oil pressure; default address `0x48`.
 - **I²C pins:** GPIO9 SDA and GPIO8 SCL. Match the 3.3V GPIO and 5V ADC logic levels; see the [wiring section](#ハードウェアと配線) and the linked device datasheets.
 - **Temperature inputs:** NTC dividers with a 10kΩ resistor on the supply side and the NTC on the GND side. They are not 0.5–4.5V voltage-output sensors.
-- **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. [#374](https://github.com/puriso/racing_gauge/pull/374) aligns initialization and the later external-output setting using `EXTERNAL_5V_OUTPUT_ENABLED`, defaulting to `false`. For USB/battery-powered sensor output, set it to `true` and rebuild. Check the PR's merge status and verify sensor-side 5V after the change. See the [power section](#電源設定). Do not feed the 5V pin from another source while its output is enabled.
+- **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. [#382](https://github.com/puriso/racing_gauge/pull/382) aligns initialization and the later external-output setting using `EXTERNAL_5V_OUTPUT_ENABLED`, defaulting to `false`. For USB/battery-powered sensor output, set it to `true` and rebuild. Check the PR's merge status and verify sensor-side 5V after the change. See the [power section](#電源設定). Do not feed the 5V pin from another source while its output is enabled.
 - **Sampling:** Pressure uses five samples plus smoothing. Each temperature is sampled every 500ms and averaged over the latest two samples, then smoothed; the average changes every 500ms.
 - **Defaults:** Ambient-light dimming is enabled; demo mode, debug logging, and the FPS overlay are disabled. Edit [config.h](include/config.h) and rebuild to change them.
 - **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. A zero reading can also represent a detected fault.
