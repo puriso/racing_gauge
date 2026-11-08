@@ -139,7 +139,7 @@ void test_racing_mode_auto_finish_restores_brightness()
   TEST_ASSERT_EQUAL(BrightnessMode::Night, currentBrightnessMode);
 }
 
-void setup()
+int main()
 {
   UNITY_BEGIN();
   RUN_TEST(test_racing_mode_requires_hold);
@@ -149,10 +149,5 @@ void setup()
   RUN_TEST(test_force_stop_does_not_restore_brightness);
   RUN_TEST(test_force_stop_updates_prev_mode_when_not_racing);
   RUN_TEST(test_racing_mode_auto_finish_restores_brightness);
-  UNITY_END();
-}
-
-void loop()
-{
-  // ループ処理は不要
+  return UNITY_END();
 }

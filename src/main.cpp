@@ -164,10 +164,7 @@ void loop()
 
   updateRacingMode(now, currentGForce);
 
-  if (!isMenuVisible)
-  {
-    updateGauges();
-  }
+  updateGauges(!isMenuVisible);
 
   fpsFrameCounter++;
   if (now - lastFpsSecond >= FPS_INTERVAL_MS)
