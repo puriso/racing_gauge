@@ -9,3 +9,9 @@ in the development cycle.
 
 More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+低油圧警告のホスト回帰テスト:
+  python3 test/low_warning/run_tests.py
+
+Python 3とC++17対応コンパイラを使い、本番のlow_warning.cppを実行します。
+描画装置だけをスタブに置き換え、イベント判定・履歴・タイマーの折り返しを確認します。
+変更前の動作確認には --baseline-ref main を指定できます。
