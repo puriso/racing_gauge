@@ -62,6 +62,16 @@ def validate_inputs(metadata):
     if scenario == "startup":
         if frames[10]["oil_c"] != -10 or frames[10]["water_c"] != -10:
             raise RuntimeError("始動時70℃から低温へ戻る入力がありません")
+    if scenario == "menu":
+        # 詳細画面中も本番と同じ最高値更新を続けることを確認する。
+        for key, peak_key, sensor in (("oil_c", "max_oil_c", "oil_temp"),
+                                      ("water_c", "max_water_c", "water_temp")):
+            expected = 0
+            for frame in frames:
+                value = frame[key] if metadata["sensors"][sensor] else 0
+                expected = max(expected, int(value) if sensor == "oil_temp" else value)
+                if not math.isclose(frame[peak_key], expected, abs_tol=0.001):
+                    raise RuntimeError(f"詳細画面中の最高温度が更新されていません: {peak_key}, {frame}")
     # 始動直後の70℃→低温の変化以外、温度はゆっくり上昇させる。
     for before, after in zip(frames, frames[1:]):
         for key in ("oil_c", "water_c"):

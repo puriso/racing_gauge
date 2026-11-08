@@ -30,6 +30,10 @@ float currentGForce = 0.0F;
 const char* currentGDirection = "Right";
 int currentFps = 0;
 
+// 描画処理が保持する最高温度も録画に保存し、詳細画面中の更新を検証する。
+extern float recordedMaxWaterTemp;
+extern int recordedMaxOilTempTop;
+
 namespace simulator
 {
 uint32_t nowMs = 0;
@@ -274,13 +278,11 @@ auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
   {
     resetGaugeState();
   }
+  // 実機と同じく、詳細画面中も計測値と最高値を更新し、ゲージ描画だけを省略する。
+  updateGauges(!menu);
   if (menu)
   {
     drawMenuScreen();
-  }
-  else
-  {
-    updateGauges();
   }
   return menu;
 }
@@ -330,7 +332,8 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
         }
         manifest << "{\"time_ms\":" << tick * MS_PER_SECOND / TICKS_PER_SECOND << ",\"oil_c\":" << input.oil
                  << ",\"water_c\":" << input.water << ",\"pressure_bar\":" << input.pressure
-                 << ",\"g\":" << input.acceleration << ",\"menu\":" << (showingMenu ? "true" : "false") << '}';
+                 << ",\"g\":" << input.acceleration << ",\"menu\":" << (showingMenu ? "true" : "false")
+                 << ",\"max_oil_c\":" << recordedMaxOilTempTop << ",\"max_water_c\":" << recordedMaxWaterTemp << '}';
       }
       if (recording && tick == totalTicks)
       {
