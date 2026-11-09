@@ -14,101 +14,61 @@ h2{font-size:21px;margin:0 0 8px}video{width:640px;max-width:100%;display:block;
 .layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(230px,1fr);gap:24px}.readings{font-variant-numeric:tabular-nums;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
 .reading.wide{grid-column:1/-1}.reading{background:#101820;border-radius:6px;padding:10px;color:#afbecd}.reading strong{display:block;font-size:21px;color:#f5f8fc;margin-top:4px}.active{color:#ff8e89!important}
 .badge{display:inline-block;color:#a7dfb4;font-size:12px;letter-spacing:.04em;margin-bottom:8px}.cues{display:flex;gap:7px;flex-wrap:wrap}.cues button{font-size:13px;padding:6px 9px}
-.performance{max-width:1100px;margin:0 auto;padding:12px 24px}.fps-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:16px 0}.fps-summary strong{display:block;font-size:25px;margin-top:6px;color:#f5f8fc}.table-scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:11px 10px;border-bottom:1px solid #354353;white-space:nowrap}th:first-child,td:first-child{text-align:left}.notice{color:#dfcc9d!important}.performance code{overflow-wrap:anywhere}
 details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-width:100%}.fine{font-size:13px;color:#8fa0b3}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.status{color:#a7dfb4;min-height:1.5em}
 @media(max-width:750px){.layout{grid-template-columns:1fr}header,main{padding:20px 14px}article{padding:15px}}
 </style>
 <header>
   <span class="badge">RACING GAUGE / VISUAL REVIEW</span>
   <h1>動きと警告を、等速で確認する</h1>
-  <p>油圧の連続変動、最大2.0Gからの急落、Rモードの保持と解除、温度の上昇・下降を確認できます。<br>全動画は<strong>1.0倍速</strong>。3分の保持も実時間どおりで、下の時刻ボタンから確認箇所へ移動できます。</p>
+  <p>油圧の連続変動、最大2.0Gからの急落、Rモードの保持と解除、温度の上昇・下降を確認できます。<br>全動画は<strong>24FPS・1.0倍速</strong>。3分の保持も実時間どおりで、下の時刻ボタンから確認箇所へ移動できます。</p>
   <div class="toolbar"><button id="play-all">全シナリオを順に再生</button><button id="stop">すべて一時停止</button><span id="status" class="status" role="status"></span></div>
   <nav aria-label="シナリオの絞り込み">
     <button data-filter="all" aria-pressed="true">すべて</button><button data-filter="pressure" aria-pressed="false">油圧・LOW</button><button data-filter="racing" aria-pressed="false">Rモード</button><button data-filter="temperature" aria-pressed="false">温度の往復・降温</button><button data-filter="operation" aria-pressed="false">始動・詳細画面</button><button data-filter="ambient" aria-pressed="false">照度・調光</button><button data-filter="raw" aria-pressed="false">生センサー・異常</button>
   </nav>
-  <p class="fine">ADC・IMU・照度の取得境界を模擬し、本番のセンサー変換・取得周期・平均化・描画・警告処理を実行しています。動画内の画面外に入力と期待値を焼き込んでいます。RAW SENSORはADCカウントとIMU各軸、照度の取得値です。EXPECTED AVG / FILTERはADC変換・電圧補正・取得周期・移動平均・平滑化を独立計算した期待値です。EXPECT / ACTUALでR・LOW・輝度を比較できます。照度は受光入力・最新取得値・中央値を区別しています。シナリオの温度・油圧はADC波形を作る目標値で、表示へ直接渡していません。ADCの量子化・起動時補正・500msの温度取得・丸め・部分描画による差や遅れも再現します。録画は10fps。実機FPS・ADC/I²Cの通信時間・電気特性・電源は未検証です。</p>
+  <p class="fine">ADC・IMU・照度の取得境界を模擬し、本番のセンサー変換・取得周期・平均化・描画・警告処理を実行しています。動画内の画面外に入力と期待値を焼き込んでいます。RAW SENSORはADCカウントとIMU各軸、照度の取得値です。EXPECTED AVG / FILTERはADC変換・電圧補正・取得周期・移動平均・平滑化を独立計算した期待値です。EXPECT / ACTUALでR・LOW・輝度を比較できます。照度は受光入力・最新取得値・中央値を区別しています。シナリオの温度・油圧はADC波形を作る目標値で、表示へ直接渡していません。ADCの量子化・起動時補正・500msの温度取得・丸め・部分描画による差や遅れも再現します。更新・録画は24FPSの設定値です。ADC/I²Cの通信時間・電気特性・電源は未検証です。</p>
 </header>
-<section class="performance" aria-labelledby="performance-title">
-  <article>
-    <span class="badge">CORES3 / 実機計測</span>
-    <h2 id="performance-title">実機の平均FPS</h2>
-    <div class="reading">測定結果<strong id="hardware-fps">未計測</strong></div>
-    <p>CoreS3本体での計測が必要です。実機には約60Hzの上限制御があり、センサー取得・SPI/DMA転送にも時間がかかります。PCの処理速度から実機FPSや改善率を求めることはできません。</p>
-    <p class="fine">動画の10fps・模擬入力の60Hzは設定値です。実機の描画性能を表す数値ではありません。</p>
-    <details id="pc-benchmark" hidden><summary>参考：PCシミュレーターの処理量（実機FPSに換算不可）</summary>
-      <div class="fps-summary"><div class="reading">変更前（PC）<strong id="fps-before"></strong></div><div class="reading">変更後（PC）<strong id="fps-after"></strong></div><div class="reading">PC上の計測差<strong id="fps-change"></strong></div></div>
-      <p class="fine" id="fps-method"></p>
-      <p class="fine">描画・判定処理とフレームバッファへの転送にかかった実時間から算出しています。画像保存・動画変換・アプリ側のFPS上限待機は除外し、SDLドライバー内部の待機・OSの割り込みは含みます。実画面への提示FPSとは別で、<strong>CoreS3実機のFPSは未測定</strong>です。</p>
-      <p class="fine notice" id="fps-source-note" hidden>製品側の描画コードと設定は比較元と同一です。計測差にはPCの負荷・ばらつきやシミュレーターの遷移処理が含まれ、実機の改善率を示すものではありません。</p>
-      <details><summary>シナリオごとのPC処理量・計測条件</summary>
-        <div class="table-scroll"><table><thead><tr><th>シナリオ</th><th>変更前（PC）</th><th>変更後（PC）</th><th>計測差</th></tr></thead><tbody id="fps-rows"></tbody></table></div>
-        <p class="fine" id="fps-host"></p><p class="fine" id="fps-commits"></p>
-        <p class="fine">全計測フレーム数÷全描画処理時間で算出しています。入力の指紋を照合して変更前後の一致を確認済みです。PC・CIの負荷によって数値は変動します。</p>
-        <a href="benchmark.json">PC計測の参考データ・条件・各実行のJSON</a>
-      </details>
-    </details>
-  </article>
-</section>
 <main id="scenarios"></main>
 <script type="application/json" id="scenario-data">@@SCENARIOS@@</script>
-<script type="application/json" id="benchmark-data">@@BENCHMARK@@</script>
 <script>
 'use strict';
-const benchmark = JSON.parse(document.getElementById('benchmark-data').textContent);
-if (benchmark) {
-  const fps = value => `${value.toLocaleString('ja-JP', {minimumFractionDigits: 1, maximumFractionDigits: 1})} frames/s`;
-  const change = value => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
-  document.getElementById('pc-benchmark').hidden = false;
-  document.getElementById('fps-before').textContent = fps(benchmark.overall.before.average_fps);
-  document.getElementById('fps-after').textContent = fps(benchmark.overall.after.average_fps);
-  document.getElementById('fps-change').textContent = change(benchmark.overall.change_percent);
-  document.getElementById('fps-method').textContent = `同一PC・同一60Hz入力で各${benchmark.repetitions}回、実行順を交互に比較。各実行の先頭${benchmark.warmup_frames}フレームを除外。${benchmark.scenarios.length}シナリオ、変更前後それぞれ${benchmark.overall.after.measured_frames.toLocaleString('ja-JP')}フレームを計測。`;
-  document.getElementById('fps-source-note').hidden = !benchmark.render_sources_identical;
-  for (const result of benchmark.scenarios) {
-    const row = document.createElement('tr');
-    for (const value of [result.title, fps(result.before.average_fps), fps(result.after.average_fps), change(result.change_percent)]) {
-      const cell = document.createElement('td'); cell.textContent = value; row.append(cell);
-    }
-    row.children[1].title = `各実行: ${fps(result.before.min_run_fps)}〜${fps(result.before.max_run_fps)}`;
-    row.children[2].title = `各実行: ${fps(result.after.min_run_fps)}〜${fps(result.after.max_run_fps)}`;
-    document.getElementById('fps-rows').append(row);
-  }
-  document.getElementById('fps-host').textContent = `${benchmark.host.system} / ${benchmark.host.machine} / ${benchmark.host.cpu} / ${benchmark.host.logical_cpus}論理CPU / ${benchmark.host.compiler} / SDL ${benchmark.host.sdl_version}`;
-  document.getElementById('fps-commits').textContent = `比較元 ${benchmark.baseline_sha.slice(0, 7)} → 対象 ${benchmark.current_sha.slice(0, 7)}。平均1フレーム: ${benchmark.overall.before.mean_frame_ms.toFixed(4)} → ${benchmark.overall.after.mean_frame_ms.toFixed(4)} ms。`;
-}
 const scenarios = JSON.parse(document.getElementById('scenario-data').textContent);
 const videos = [];
 let queue = false;
-const format = value => `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}.${Math.round(value * 10) % 10}`;
+const format = value => {
+  const ms = Math.floor(value * 1000 + 0.000001);
+  return `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`;
+};
 const container = document.getElementById('scenarios');
 for (const scenario of scenarios) {
   const card = document.createElement('article');
   card.id = scenario.name;
   card.dataset.group = scenario.group;
-  card.innerHTML = `<span class="badge">等速 1.0× / ${scenario.seconds}秒 / 検証成功</span><h2></h2><p class="description"></p><div class="layout"><div><video controls playsinline preload="metadata" poster="${scenario.name}/poster.png"><source src="${scenario.name}/recording.mp4" type="video/mp4"></video><div class="readings"><div class="reading wide">ADC CH0 / CH1 / CH2（カウント）<strong data-value="adc"></strong></div><div class="reading wide">IMU X / Y / Z（g）<strong data-value="imu"></strong></div><div class="reading">仮想時刻<strong data-value="time"></strong></div><div class="reading">G（各軸から算出）<strong data-value="g"></strong></div><div class="reading">油圧（変換・平均後）<strong data-value="pressure"></strong></div><div class="reading">R / LOW 表示<strong data-value="mode"></strong></div><div class="reading">受光入力 / 最新 / 中央値<strong data-value="lux"></strong></div><div class="reading">輝度 期待 / 実際<strong data-value="brightness"></strong></div><div class="reading">油圧 期待（平滑化）<strong data-value="expected-pressure"></strong></div><div class="reading">油温 / 水温 期待（平滑化）<strong data-value="expected-temperature"></strong></div></div></div><div><h3>確認時刻へ移動</h3><div class="cues"></div><p><a href="${scenario.name}/recording.mp4">MP4を直接開く</a><br><a href="${scenario.name}/inputs.json">入力・期待値・描画値のJSON</a></p><p class="fine">R / LOWは転送先の画素も検証済み。ADC変換・サンプリング・IMU補正・平滑化・R・LOW・調光を独立計算した期待値と照合済みです。輝度は設定値（0〜255）で、SDL上の画素を暗くする加工はしていません。</p></div></div><details><summary>代表フレームを確認する</summary><img loading="lazy" src="${scenario.name}/contact-sheet.png" alt="代表フレーム"></details>`;
+  card.innerHTML = `<span class="badge">${scenario.fps}FPS / 等速 1.0× / ${scenario.seconds}秒 / 検証成功</span><h2></h2><p class="description"></p><div class="layout"><div><video controls playsinline preload="metadata" poster="${scenario.name}/poster.png"><source src="${scenario.name}/recording.mp4" type="video/mp4"></video><div class="readings"><div class="reading wide">ADC CH0 / CH1 / CH2（カウント）<strong data-value="adc"></strong></div><div class="reading wide">IMU X / Y / Z（g）<strong data-value="imu"></strong></div><div class="reading">仮想時刻<strong data-value="time"></strong></div><div class="reading">G（各軸から算出）<strong data-value="g"></strong></div><div class="reading">油圧（変換・平均後）<strong data-value="pressure"></strong></div><div class="reading">R / LOW 表示<strong data-value="mode"></strong></div><div class="reading">受光入力 / 最新 / 中央値<strong data-value="lux"></strong></div><div class="reading">輝度 期待 / 実際<strong data-value="brightness"></strong></div><div class="reading">油圧 期待（平滑化）<strong data-value="expected-pressure"></strong></div><div class="reading">油温 / 水温 期待（平滑化）<strong data-value="expected-temperature"></strong></div></div></div><div><h3>確認時刻へ移動</h3><div class="cues"></div><p><a href="${scenario.name}/recording.mp4">MP4を直接開く</a><br><a href="${scenario.name}/inputs.json">入力・期待値・描画値のJSON</a></p><p class="fine">R / LOWは転送先の画素も検証済み。ADC変換・サンプリング・IMU補正・平滑化・R・LOW・調光を独立計算した期待値と照合済みです。輝度は設定値（0〜255）で、SDL上の画素を暗くする加工はしていません。</p></div></div><details><summary>代表フレームを確認する</summary><img loading="lazy" src="${scenario.name}/contact-sheet.png" alt="代表フレーム"></details>`;
   card.querySelector('h2').textContent = scenario.title;
   card.querySelector('.description').textContent = scenario.description;
   const video = card.querySelector('video');
   video.defaultPlaybackRate = 1;
   video.playbackRate = 1;
   const update = () => {
-    const frame = scenario.frames[Math.min(scenario.frames.length - 1, Math.floor(video.currentTime * 10))];
+    const row = scenario.frames[Math.min(scenario.frames.length - 1, Math.floor(video.currentTime * scenario.fps + 0.000001))];
+    const frame = Object.fromEntries(scenario.columns.map((key, index) => [key, row[index]]));
     card.querySelector('[data-value=time]').textContent = format(frame.time_ms / 1000);
     card.querySelector('[data-value=g]').textContent = `${frame.g.toFixed(2)} G`;
-    card.querySelector('[data-value=pressure]').textContent = `${frame.sensor.pressure_bar.toFixed(2)} bar`;
-    card.querySelector('[data-value=lux]').textContent = `${frame.lux} / ${frame.actual.lux_sample} / ${frame.actual.lux_median} lux`;
-    card.querySelector('[data-value=brightness]').textContent = `${frame.expected.brightness_pwm} / ${frame.actual.brightness_pwm}（${['昼', '夕方', '夜'][frame.actual.brightness_mode]}）`;
-    card.querySelector('[data-value=expected-pressure]').textContent = `${frame.expected.pressure_bar.toFixed(2)} bar`;
-    card.querySelector('[data-value=expected-temperature]').textContent = `${frame.expected.oil_c.toFixed(2)} / ${frame.expected.water_c.toFixed(2)} ℃`;
-    card.querySelector('[data-value=adc]').textContent = frame.raw.adc.slice(0, 3).join(' / ');
-    card.querySelector('[data-value=imu]').textContent = frame.raw.imu.map(value => value.toFixed(3)).join(' / ');
+    card.querySelector('[data-value=pressure]').textContent = `${frame.pressure_bar.toFixed(2)} bar`;
+    card.querySelector('[data-value=lux]').textContent = `${frame.lux} / ${frame.lux_sample} / ${frame.lux_median} lux`;
+    card.querySelector('[data-value=brightness]').textContent = `${frame.expected_brightness_pwm} / ${frame.brightness_pwm}（${['昼', '夕方', '夜'][frame.brightness_mode]}）`;
+    card.querySelector('[data-value=expected-pressure]').textContent = `${frame.expected_pressure_bar.toFixed(2)} bar`;
+    card.querySelector('[data-value=expected-temperature]').textContent = `${frame.expected_oil_c.toFixed(2)} / ${frame.expected_water_c.toFixed(2)} ℃`;
+    card.querySelector('[data-value=adc]').textContent = frame.adc.slice(0, 3).join(' / ');
+    card.querySelector('[data-value=imu]').textContent = frame.imu.map(value => value.toFixed(3)).join(' / ');
     const mode = card.querySelector('[data-value=mode]');
     mode.textContent = `${frame.r_visible ? 'R 点灯' : 'R 消灯'} / ${frame.low_visible ? 'LOW 点灯' : 'LOW 消灯'}`;
     mode.classList.toggle('active', frame.r_visible || frame.low_visible);
   };
-  for (const second of scenario.snapshots) {
+  for (const index of scenario.snapshots) {
+    const second = index / scenario.fps;
     const button = document.createElement('button');
-    button.textContent = format(second);
+    button.textContent = format(scenario.frames[index][0] / 1000);
     button.addEventListener('click', () => { video.currentTime = second; update(); });
     card.querySelector('.cues').append(button);
   }

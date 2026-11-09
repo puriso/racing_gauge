@@ -1,9 +1,10 @@
-"""60Hzの模擬入力から、描画処理に依存せず期待する平滑化値と状態を求める。"""
+"""24FPSの模擬入力から、描画処理に依存せず期待する平滑化値と状態を求める。"""
 
 import csv
 import math
 from numeric import float32
 from sensor_reference import SensorReference
+from timing import FRAME_RATE, frame_time_ms
 
 
 class Reference:
@@ -94,6 +95,8 @@ class Reference:
 
 
 def add_expectations(directory, metadata):
+    if metadata['fps'] != FRAME_RATE:
+        raise ValueError(f'{FRAME_RATE}FPSの生センサー入力が必要です')
     frames = metadata['frames']
     reference = Reference(metadata['settings'], metadata['sensors'])
     sensor = SensorReference(metadata['sensor_settings'], metadata['sensors'])
@@ -104,26 +107,25 @@ def add_expectations(directory, metadata):
             now = int(row['time_ms'])
             raw = {'adc': [int(row[f'adc{channel}']) for channel in range(4)],
                    'imu': [float(row[axis]) for axis in ('ax', 'ay', 'az')], 'als': int(row['lux'])}
-            if (now != tick * 1000 // 60 or not all(0 <= value <= 2047 for value in raw['adc'])
+            if (now != frame_time_ms(tick) or not all(0 <= value <= 2047 for value in raw['adc'])
                     or not all(math.isfinite(value) for value in raw['imu'])):
-                raise ValueError('期待値の計算に使う60Hz入力が欠損・不正です')
+                raise ValueError('期待値の計算に使う24FPS入力が欠損・不正です')
             acquired = sensor.step(now, raw)
             sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als']}
             expected = reference.step(sample)
             expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
                                   for key, value in acquired.items()}
             expected['voltage'] = [round(sensor.voltage(value), 6) for value in raw['adc']]
-            if tick % 6 == 0:
-                frame = frames[tick // 6]
-                if (frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
-                        or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
-                        or any(not math.isclose(before, after, abs_tol=0.000001)
-                               for before, after in zip(frame['raw']['imu'], raw['imu']))):
-                    raise ValueError(f'録画と60Hzの生入力が一致しません: {frame}')
-                frame['expected'] = expected
-                count += 1
-    if count != len(frames) or tick != (len(frames) - 1) * 6:
-        raise ValueError('60Hz入力と録画の長さが一致しません')
+            frame = frames[tick]
+            if (frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
+                    or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
+                    or any(not math.isclose(before, after, abs_tol=0.000001)
+                           for before, after in zip(frame['raw']['imu'], raw['imu']))):
+                raise ValueError(f'録画と24FPSの生入力が一致しません: {frame}')
+            frame['expected'] = expected
+            count += 1
+    if count != len(frames) or tick != len(frames) - 1:
+        raise ValueError('24FPS入力と録画の長さが一致しません')
 
 
 def check_expectations(frame):

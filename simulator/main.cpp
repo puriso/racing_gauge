@@ -17,7 +17,6 @@
 #include <thread>
 #include <vector>
 
-#include "benchmark.hpp"
 #include "compat.hpp"
 #include "modules/backlight.h"
 #include "modules/display.h"
@@ -27,8 +26,6 @@
 #include "sensor_inputs.hpp"
 #include "telemetry.hpp"
 
-int currentFps = 0;
-
 namespace simulator
 {
 uint32_t nowMs = 0;
@@ -36,8 +33,7 @@ uint32_t nowMs = 0;
 
 namespace
 {
-constexpr unsigned int TICKS_PER_SECOND = 60;
-constexpr unsigned int CAPTURE_STRIDE = 6;
+constexpr unsigned int TICKS_PER_SECOND = 24;
 constexpr unsigned int DEFAULT_SECONDS = 20;
 constexpr unsigned int MIN_SECONDS = 5;
 constexpr unsigned int MAX_SECONDS = 240;
@@ -52,7 +48,6 @@ struct Options
 {
   std::string scenario = "ramp";
   std::filesystem::path capture;
-  std::filesystem::path benchmark;
   unsigned int seconds = 0;
 };
 
@@ -199,10 +194,11 @@ auto sampleRawFaults(float seconds, float pressure) -> Targets
   return {100.0F, 95.0F, pressure, seconds >= 12.0F && seconds < 14.0F ? 2.0F : 0.0F, false};
 }
 
-auto sample(float progress) -> Targets
+auto sample(double ratio) -> Targets
 {
   // 時間指定を変えても同じ順序のシナリオを伸縮する。
-  const float seconds = progress * static_cast<float>(defaultSeconds());
+  const auto progress = static_cast<float>(ratio);
+  const auto seconds = static_cast<float>(ratio * defaultSeconds());
   const float pressure = runningPressure(seconds);
   if (options().scenario == "circuit")
   {
@@ -242,9 +238,9 @@ auto sample(float progress) -> Targets
   }
   if (options().scenario == "startup")
   {
-    // 始動直後だけ両温度が 70℃を示し、低温に戻ってからゆっくり暖まる。
-    const bool initialReading = seconds < 1.0F;
-    const float warming = (seconds - 1.0F) / 29.0F;
+    // 24FPSでのIMU補正後も70℃相当のADCを取得できるよう、最初の2秒は保持する。
+    const bool initialReading = seconds < 2.0F;
+    const float warming = (seconds - 2.0F) / 28.0F;
     return {
         initialReading ? 70.0F : interpolate(-10.0F, 50.0F, warming),
         initialReading ? 70.0F : interpolate(-10.0F, 40.0F, warming),
@@ -380,16 +376,21 @@ void captureFrame(unsigned int frame)
   std::ofstream output(options().capture / name.str(), std::ios::binary);
   output.exceptions(std::ios::failbit | std::ios::badbit);
   output << "P6\n" << LCD_WIDTH << ' ' << LCD_HEIGHT << "\n255\n";
-  for (const auto& pixel : pixels)
+  constexpr size_t RGB_CHANNELS = 3;
+  std::vector<char> rgb(pixels.size() * RGB_CHANNELS);
+  for (size_t index = 0; index < pixels.size(); ++index)
   {
-    const std::array<char, 3> rgb{static_cast<char>(pixel.r), static_cast<char>(pixel.g), static_cast<char>(pixel.b)};
-    output.write(rgb.data(), static_cast<std::streamsize>(rgb.size()));
+    rgb[index * RGB_CHANNELS] = static_cast<char>(pixels[index].r);
+    rgb[(index * RGB_CHANNELS) + 1] = static_cast<char>(pixels[index].g);
+    rgb[(index * RGB_CHANNELS) + 2] = static_cast<char>(pixels[index].b);
   }
+  output.write(rgb.data(), static_cast<std::streamsize>(rgb.size()));
 }
 
 struct Controls
 {
   unsigned int tick = 0;
+  unsigned int pacingPhase = 0;
   bool paused = false;
   bool manualMenu = false;
   std::array<bool, 4> previousKeys{};
@@ -412,6 +413,7 @@ struct Controls
     if (keys[1] && !previousKeys[1])
     {
       tick = 0;
+      pacingPhase = 0;
       paused = false;
       deadline = std::chrono::steady_clock::now();
     }
@@ -420,6 +422,16 @@ struct Controls
       manualMenu = !manualMenu;
     }
     previousKeys = keys;
+  }
+
+  void waitForNextFrame()
+  {
+    // 端数を配分して24フレームを1秒とし、処理遅延後の追い付き連続実行を防ぐ。
+    const auto frameUs =
+        ((pacingPhase + 1) * US_PER_SECOND / TICKS_PER_SECOND) - (pacingPhase * US_PER_SECOND / TICKS_PER_SECOND);
+    pacingPhase = (pacingPhase + 1) % TICKS_PER_SECOND;
+    deadline = std::max(deadline + std::chrono::microseconds(frameUs), std::chrono::steady_clock::now());
+    std::this_thread::sleep_until(deadline);
   }
 };
 
@@ -486,28 +498,10 @@ auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
   return menu;
 }
 
-auto processFrame(FrameBenchmark& benchmark, unsigned int tick, const Inputs& input, bool manualMenu, bool showingMenu)
-    -> bool
+auto finishRecording(std::ofstream& manifest) -> int
 {
-  if (options().benchmark.empty())
-  {
-    return renderFrame(input, manualMenu, showingMenu);
-  }
-  benchmark.recordInput(simulator::nowMs, input);
-  return benchmark.measure(tick, [&]() -> bool { return renderFrame(input, manualMenu, showingMenu); });
-}
-
-auto finishOfflineRun(std::ofstream& manifest, const FrameBenchmark& benchmark) -> int
-{
-  if (!options().capture.empty())
-  {
-    manifest << "\n]}\n";
-    manifest.close();
-  }
-  if (!options().benchmark.empty())
-  {
-    benchmark.write(options().benchmark, options().scenario);
-  }
+  manifest << "\n]}\n";
+  manifest.close();
   exitStatus = 0;
   quit();
   return 0;
@@ -515,14 +509,6 @@ auto finishOfflineRun(std::ofstream& manifest, const FrameBenchmark& benchmark) 
 
 void prepareOfflineOutput()
 {
-  if (!options().capture.empty() && !options().benchmark.empty())
-  {
-    throw std::runtime_error("Capture and benchmark must run separately");
-  }
-  if (!options().benchmark.empty() && std::filesystem::exists(options().benchmark))
-  {
-    throw std::runtime_error("Benchmark output file must not already exist");
-  }
   if (!options().capture.empty() && !std::filesystem::create_directory(options().capture))
   {
     throw std::runtime_error("Capture directory must not already exist");
@@ -540,9 +526,6 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
     std::ofstream manifest;
     std::ofstream trace;
     const bool recording = !options().capture.empty();
-    const bool benchmarking = !options().benchmark.empty();
-    const bool offline = recording || benchmarking;
-    FrameBenchmark benchmark;
     if (recording)
     {
       manifest.open(options().capture / "inputs.json");
@@ -552,69 +535,67 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       trace.exceptions(std::ios::failbit | std::ios::badbit);
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
       trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g\n";
-      manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":10,"sensors":{"oil_temp":)"
-               << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)" << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)"
-               << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)" << SENSOR_AMBIENT_LIGHT_PRESENT
-               << R"(},"settings":{"pressure_alpha":)" << OIL_PRESSURE_SMOOTHING_ALPHA << R"(,"als_interval_ms":)"
-               << ALS_MEASUREMENT_INTERVAL_MS << R"(,"median_size":)" << MEDIAN_BUFFER_SIZE << R"(,"lux_day":)"
-               << static_cast<int>(LUX_THRESHOLD_DAY) << R"(,"lux_dusk":)" << static_cast<int>(LUX_THRESHOLD_DUSK)
-               << R"(,"brightness":[)" << static_cast<int>(BACKLIGHT_DAY) << ',' << static_cast<int>(BACKLIGHT_DUSK) << ','
-               << static_cast<int>(BACKLIGHT_NIGHT) << R"(],"racing_hold_ms":)" << RACING_MODE_START_HOLD_MS
-               << R"(,"racing_duration_ms":)" << RACING_MODE_DURATION_MS << R"(,"racing_g":)"
+      manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
+               << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)"
+               << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)"
+               << SENSOR_AMBIENT_LIGHT_PRESENT << R"(},"settings":{"pressure_alpha":)" << OIL_PRESSURE_SMOOTHING_ALPHA
+               << R"(,"als_interval_ms":)" << ALS_MEASUREMENT_INTERVAL_MS << R"(,"median_size":)" << MEDIAN_BUFFER_SIZE
+               << R"(,"lux_day":)" << static_cast<int>(LUX_THRESHOLD_DAY) << R"(,"lux_dusk":)"
+               << static_cast<int>(LUX_THRESHOLD_DUSK) << R"(,"brightness":[)" << static_cast<int>(BACKLIGHT_DAY) << ','
+               << static_cast<int>(BACKLIGHT_DUSK) << ',' << static_cast<int>(BACKLIGHT_NIGHT) << R"(],"racing_hold_ms":)"
+               << RACING_MODE_START_HOLD_MS << R"(,"racing_duration_ms":)" << RACING_MODE_DURATION_MS << R"(,"racing_g":)"
                << RACING_MODE_START_THRESHOLD_G << R"(},"sensor_settings":)";
       writeSensorSettings(manifest);
       manifest << R"(,"frames":[)" << '\n';
     }
-    std::cout << "Scenario: " << options().scenario << " | Space: pause | Home: replay | M/click: menu\n";
+    std::cout << "Scenario: " << options().scenario << " | 24FPS | Space: pause | Home: replay | M/click: menu\n";
     const auto totalTicks = options().seconds * TICKS_PER_SECOND;
     Controls controls;
     bool showingMenu = false;
     while (*running)
     {
-      if (!offline)
+      if (!recording)
       {
         controls.poll();
       }
       const auto tick = controls.tick;
-      const float progress = static_cast<float>(tick) / static_cast<float>(totalTicks);
+      const double progress = static_cast<double>(tick) / static_cast<double>(totalTicks);
       const auto target = sample(progress);
-      const auto input = makeInputs(target, progress * static_cast<float>(defaultSeconds()));
+      const auto input = makeInputs(target, static_cast<float>(progress * defaultSeconds()));
       // 再生を戻しても時計は単調増加させ、警告の継続時間やピーク値を壊さない。
       if (!controls.paused)
       {
-        showingMenu = processFrame(benchmark, tick, input, controls.manualMenu, showingMenu);
+        showingMenu = renderFrame(input, controls.manualMenu, showingMenu);
       }
       if (recording)
       {
         writeInputTrace(trace, input, target, showingMenu);
       }
 
-      if (recording && tick % CAPTURE_STRIDE == 0)
+      if (recording)
       {
-        const auto frame = tick / CAPTURE_STRIDE;
-        captureFrame(frame);
-        if (frame != 0)
+        captureFrame(tick);
+        if (tick != 0)
         {
           manifest << ",\n";
         }
         writeFrameManifest(manifest, tick, input, target, showingMenu);
       }
-      if (offline && tick == totalTicks)
+      if (recording && tick == totalTicks)
       {
-        return finishOfflineRun(manifest, benchmark);
+        return finishRecording(manifest);
       }
       if (!controls.paused && tick < totalTicks)
       {
         ++controls.tick;
         simulator::nowMs += (controls.tick * MS_PER_SECOND / TICKS_PER_SECOND) - (tick * MS_PER_SECOND / TICKS_PER_SECOND);
       }
-      if (!offline)
+      if (!recording)
       {
-        controls.deadline += std::chrono::microseconds(US_PER_SECOND / TICKS_PER_SECOND);
-        std::this_thread::sleep_until(controls.deadline);
+        controls.waitForNextFrame();
       }
     }
-    if (!offline)
+    if (!recording)
     {
       exitStatus = 0;
     }
@@ -639,7 +620,7 @@ auto main(int argc, char** argv) -> int
       {
         std::cout << "Usage: program [--scenario "
                      "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|startup|warm-start|menu] "
-                     "[--seconds N] [--benchmark NEW_FILE] [--capture "
+                     "[--seconds N] [--capture "
                      "NEW_DIRECTORY]\n";
         return 0;
       }
@@ -655,10 +636,6 @@ auto main(int argc, char** argv) -> int
       else if (argument == "--capture")
       {
         options().capture = value;
-      }
-      else if (argument == "--benchmark")
-      {
-        options().benchmark = value;
       }
       else if (argument == "--seconds" && value.find_first_not_of("0123456789") == std::string::npos)
       {

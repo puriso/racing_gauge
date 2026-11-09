@@ -13,7 +13,7 @@ A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays
 油圧3〜6barの連続変動、2.0Gでの油圧急落、Rモードの保持・解除、温度の上昇・下降を、
 PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 生ADCカウント・IMU各軸・照度を本番のセンサー処理へ渡し、変換・補正・取得周期・平均化から表示まで確認します。
-実機の平均FPSは未計測です。動画の保存fpsやPC上の処理量から、実機性能を求めることはできません。
+シミュレーションと動画は24FPS・1.0倍速です。
 
 [Real-time visual review](https://puriso.github.io/racing_gauge/): continuous pressure changes, circuit pressure drops,
 racing-mode transitions, and heating/cooling scenarios. All videos play at normal speed.

@@ -2,9 +2,9 @@
 
 [確認ページをブラウザーで開く](https://puriso.github.io/racing_gauge/)
 
-本番のセンサー取得・変換・平均化・描画・平滑化・Rモード・LOW警告をSDLで実行し、**等速のMP4とindex.html**にまとめます。
+本番のセンサー取得・変換・平均化・描画・平滑化・Rモード・LOW警告をSDLで実行し、**24FPS・等速のMP4とindex.html**にまとめます。
 PRのコメントから、ZIPを展開せずGitHub Pages上の確認ページを直接開けます。
-すべて1.0倍速です。Rモードの3分保持も実時間どおりに保存し、確認時刻ボタンから場面へ移動できます。
+更新・録画は24FPS、すべて1.0倍速です。Rモードの3分保持も実時間どおりに保存し、確認時刻ボタンから場面へ移動できます。
 
 動画・GIFには、320×240の製品画面の**外側**に入力と期待値を表示します。MP4を直接開いても数値を追えます。
 
@@ -40,7 +40,7 @@ flowchart LR
 たとえば油圧3bar相当のADC=551は約3.000996barとなり、3bar境界も生値から判定します。
 
 起動中にIMU補正が終わるまでは、本番コードが温度・油圧の取得も返さず終了します。
-仮想時刻0から起動した場合は約0.53秒まで取得値が0となり、その後も500ms取得・移動平均・平滑化による遅れがあります。
+24FPSで仮想時刻0から起動した場合は約1.04秒まで取得値が0となり、その後も500ms取得・移動平均・平滑化による遅れがあります。
 初期バッファを目標値で埋める処理は行いません。
 
 ## シナリオ
@@ -58,7 +58,7 @@ flowchart LR
 | `cooldown` | 100秒 | 高温から低温へ下降。バーの消去、赤表示の解除、低温端を確認 |
 | `pressure-sweep` | 20秒 | 油圧0→10→0barの専用全レンジ試験。上昇・下降、8bar以上の赤表示を確認 |
 | `warnings` | 40秒 | 通常変動中に3.1/3.0/2.9barへ250ms低下。2.9barの2秒保持でLOW点灯・保持・解除 |
-| `startup` | 30秒 | 最初の1秒は70℃、その後-10℃へ戻って暖機。始動時の読み値の推移を確認 |
+| `startup` | 30秒 | 最初の2秒は70℃相当ADCを保持し、IMU補正後の取得を確認。その後-10℃相当へ戻って暖機 |
 | `warm-start` | 30秒 | 70℃から暖機。始動後は油圧3〜6barで連続変動 |
 | `menu` | 20秒 | 8〜13秒は詳細画面。油圧の変動、通常表示への復帰や残像を確認 |
 
@@ -66,7 +66,7 @@ flowchart LR
 
 | 時刻 | 入力・確認する動作 |
 | --- | --- |
-| 4.00〜4.05秒 | 2.0Gと0.8barへ同時に急変。50msではR・LOWとも非点灯 |
+| 4.00〜4.05秒 | 2.0Gと0.8bar相当ADCへ同時に急変。24FPSでは2フレーム取得し、R・LOWとも非点灯 |
 | 8.00〜10.50秒 | 2.0Gと0.8barを継続。R進入、LOW点灯、油圧回復後の表示保持 |
 | 18.00〜18.20秒 | 2.0Gと0.8barへ200msだけ低下。LOWは点灯しない |
 | 22.00〜24.00秒 | 再度継続して急落。LOWの再点灯と回復を確認 |
@@ -76,7 +76,8 @@ Gは各軸の取得値から算出します。4秒＝前、8秒＝右、18秒＝
 
 `racing`の確認時刻は2.1秒（短いGで非進入）、4.2秒（進入）、184秒（保持中）、
 184.3秒（3分後の解除）、187.3秒（再進入）、190秒（詳細画面での解除）です。
-入力とゲージ表示には本番の平滑化による遅れがあります。
+入力とゲージ表示には本番の平均化・平滑化による遅れがあります。
+24FPSの1フレームは約41.7msで、判定はその刻みで実行します。100ms保持のR進入は125ms後のフレームで成立します。
 Rは1.0G以上が100ms継続、LOWは1.0G超かつ表示用油圧3bar以下が500ms継続すると点灯します。
 `racing`は2luxの夜間入力です。R中の最大輝度と3分後の夜間輝度への復帰も確認します。
 
@@ -128,64 +129,25 @@ python simulator/record.py --output simulator/out/my-review
 既存の出力先は上書きしません。FFmpegはPythonパッケージに同梱されています。
 
 - `index.html`: シナリオ一覧、確認時刻への移動、等速での連続再生、生の入力・期待値・R・LOW・照度・輝度
-- `<scenario>/recording.mp4`: H.264、640×540、10fps、等速。終点の1フレーム（0.1秒）も含む。画面外に数値を合成
+- `<scenario>/recording.mp4`: H.264、640×540、24FPS、等速。終点の1フレーム（約41.7ms）も含む。画面外に数値を合成
 - `<scenario>/poster.png`: 数値付きの動画ポスター
-- `<scenario>/frame-*.png`: 100msごとの全転送先フレーム。圧縮にじみのない画素確認用
+- `<scenario>/frame-*.png`: 24FPSの全転送先フレーム。圧縮にじみのない画素確認用
 - `<scenario>/contact-sheet.png`: 代表フレームの一覧
 - `<scenario>/inputs.json`: schema_version=2。`raw`=ADC/IMU/ALS、`target`=波形生成用の目標、`sensor`=本番の取得結果・ADC読取回数、`expected`=独立モデル、`actual`=描画・調光設定、R・LOWの画素判定
-- `<scenario>/trace.csv`: ADCカウント・IMU各軸・照度と目標波形を記録した60Hzの全入力。公開用には含めず、Actions成果物に保存
+- `<scenario>/trace.csv`: ADCカウント・IMU各軸・照度と目標波形を記録した24FPSの全入力。公開用には含めず、Actions成果物に保存
 - `public/`: 公開用のindex.html・MP4・代表画像・JSON。全PNGは含めず、公開データ量を抑える
 
 入力範囲、連続した油圧変動、温度の上昇・下降、Rの非進入・進入・保持・解除を自動検証します。
 さらに実際の転送先PNGでR表示との一致、LOWの点灯・保持・消灯、油温バーの枠内描画と赤色の解除を確認します。
-全8,331フレームで、生ADCからの変換・ダミー読み取りを含む取得回数・最終取得値・取得周期・平均化・IMU補正と方向・R/LOW・調光を独立モデルと照合します。
+全19,979フレームで、生ADCからの変換・ダミー読み取りを含む取得回数・最終取得値・取得周期・平均化・IMU補正と方向・R/LOW・調光を独立モデルと照合します。
 さらに、平滑化と描画値の差が部分描画の更新幅以内か確認します。
 MP4も再デコードして破損を検出します。それ以外の外観は確認ページで目視してください。
-
-## 実機の平均FPS
-
-**CoreS3実機の平均FPSは未計測です。** PCで得た約2,200frames/sという処理量から、
-実機のFPSや改善率を求めることはできません。実機には約60Hzの上限制御があり、
-SPI/DMA転送・ADC・I²C・IMUなど、PC側では再現しない処理時間があります。
-
-実機と計測ログが用意できたら、次の条件で前後を比較します。
-
-1. 同じCoreS3、センサー構成、ビルド設定、入力条件で測る。
-2. 起動・初期化中を除外し、同じ長さの区間で、処理を完了したループ数と本体時計の経過時間を記録する。
-3. FPS上限の待機・センサー取得・描画・転送を含む区間から、`平均ループFPS = 完了ループ数 × 1000 ÷ 経過時間ms`で算出する。
-
-既存の実機FPS表示・デバッグログはループ回数の目安です。液晶転送は値が変化したときだけ行うため、
-ループFPSと液晶への転送回数は別です。正確な区間平均には、実機上の経過時間も必要です。
-現在は実機とログがないため、確認ページとPRコメントは「未計測」と表示します。
-
-## 任意：PCシミュレーターの処理量を参考計測する
-
-```sh
-python simulator/benchmark.py --baseline-ref origin/main --output simulator/out/pc-benchmark.json
-python simulator/record.py --benchmark-json simulator/out/pc-benchmark.json --output simulator/out/pc-review
-```
-
-PC処理量の自動計測はCIから外しています。必要な場合だけ上記コマンドを使い、
-ページ内の「参考：PCシミュレーターの処理量」を開いて確認します。単位はframes/sです。
-実機の平均FPS欄は引き続き「未計測」で、PC計測値では埋めません。
-生の計測値・条件は`benchmark.json`から取得でき、コミット・CPU・コンパイラー・SDLも記録します。
-
-- 同じ60Hz入力を変更前後で各5回再生し、実行順を交互にします。`--repetitions`で回数を変更できます。
-- 先頭120フレームをウォームアップとして除外し、単調増加する実時計で`renderFrame`の経過時間を計測します。
-- センサー値の注入・判定・描画・フレームバッファ転送を含み、入力の指紋記録・FPS上限待機・画像保存・JSON出力・動画変換を除外します。
-- SDLドライバー内部の待機やOSの割り込みは処理の経過時間に含まれます。画面提示は別スレッドなので、この処理FPSはディスプレイへの表示FPSを示しません。CoreS3のSPI・DMA・ADCも対象外です。
-- 平均は全計測フレーム数÷全処理時間です。シナリオ別FPSの単純平均にはしません。各実行の最小・最大値も保存します。
-- 比較元の製品ソースと`renderFrame`を使い、入力・計測ドライバー・ビルド設定・ライブラリは現在版と共通化します。
-- 60Hz入力の時刻・ADC全チャンネル・IMU各軸・メニュー状態・照度を指紋で照合し、不一致なら比較を中止します。
-- 生値アダプター・本番取得の呼び出し・観測処理は共通化し、比較元の製品モジュールと`renderFrame`を使用します。動画・GIFの比較欄の合成時間は計測に含めません。
-
-計測差にはPCの負荷やばらつき、シミュレーターの遷移処理が含まれます。
-同じPC上での処理量を比較するための参考値です。実機性能の評価には使用しません。
 
 ## GIFが必要な場合
 
 CIはGIFを自動生成せず、等速動画の確認ページを公開します。
-個別にGIFを作る場合も、全区間を10fps・1.0倍速で保存します。倍速化や途中区間の省略はしません。
+個別にGIFを作る場合も、全区間を平均24FPS・1.0倍速で保存します。倍速化や途中区間の省略はしません。
+GIFは10ms単位の形式なので、40ms/50msを配分して24フレームの合計を1秒にします。累積誤差は10ms未満です。
 動画と同じ比較欄を付けます。GIFを作る前に、新しい録画処理で`inputs.json`と原画像を生成してください。
 
 ```sh
@@ -214,9 +176,10 @@ fork・Dependabotでは公開とコメントを省略します。録画ジョブ
 
 [M5GFX SDL](https://github.com/m5stack/M5GFX/blob/master/examples/PlatformIO_SDL/README.md)の本番レンダラーを使用します。
 `rendering.cpp`が`src/modules/sensor.cpp`を含む本番モジュールを直接リンクし、取得APIの戻り値と時刻だけを仮想化します。
-毎秒60回の本番処理を実行し、6回に1回、転送先フレームバッファを保存します。
+毎秒24回の本番処理を実行し、各フレームの転送先フレームバッファを保存します。
+仮想時刻はフレーム番号から計算し、41ms/42msの端数を累積させず、24フレームで正確に1秒進みます。
 仮想実行自体は実時間より速く完了しますが、生成した動画の再生速度は等速です。
-録画の10fpsは実機FPSの測定値ではありません。ADC/I²Cの電気特性・通信遅延、IMUのレジスタ→g変換、ALSのドライバー内部処理、電源・タッチの実機動作は検証しません。
+24FPSは動作確認用の設定値です。ADC/I²Cの電気特性・通信遅延、IMUのレジスタ→g変換、ALSのドライバー内部処理、電源・タッチの実機動作は検証しません。
 ファームウェア側のビルド・書き込み設定は変更しません。
 
 ## English
@@ -228,5 +191,6 @@ sample buffers and IMU offset/direction calculations are executed rather than in
 Videos and optional GIFs carry raw readings and independently calculated average/filter expectations outside the original 320×240 screen.
 The HTML review page offers normal-speed video, timestamp links and input/state readouts.
 Trusted same-repository PRs publish a commit-specific GitHub Pages URL; full PNG artifacts remain in Actions for 14 days.
-Optional GIF generation is also real-time. Hardware accuracy, vehicle behavior and hardware FPS are outside this simulator's scope.
-Hardware average FPS remains unmeasured. Host throughput is optional and is never converted into hardware FPS.
+Optional GIF generation is also real-time. Electrical behavior, bus timing and hardware performance are outside this simulator's scope.
+Simulation and MP4 output run at 24 FPS and normal speed. GIF delays use 40/50ms intervals to average 24 FPS.
+FPS benchmarking, comparison CLI options and performance reports are removed.

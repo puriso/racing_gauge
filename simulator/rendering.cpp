@@ -5,12 +5,14 @@
 // NOLINTBEGIN(bugprone-suspicious-include)
 #include "../src/modules/backlight.cpp"
 #include "../src/modules/display.cpp"
-#include "../src/modules/fps_display.cpp"
 #include "../src/modules/low_warning.cpp"
 #include "../src/modules/racing_indicator.cpp"
 #include "../src/modules/racing_mode.cpp"
 #include "../src/modules/sensor.cpp"
 // NOLINTEND(bugprone-suspicious-include)
+
+// FPSの計測・表示はシミュレーターへ持ち込まない。
+static_assert(FPS_DISPLAY_ENABLED == 0, "FPS measurement overlays are unavailable in the simulator");
 
 void writeDisplayTelemetry(std::ostream& output)
 {

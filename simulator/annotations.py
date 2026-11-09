@@ -1,10 +1,13 @@
 """動画とGIFで共用する、メーター領域の外側の入力・期待値パネル。"""
 
 from PIL import Image, ImageDraw, ImageFont
+from timing import FRAME_RATE
 
 SIZE = (640, 540)
 SCREEN_ORIGIN = (16, 44)
 MODES = ('DAY', 'DUSK', 'NIGHT')
+NORMAL_FONT = ImageFont.load_default(size=15)
+SMALL_FONT = ImageFont.load_default(size=12)
 
 
 def annotated_frame(source, sample, scenario, sensor_settings):
@@ -14,13 +17,12 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     frame = Image.new('RGB', SIZE, '#10151b')
     frame.paste(source, SCREEN_ORIGIN)
     draw = ImageDraw.Draw(frame)
-    normal = ImageFont.load_default(size=15)
-    small = ImageFont.load_default(size=12)
+    normal, small = NORMAL_FONT, SMALL_FONT
 
     def label(x, y, text, color='#e9edf3', font=normal):
         draw.text((x, y), text, fill=color, font=font)
 
-    label(16, 12, f'{scenario} | {sample["time_ms"] / 1000:.1f}s | 1.0x')
+    label(16, 12, f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x')
     label(352, 48, 'STATE', '#a7dfb4')
     label(466, 48, 'EXPECT', '#a7dfb4')
     label(552, 48, 'ACTUAL', '#8fc5ff')
