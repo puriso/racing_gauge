@@ -87,8 +87,13 @@ class SensorReference:
                 if now - self.last_temp[key] < self.settings['temp_interval_ms']:
                     continue
                 value = self.temperature(self.read(adc, self.settings[channel])) if self.enabled[sensor] else 0.0
-                if self.first[key]:
+                if not math.isfinite(value) or value >= 199:
+                    self.buffers[key] = [200.0] * len(self.buffers[key])
+                    self.indices[key] = 0
+                    self.first[key] = True
+                elif self.first[key]:
                     self.buffers[key] = [value] * len(self.buffers[key])
+                    self.indices[key] = 0
                     self.first[key] = False
                 else:
                     self.buffers[key][self.indices[key]] = value
