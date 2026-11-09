@@ -75,7 +75,11 @@ struct Targets
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
-  if (options().scenario == "ramp" || options().scenario == "adc-steps")
+  if (options().scenario == "adc-steps")
+  {
+    return 173;
+  }
+  if (options().scenario == "ramp")
   {
     return 200;
   }
@@ -685,10 +689,6 @@ auto main(int argc, char** argv) -> int
     if (options().seconds < MIN_SECONDS || options().seconds > MAX_SECONDS)
     {
       throw std::runtime_error("Duration must be 5..240 seconds");
-    }
-    if (options().scenario == "adc-steps" && options().seconds != defaultSeconds())
-    {
-      throw std::runtime_error("adc-steps requires 200 seconds to hold every count for 500ms");
     }
     prepareOfflineOutput();
     lgfx::Panel_sdl::addKeyCodeMapping(SDLK_SPACE, PAUSE_PIN);

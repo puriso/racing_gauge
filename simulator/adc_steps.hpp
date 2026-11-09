@@ -1,28 +1,13 @@
 #pragma once
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
 
 namespace simulator
 {
-// 通常域・表示境界・入力異常の近傍を、各カウント500ms保持して往復する。
 inline constexpr unsigned int ADC_STEPS_WARMUP_FRAMES = 48;
-inline constexpr unsigned int ADC_STEPS_HOLD_FRAMES = 12;
-inline constexpr unsigned int ADC_STEPS_WIDTH = 16;
-inline constexpr unsigned int ADC_STEPS_PER_WINDOW = (ADC_STEPS_WIDTH * 2) + 1;
-inline constexpr unsigned int ADC_STEPS_WINDOW_COUNT = 12;
-// 入力値はREADMEの試験仕様表と対応させる。
-// NOLINTBEGIN(readability-magic-numbers)
-inline constexpr std::array<int16_t, 4> ADC_STEPS_INITIAL{151, 168, 551, 0};
-inline constexpr std::array<std::array<int16_t, ADC_STEPS_WINDOW_COUNT>, 3> ADC_STEPS_CENTERS{
-    {
-        {8, 24, 39, 80, 98, 151, 237, 299, 1326, 1616, 1633, 2039},
-        {8, 24, 80, 109, 121, 168, 211, 299, 1326, 1616, 1633, 2039},
-        {8, 162, 292, 422, 551, 940, 1199, 1458, 1588, 1620, 1633, 2039},
-    },
-};
-// NOLINTEND(readability-magic-numbers)
+inline constexpr unsigned int ADC_STEPS_MAX_COUNT = 2047;
+inline constexpr std::array<int16_t, 4> ADC_STEPS_INITIAL{151, 168, 551, 0};  // NOLINT(readability-magic-numbers)
 
 inline auto adcSteps(unsigned int frame) -> std::array<int16_t, 4>
 {
@@ -30,16 +15,9 @@ inline auto adcSteps(unsigned int frame) -> std::array<int16_t, 4>
   {
     return ADC_STEPS_INITIAL;
   }
-  constexpr unsigned int TOTAL_STEPS = ADC_STEPS_PER_WINDOW * ADC_STEPS_WINDOW_COUNT;
-  const auto step = std::min((frame - ADC_STEPS_WARMUP_FRAMES) / ADC_STEPS_HOLD_FRAMES, TOTAL_STEPS - 1);
-  const auto window = step / ADC_STEPS_PER_WINDOW;
-  const auto local = step % ADC_STEPS_PER_WINDOW;
-  const auto offset = local <= ADC_STEPS_WIDTH ? local : (ADC_STEPS_WIDTH * 2) - local;
-  std::array<int16_t, 4> result{};
-  for (size_t channel = 0; channel < ADC_STEPS_CENTERS.size(); ++channel)
-  {
-    result[channel] = static_cast<int16_t>(ADC_STEPS_CENTERS[channel][window] - (ADC_STEPS_WIDTH / 2) + offset);
-  }
-  return result;
+  // 温度の取得周期とは独立に、毎フレーム1カウント増減させる。
+  const auto step = (frame - ADC_STEPS_WARMUP_FRAMES) % (ADC_STEPS_MAX_COUNT * 2);
+  const auto value = static_cast<int16_t>(step <= ADC_STEPS_MAX_COUNT ? step : (ADC_STEPS_MAX_COUNT * 2) - step);
+  return {value, value, value, 0};
 }
 }  // namespace simulator
