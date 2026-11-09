@@ -221,13 +221,28 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   bool racingChanged = drawRacingIndicator(mainCanvas);
   bool historyChanged = drawLowWarningHistory(mainCanvas);
 
-  // 離れた更新領域はまとめず、上段の変化で全面転送に戻ることを防ぐ。
+  const bool pressureRegionChanged = pressureChanged || warnChanged;
+  if (!(oilChanged || pressureRegionChanged || waterChanged || fpsChanged || racingChanged || historyChanged)) return;
+
+  // 接する領域だけを結合し、離れた更新の間にある未変更部分は転送しない。
   display.startWrite();
-  if (oilChanged) transferRegion(0, 0, LCD_WIDTH, 60);
-  if (pressureChanged || warnChanged) transferRegion(0, 60, 160, 180);
-  if (waterChanged) transferRegion(160, 60, 160, 180);
-  if ((racingChanged || historyChanged) && !pressureChanged && !warnChanged) transferRegion(0, LCD_HEIGHT - 16, 24, 8);
-  if (fpsChanged) transferRegion(0, LCD_HEIGHT - 16, 32, 16);
+  if (oilChanged && pressureRegionChanged && waterChanged)
+  {
+    transferRegion(0, 0, LCD_WIDTH, LCD_HEIGHT);
+  }
+  else
+  {
+    if (oilChanged) transferRegion(0, 0, LCD_WIDTH, 60);
+    if (pressureRegionChanged && waterChanged)
+      transferRegion(0, 60, LCD_WIDTH, 180);
+    else
+    {
+      if (pressureRegionChanged) transferRegion(0, 60, 160, 180);
+      if (waterChanged) transferRegion(160, 60, 160, 180);
+    }
+  }
+  if (!pressureRegionChanged && (fpsChanged || racingChanged || historyChanged))
+    transferRegion(0, LCD_HEIGHT - 16, 32, fpsChanged ? 16 : 8);
   finishTransfer();
 }
 
