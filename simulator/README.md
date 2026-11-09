@@ -112,16 +112,33 @@ python simulator/record.py --output simulator/out/my-review
 全8,090フレームで、独立計算した期待値と実際のR・LOW・調光状態を照合し、平滑化と描画値の差が更新幅以内か確認します。
 MP4も再デコードして破損を検出します。それ以外の外観は確認ページで目視してください。
 
-## 平均処理FPSを比較する
+## 実機の平均FPS
+
+**CoreS3実機の平均FPSは未計測です。** PCで得た約2,200frames/sという処理量から、
+実機のFPSや改善率を求めることはできません。実機には約60Hzの上限制御があり、
+SPI/DMA転送・ADC・I²C・IMUなど、PC側では再現しない処理時間があります。
+
+実機と計測ログが用意できたら、次の条件で前後を比較します。
+
+1. 同じCoreS3、センサー構成、ビルド設定、入力条件で測る。
+2. 起動・初期化中を除外し、同じ長さの区間で、処理を完了したループ数と本体時計の経過時間を記録する。
+3. FPS上限の待機・センサー取得・描画・転送を含む区間から、`平均ループFPS = 完了ループ数 × 1000 ÷ 経過時間ms`で算出する。
+
+既存の実機FPS表示・デバッグログはループ回数の目安です。液晶転送は値が変化したときだけ行うため、
+ループFPSと液晶への転送回数は別です。正確な区間平均には、実機上の経過時間も必要です。
+現在は実機とログがないため、確認ページとPRコメントは「未計測」と表示します。
+
+## 任意：PCシミュレーターの処理量を参考計測する
 
 ```sh
-python simulator/benchmark.py --baseline-ref origin/main --output simulator/out/fps.json
-python simulator/record.py --benchmark-json simulator/out/fps.json --output simulator/out/fps-review
+python simulator/benchmark.py --baseline-ref origin/main --output simulator/out/pc-benchmark.json
+python simulator/record.py --benchmark-json simulator/out/pc-benchmark.json --output simulator/out/pc-review
 ```
 
-確認ページに全体とシナリオ別の**PC上のSDL平均処理FPS**を表示します。生の計測値・条件は`benchmark.json`から取得できます。
-CIではPRのbaseコミットと比較し、コミット・CPU・コンパイラー・SDLのバージョンも記録します。
-実機のFPS、動画の保存設定10fps、入力周期60Hzとは別の値です。
+PC処理量の自動計測はCIから外しています。必要な場合だけ上記コマンドを使い、
+ページ内の「参考：PCシミュレーターの処理量」を開いて確認します。単位はframes/sです。
+実機の平均FPS欄は引き続き「未計測」で、PC計測値では埋めません。
+生の計測値・条件は`benchmark.json`から取得でき、コミット・CPU・コンパイラー・SDLも記録します。
 
 - 同じ60Hz入力を変更前後で各5回再生し、実行順を交互にします。`--repetitions`で回数を変更できます。
 - 先頭120フレームをウォームアップとして除外し、単調増加する実時計で`renderFrame`の経過時間を計測します。
@@ -132,8 +149,8 @@ CIではPRのbaseコミットと比較し、コミット・CPU・コンパイラ
 - 60Hz入力の時刻・温度・油圧・G・メニュー状態・照度を指紋で照合し、不一致なら比較を中止します。
 - 入力・照度注入・観測アダプターは共通化し、比較元の製品モジュールと`renderFrame`を使用します。動画・GIFの比較欄の合成時間は計測に含めません。
 
-今回のPRは製品側の描画コード・設定を変更していません。計測差にはPCの負荷やばらつき、シミュレーターの遷移処理が含まれます。
-実機の改善率として扱わず、同じ計測環境での比較に使ってください。
+計測差にはPCの負荷やばらつき、シミュレーターの遷移処理が含まれます。
+同じPC上での処理量を比較するための参考値です。実機性能の評価には使用しません。
 
 ## GIFが必要な場合
 
@@ -182,3 +199,4 @@ G, ambient light and expected/actual brightness outside the unmodified 320×240 
 The HTML review page offers normal-speed video, timestamp links and input/state readouts.
 Trusted same-repository PRs publish a commit-specific GitHub Pages URL; full PNG artifacts remain in Actions for 14 days.
 Optional GIF generation is also real-time. Hardware accuracy, vehicle behavior and hardware FPS are outside this simulator's scope.
+Hardware average FPS remains unmeasured. Host throughput is optional and is never converted into hardware FPS.

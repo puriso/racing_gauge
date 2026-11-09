@@ -45,20 +45,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev pkg-config build-essential
       - name: Python 依存
         run: python -m pip install -r simulator/requirements.txt
-      - name: 期待値と平均FPS集計の回帰テスト
+      - name: 期待値とPC処理量集計の回帰テスト
         run: python -m unittest discover -s simulator -p 'test_*.py'
       - name: 本番描画を SDL 向けにビルド
         run: pio run -d simulator -e desktop
-      - name: 同一入力で平均処理FPSを比較
-        env:
-          BASELINE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
-          SIM_BENCH_CURRENT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
-        run: python simulator/benchmark.py --baseline-ref "$BASELINE_REF" --scenario "$SIM_SCENARIO" --output simulator/out/fps.json
       - name: シナリオの録画と描画検証
         env:
           SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
-        run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --benchmark-json simulator/out/fps.json --output simulator/out/ci
+        run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --output simulator/out/ci
       - name: 公開用の確認ページを保存
         id: preview
         uses: actions/upload-artifact@v4
@@ -85,6 +79,7 @@ jobs:
           シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
           油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさなど、10シナリオを等速で確認できます。
           動画の画面外に生の模擬入力・平滑化の期待値・G・照度・輝度の期待／実際を表示します。
+          実機の平均FPSは未計測です。PC処理量の自動計測は行いません。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
           SUMMARY
 
@@ -177,20 +172,18 @@ jobs:
               total += info.st_size
               files.append((entry, relative))
           names = {relative for _, relative in files}
-          if not {'index.html', 'benchmark.json'}.issubset(names) or len(files) < 6 or total > 64 * 1024 * 1024:
+          if 'index.html' not in names or len(files) < 5 or total > 64 * 1024 * 1024:
               raise ValueError('公開レポートが不完全、または大きすぎます')
-          benchmark = json.loads((source / 'benchmark.json').read_text())
-          if benchmark.get('schema_version') != 1 or benchmark.get('metric') != 'sdl_render_processing_fps':
-              raise ValueError('FPS計測の形式が不正です')
-          if benchmark.get('current_sha') != sha:
-              raise ValueError('FPS計測対象とPRのコミットが一致しません')
-          for variant in ('before', 'after'):
-              fps = benchmark['overall'][variant]['average_fps']
-              if not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
-                  raise ValueError('FPS計測値が不正です')
-          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
-              output.write(f"fps_before={benchmark['overall']['before']['average_fps']:.1f}\n")
-              output.write(f"fps_after={benchmark['overall']['after']['average_fps']:.1f}\n")
+          if 'benchmark.json' in names:
+              benchmark = json.loads((source / 'benchmark.json').read_text())
+              if benchmark.get('schema_version') != 1 or benchmark.get('metric') != 'sdl_render_processing_fps':
+                  raise ValueError('PC計測の形式が不正です')
+              if benchmark.get('current_sha') != sha:
+                  raise ValueError('PC計測対象とPRのコミットが一致しません')
+              for variant in ('before', 'after'):
+                  fps = benchmark['overall'][variant]['average_fps']
+                  if not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
+                      raise ValueError('PC計測値が不正です')
           for directory in {relative.split('/')[0] for relative in names if '/' in relative}:
               required = {f'{directory}/{name}' for name in ('recording.mp4', 'contact-sheet.png', 'poster.png', 'inputs.json')}
               if not required.issubset(names):
@@ -257,8 +250,6 @@ jobs:
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
           ARTIFACT_URL: ${{ needs.record.outputs.artifact_url }}
-          FPS_BEFORE: ${{ steps.report.outputs.fps_before }}
-          FPS_AFTER: ${{ steps.report.outputs.fps_after }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -275,7 +266,7 @@ jobs:
               'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
               '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面、照度と調光を確認できます。',
               '動画の画面外に、生の模擬入力・平滑化の期待値・G・受光照度・輝度の期待／実際を表示しています。', '',
-              `**PC上のSDL平均処理FPS:** 変更前 ${process.env.FPS_BEFORE} → 変更後 ${process.env.FPS_AFTER}。同一入力で各5回比較。実機FPSは未測定です。`, '',
+              '**実機の平均FPS：未計測**。CoreS3本体の計測ログが必要です。PCの処理速度を実機FPSや改善率として扱いません。', '',
               `[全PNG・MP4をダウンロード](${process.env.ARTIFACT_URL})`, '',
               `対象: ${expectedSha.slice(0, 7)} · [CIの実行](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`,
               'このURLは対象コミットの録画です。再検証時はこのコメントを更新します。',

@@ -1,4 +1,4 @@
-"""同じ60Hz入力で変更前後のSDL描画処理FPSを比較する。"""
+"""同じ60Hz入力でPCシミュレーターの処理量を参考計測する。実機FPSには換算しない。"""
 
 import argparse
 import hashlib
@@ -154,9 +154,10 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     overall = report['overall']
-    print(f"SDL処理FPS: 変更前 {overall['before']['average_fps']:.2f} / 変更後 {overall['after']['average_fps']:.2f} "
-          f"({overall['change_percent']:+.2f}%)")
-    print('実機FPSは未測定。画像保存・動画変換・FPS上限待機は除外し、SDLドライバー内部の待機は含みます。')
+    print(f"PCの処理量（参考）: 変更前 {overall['before']['average_fps']:.2f} / "
+          f"変更後 {overall['after']['average_fps']:.2f} frames/s ({overall['change_percent']:+.2f}%)")
+    print('実機FPSは未計測で、PCの処理量からは換算できません。')
+    print('画像保存・動画変換・FPS上限待機は除外し、SDLドライバー内部の待機は含みます。')
 
 
 if __name__ == '__main__':

@@ -30,21 +30,23 @@ details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-wid
 </header>
 <section class="performance" aria-labelledby="performance-title">
   <article>
-    <span class="badge">実時間で計測 / PC上の処理性能</span>
-    <h2 id="performance-title">平均処理FPSの比較</h2>
-    <p id="fps-missing">この録画にはFPS計測結果がありません。動画の10fps・入力の60Hzは設定値で、実測FPSではありません。</p>
-    <div id="fps-results" hidden>
-      <div class="fps-summary"><div class="reading">変更前<strong id="fps-before"></strong></div><div class="reading">変更後<strong id="fps-after"></strong></div><div class="reading">計測差<strong id="fps-change"></strong></div></div>
+    <span class="badge">CORES3 / 実機計測</span>
+    <h2 id="performance-title">実機の平均FPS</h2>
+    <div class="reading">測定結果<strong id="hardware-fps">未計測</strong></div>
+    <p>CoreS3本体での計測が必要です。実機には約60Hzの上限制御があり、センサー取得・SPI/DMA転送にも時間がかかります。PCの処理速度から実機FPSや改善率を求めることはできません。</p>
+    <p class="fine">動画の10fps・模擬入力の60Hzは設定値です。実機の描画性能を表す数値ではありません。</p>
+    <details id="pc-benchmark" hidden><summary>参考：PCシミュレーターの処理量（実機FPSに換算不可）</summary>
+      <div class="fps-summary"><div class="reading">変更前（PC）<strong id="fps-before"></strong></div><div class="reading">変更後（PC）<strong id="fps-after"></strong></div><div class="reading">PC上の計測差<strong id="fps-change"></strong></div></div>
       <p class="fine" id="fps-method"></p>
       <p class="fine">描画・判定処理とフレームバッファへの転送にかかった実時間から算出しています。画像保存・動画変換・アプリ側のFPS上限待機は除外し、SDLドライバー内部の待機・OSの割り込みは含みます。実画面への提示FPSとは別で、<strong>CoreS3実機のFPSは未測定</strong>です。</p>
       <p class="fine notice" id="fps-source-note" hidden>製品側の描画コードと設定は比較元と同一です。計測差にはPCの負荷・ばらつきやシミュレーターの遷移処理が含まれ、実機の改善率を示すものではありません。</p>
-      <details><summary>シナリオごとの平均FPS・計測条件</summary>
+      <details><summary>シナリオごとのPC処理量・計測条件</summary>
         <div class="table-scroll"><table><thead><tr><th>シナリオ</th><th>変更前（PC）</th><th>変更後（PC）</th><th>計測差</th></tr></thead><tbody id="fps-rows"></tbody></table></div>
         <p class="fine" id="fps-host"></p><p class="fine" id="fps-commits"></p>
-        <p class="fine">各シナリオのFPSを単純平均せず、全計測フレーム数÷全描画処理時間で算出しています。入力の指紋を照合して変更前後の一致を確認済みです。PC・CIの負荷によって数値は変動します。</p>
-        <a href="benchmark.json">計測結果・条件・各実行のJSON</a>
+        <p class="fine">全計測フレーム数÷全描画処理時間で算出しています。入力の指紋を照合して変更前後の一致を確認済みです。PC・CIの負荷によって数値は変動します。</p>
+        <a href="benchmark.json">PC計測の参考データ・条件・各実行のJSON</a>
       </details>
-    </div>
+    </details>
   </article>
 </section>
 <main id="scenarios"></main>
@@ -54,10 +56,9 @@ details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-wid
 'use strict';
 const benchmark = JSON.parse(document.getElementById('benchmark-data').textContent);
 if (benchmark) {
-  const fps = value => `${value.toLocaleString('ja-JP', {minimumFractionDigits: 1, maximumFractionDigits: 1})} fps`;
+  const fps = value => `${value.toLocaleString('ja-JP', {minimumFractionDigits: 1, maximumFractionDigits: 1})} frames/s`;
   const change = value => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
-  document.getElementById('fps-missing').hidden = true;
-  document.getElementById('fps-results').hidden = false;
+  document.getElementById('pc-benchmark').hidden = false;
   document.getElementById('fps-before').textContent = fps(benchmark.overall.before.average_fps);
   document.getElementById('fps-after').textContent = fps(benchmark.overall.after.average_fps);
   document.getElementById('fps-change').textContent = change(benchmark.overall.change_percent);

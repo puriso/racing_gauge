@@ -286,7 +286,7 @@ def main():
     parser.add_argument("--scenario", choices=["all", *SCENARIOS], default="all")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--skip-build", action="store_true")
-    parser.add_argument("--benchmark-json", type=Path, help="benchmark.pyの実時間によるFPS比較を確認ページへ含める")
+    parser.add_argument("--benchmark-json", type=Path, help="PC処理量の参考データを折りたたみ欄に含める（実機FPSには換算不可）")
     args = parser.parse_args()
     output = args.output or ROOT / "out" / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     output = output.resolve()
