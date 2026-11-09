@@ -1,0 +1,1168 @@
+{
+  "schema_version": 1,
+  "metric": "sdl_render_processing_fps",
+  "baseline_sha": "6543fc41197636b18b3111da09a52dfc02c38c34",
+  "baseline_ref": "6543fc41197636b18b3111da09a52dfc02c38c34",
+  "current_sha": "30928ab8423be9bcc5460f237fca29b2b60e760a",
+  "checkout_sha": "1dd9a4506a7a6c69069eec9b3773db4e5589c449",
+  "driver_sha256": "198614befd34193d44b789674717e9ce298bf5891634f6fd93816292e569f354",
+  "render_sources_identical": true,
+  "repetitions": 5,
+  "warmup_frames": 120,
+  "host": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "logical_cpus": 4,
+    "compiler": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "runner_os": "Linux",
+    "sdl_version": "2.30.0"
+  },
+  "scenarios": [
+    {
+      "name": "circuit",
+      "title": "サーキット・2.0Gと急な油圧低下",
+      "trace_hash": "25f722726e08945d",
+      "before": {
+        "measured_frames": 10205,
+        "render_ns": 4559129054,
+        "average_fps": 2238.366117547503,
+        "mean_frame_ms": 0.4467544393924547,
+        "median_run_fps": 2264.7876114080345,
+        "min_run_fps": 2150.44269059588,
+        "max_run_fps": 2285.7403470259374,
+        "runs": [
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 949106902
+          },
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 901188257
+          },
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 892927319
+          },
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 918563647
+          },
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 897342929
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 10205,
+        "render_ns": 4757432425,
+        "average_fps": 2145.064624853815,
+        "mean_frame_ms": 0.46618642087212153,
+        "median_run_fps": 2153.7228813168235,
+        "min_run_fps": 2099.2104184621485,
+        "max_run_fps": 2174.259228362857,
+        "runs": [
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 954043239
+          },
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 938710515
+          },
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 944746963
+          },
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 972270327
+          },
+          {
+            "scenario": "circuit",
+            "warmup_frames": 120,
+            "trace_frames": 2161,
+            "trace_hash": "25f722726e08945d",
+            "measured_frames": 2041,
+            "render_ns": 947661381
+          }
+        ]
+      },
+      "change_percent": -4.168285606284783
+    },
+    {
+      "name": "racing",
+      "title": "Rモード・進入から3分後の解除まで",
+      "trace_hash": "b740fa63afda06b4",
+      "before": {
+        "measured_frames": 58205,
+        "render_ns": 17629148625,
+        "average_fps": 3301.634199025309,
+        "mean_frame_ms": 0.3028803131174298,
+        "median_run_fps": 3306.0830110918655,
+        "min_run_fps": 3260.902042336816,
+        "max_run_fps": 3330.8199410320235,
+        "runs": [
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3521085212
+          },
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3513121604
+          },
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3530135454
+          },
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3494935243
+          },
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3569871112
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 58205,
+        "render_ns": 18284482801,
+        "average_fps": 3183.300322654831,
+        "mean_frame_ms": 0.3141393832316811,
+        "median_run_fps": 3188.9335846683807,
+        "min_run_fps": 3152.4990846940564,
+        "max_run_fps": 3217.3990937695335,
+        "runs": [
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3692625973
+          },
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3618139889
+          },
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3689373930
+          },
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3633906369
+          },
+          {
+            "scenario": "racing",
+            "warmup_frames": 120,
+            "trace_frames": 11761,
+            "trace_hash": "b740fa63afda06b4",
+            "measured_frames": 11641,
+            "render_ns": 3650436640
+          }
+        ]
+      },
+      "change_percent": -3.58410015274897
+    },
+    {
+      "name": "ambient",
+      "title": "照度・昼→夕方→夜→昼と詳細画面",
+      "trace_hash": "a0a9a06cf8ee2e87",
+      "before": {
+        "measured_frames": 40205,
+        "render_ns": 12045389354,
+        "average_fps": 3337.791649437121,
+        "mean_frame_ms": 0.2995992875015545,
+        "median_run_fps": 3347.023826267997,
+        "min_run_fps": 3281.0325697490134,
+        "max_run_fps": 3395.344739734652,
+        "runs": [
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2434216195
+          },
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2368242584
+          },
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2389744848
+          },
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2402432853
+          },
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2450752874
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 40205,
+        "render_ns": 12612003031,
+        "average_fps": 3187.8362145312744,
+        "mean_frame_ms": 0.313692402213655,
+        "median_run_fps": 3179.604291337886,
+        "min_run_fps": 3159.8284275802384,
+        "max_run_fps": 3215.823031181367,
+        "runs": [
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2528931044
+          },
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2544758421
+          },
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2500448539
+          },
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2501353703
+          },
+          {
+            "scenario": "ambient",
+            "warmup_frames": 120,
+            "trace_frames": 8161,
+            "trace_hash": "a0a9a06cf8ee2e87",
+            "measured_frames": 8041,
+            "render_ns": 2536511324
+          }
+        ]
+      },
+      "change_percent": -4.4926541454777364
+    },
+    {
+      "name": "ramp",
+      "title": "温度の上昇→保持→下降",
+      "trace_hash": "67c0702270597337",
+      "before": {
+        "measured_frames": 59405,
+        "render_ns": 35460902719,
+        "average_fps": 1675.2252606409459,
+        "mean_frame_ms": 0.5969346472350812,
+        "median_run_fps": 1675.2046850592822,
+        "min_run_fps": 1661.0345016854058,
+        "max_run_fps": 1698.9233003873744,
+        "runs": [
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 7152771353
+          },
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 7152066640
+          },
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 7070544348
+          },
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 7092267653
+          },
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 6993252725
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 59405,
+        "render_ns": 32800842951,
+        "average_fps": 1811.0815044827657,
+        "mean_frame_ms": 0.5521562654827035,
+        "median_run_fps": 1586.8772940550323,
+        "min_run_fps": 1583.2421233866937,
+        "max_run_fps": 4092.5239537767616,
+        "runs": [
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 2903098463
+          },
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 7504221764
+          },
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 7410000307
+          },
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 7496491098
+          },
+          {
+            "scenario": "ramp",
+            "warmup_frames": 120,
+            "trace_frames": 12001,
+            "trace_hash": "67c0702270597337",
+            "measured_frames": 11881,
+            "render_ns": 7487031319
+          }
+        ]
+      },
+      "change_percent": 8.109729899239992
+    },
+    {
+      "name": "cooldown",
+      "title": "高温からの降温・赤表示の解除",
+      "trace_hash": "222d0ad9c31b615a",
+      "before": {
+        "measured_frames": 29405,
+        "render_ns": 17719484022,
+        "average_fps": 1659.4727004178903,
+        "mean_frame_ms": 0.6026010549906479,
+        "median_run_fps": 1682.188029595862,
+        "min_run_fps": 1610.6593928306188,
+        "max_run_fps": 1686.044013194746,
+        "runs": [
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3489979157
+          },
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3651299602
+          },
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3496041998
+          },
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3488046548
+          },
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3594116717
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 29405,
+        "render_ns": 18551412006,
+        "average_fps": 1585.054549512979,
+        "mean_frame_ms": 0.6308931136201327,
+        "median_run_fps": 1585.716503795287,
+        "min_run_fps": 1570.5684197058495,
+        "max_run_fps": 1599.761703457294,
+        "runs": [
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3708733551
+          },
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3744504172
+          },
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3690957145
+          },
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3731044626
+          },
+          {
+            "scenario": "cooldown",
+            "warmup_frames": 120,
+            "trace_frames": 6001,
+            "trace_hash": "222d0ad9c31b615a",
+            "measured_frames": 5881,
+            "render_ns": 3676172512
+          }
+        ]
+      },
+      "change_percent": -4.484445624575272
+    },
+    {
+      "name": "pressure-sweep",
+      "title": "油圧0→10→0bar",
+      "trace_hash": "82b9384807e9bb21",
+      "before": {
+        "measured_frames": 5405,
+        "render_ns": 1205364372,
+        "average_fps": 4484.1212545811,
+        "mean_frame_ms": 0.22300913450508789,
+        "median_run_fps": 4487.538709016977,
+        "min_run_fps": 4361.694901378386,
+        "max_run_fps": 4577.487119719805,
+        "runs": [
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 240889287
+          },
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 243614469
+          },
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 236865410
+          },
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 247839435
+          },
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 236155771
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 5405,
+        "render_ns": 1284251809,
+        "average_fps": 4208.676181821909,
+        "mean_frame_ms": 0.23760440499537464,
+        "median_run_fps": 4166.566148097745,
+        "min_run_fps": 4113.383494415169,
+        "max_run_fps": 4326.744938910184,
+        "runs": [
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 262223273
+          },
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 262800685
+          },
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 249841397
+          },
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 259446259
+          },
+          {
+            "scenario": "pressure-sweep",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "82b9384807e9bb21",
+            "measured_frames": 1081,
+            "render_ns": 249940195
+          }
+        ]
+      },
+      "change_percent": -6.142676727971819
+    },
+    {
+      "name": "warnings",
+      "title": "LOW境界・短時間低下と継続低下",
+      "trace_hash": "85f2cf39bbf6422c",
+      "before": {
+        "measured_frames": 11405,
+        "render_ns": 4613042483,
+        "average_fps": 2472.337950935797,
+        "mean_frame_ms": 0.40447544787373957,
+        "median_run_fps": 2455.7001357892364,
+        "min_run_fps": 2398.457467777815,
+        "max_run_fps": 2573.7243712862723,
+        "runs": [
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 886264289
+          },
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 940116725
+          },
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 951027913
+          },
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 928859337
+          },
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 906774219
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 11405,
+        "render_ns": 4832692188,
+        "average_fps": 2359.968223989026,
+        "mean_frame_ms": 0.4237345188952214,
+        "median_run_fps": 2341.299068813217,
+        "min_run_fps": 2289.6981258477535,
+        "max_run_fps": 2421.6073906030715,
+        "runs": [
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 974245465
+          },
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 941936339
+          },
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 996201191
+          },
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 975307348
+          },
+          {
+            "scenario": "warnings",
+            "warmup_frames": 120,
+            "trace_frames": 2401,
+            "trace_hash": "85f2cf39bbf6422c",
+            "measured_frames": 2281,
+            "render_ns": 945001845
+          }
+        ]
+      },
+      "change_percent": -4.545079563424503
+    },
+    {
+      "name": "startup",
+      "title": "始動直後70℃→低温→暖機",
+      "trace_hash": "78a180b339a030bf",
+      "before": {
+        "measured_frames": 8405,
+        "render_ns": 5398946953,
+        "average_fps": 1556.7850681195607,
+        "mean_frame_ms": 0.6423494292682927,
+        "median_run_fps": 1558.9501945924108,
+        "min_run_fps": 1532.3242003413932,
+        "max_run_fps": 1572.9817336190824,
+        "runs": [
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1068671024
+          },
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1079660476
+          },
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1078289740
+          },
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1075299379
+          },
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1097026334
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 8405,
+        "render_ns": 5678443468,
+        "average_fps": 1480.1591399764905,
+        "mean_frame_ms": 0.6756030301011302,
+        "median_run_fps": 1481.6716820694871,
+        "min_run_fps": 1459.9786577002078,
+        "max_run_fps": 1508.492394000079,
+        "runs": [
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1126887227
+          },
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1151282580
+          },
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1151386694
+          },
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1134529343
+          },
+          {
+            "scenario": "startup",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "78a180b339a030bf",
+            "measured_frames": 1681,
+            "render_ns": 1114357624
+          }
+        ]
+      },
+      "change_percent": -4.922062120985437
+    },
+    {
+      "name": "warm-start",
+      "title": "70℃からの暖機",
+      "trace_hash": "b610293f374b26ab",
+      "before": {
+        "measured_frames": 8405,
+        "render_ns": 3757888176,
+        "average_fps": 2236.628554750268,
+        "mean_frame_ms": 0.4471015081499108,
+        "median_run_fps": 2241.0842323387405,
+        "min_run_fps": 2208.1757287315204,
+        "max_run_fps": 2263.2628840857756,
+        "runs": [
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 756408565
+          },
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 747401384
+          },
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 761261877
+          },
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 742732986
+          },
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 750083364
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 8405,
+        "render_ns": 4036938911,
+        "average_fps": 2082.023083653247,
+        "mean_frame_ms": 0.4803020715050565,
+        "median_run_fps": 2074.683936712597,
+        "min_run_fps": 2049.8255823410286,
+        "max_run_fps": 2133.9133122686594,
+        "runs": [
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 820069773
+          },
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 805298410
+          },
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 813572243
+          },
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 810243898
+          },
+          {
+            "scenario": "warm-start",
+            "warmup_frames": 120,
+            "trace_frames": 1801,
+            "trace_hash": "b610293f374b26ab",
+            "measured_frames": 1681,
+            "render_ns": 787754587
+          }
+        ]
+      },
+      "change_percent": -6.912433929570561
+    },
+    {
+      "name": "menu",
+      "title": "詳細画面と通常表示への復帰",
+      "trace_hash": "5e012476bfa1f5a8",
+      "before": {
+        "measured_frames": 5405,
+        "render_ns": 2663088077,
+        "average_fps": 2029.5986628008172,
+        "mean_frame_ms": 0.4927082473635523,
+        "median_run_fps": 1775.1464258102453,
+        "min_run_fps": 1726.8215524109144,
+        "max_run_fps": 5321.700355630872,
+        "runs": [
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 608963849
+          },
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 626005622
+          },
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 203130565
+          },
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 619624665
+          },
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 605363376
+          }
+        ]
+      },
+      "after": {
+        "measured_frames": 5405,
+        "render_ns": 3298291446,
+        "average_fps": 1638.7272284730657,
+        "mean_frame_ms": 0.6102296847363552,
+        "median_run_fps": 1657.415388449955,
+        "min_run_fps": 1597.6140743705078,
+        "max_run_fps": 1673.8266161481536,
+        "runs": [
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 671661795
+          },
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 651949776
+          },
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 676633999
+          },
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 652220323
+          },
+          {
+            "scenario": "menu",
+            "warmup_frames": 120,
+            "trace_frames": 1201,
+            "trace_hash": "5e012476bfa1f5a8",
+            "measured_frames": 1081,
+            "render_ns": 645825553
+          }
+        ]
+      },
+      "change_percent": -19.25855793521043
+    }
+  ],
+  "overall": {
+    "before": {
+      "measured_frames": 236450,
+      "render_ns": 105052383835,
+      "average_fps": 2250.7818610892164,
+      "mean_frame_ms": 0.4442900563967012,
+      "median_run_fps": 2241.1536892842614,
+      "min_run_fps": 2228.272618964718,
+      "max_run_fps": 2294.520623344279,
+      "runs": [
+        {
+          "measured_frames": 47290,
+          "render_ns": 21108355833
+        },
+        {
+          "measured_frames": 47290,
+          "render_ns": 21222717363
+        },
+        {
+          "measured_frames": 47290,
+          "render_ns": 20609969472
+        },
+        {
+          "measured_frames": 47290,
+          "render_ns": 21010601746
+        },
+        {
+          "measured_frames": 47290,
+          "render_ns": 21100739421
+        }
+      ]
+    },
+    "after": {
+      "measured_frames": 236450,
+      "render_ns": 106136791036,
+      "average_fps": 2227.7854614975095,
+      "mean_frame_ms": 0.44887625728906744,
+      "median_run_fps": 2137.57866655173,
+      "min_run_fps": 2133.3693469056384,
+      "max_run_fps": 2680.4561099009584,
+      "runs": [
+        {
+          "measured_frames": 47290,
+          "render_ns": 17642519803
+        },
+        {
+          "measured_frames": 47290,
+          "render_ns": 22163602551
+        },
+        {
+          "measured_frames": 47290,
+          "render_ns": 22123162408
+        },
+        {
+          "measured_frames": 47290,
+          "render_ns": 22166813294
+        },
+        {
+          "measured_frames": 47290,
+          "render_ns": 22040692980
+        }
+      ]
+    },
+    "change_percent": -1.0217071671520528
+  }
+}
