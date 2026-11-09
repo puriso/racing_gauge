@@ -154,7 +154,7 @@ def main():
     overall = report['overall']
     print(f"SDL処理FPS: 変更前 {overall['before']['average_fps']:.2f} / 変更後 {overall['after']['average_fps']:.2f} "
           f"({overall['change_percent']:+.2f}%)")
-    print('実機FPSは未測定。描画処理時間のみを実時間計測し、録画・画像保存・動画変換・待機は含めません。')
+    print('実機FPSは未測定。画像保存・動画変換・FPS上限待機は除外し、SDLドライバー内部の待機は含みます。')
 
 
 if __name__ == '__main__':
