@@ -23,6 +23,13 @@ class ReferenceTest(unittest.TestCase):
         self.assertEqual((first['pressure_bar'], second['pressure_bar']), (3.0, 5.1))
         self.assertEqual((first['oil_c'], second['oil_c']), (10.0, 19.0))
 
+    def test_sensor_faults_are_zeroed_before_display_smoothing(self):
+        self.sample(0)
+        result = self.sample(16, oil_c=200, water_c=200, pressure_fault=True)
+        self.assertEqual(result['oil_c'], 90)
+        self.assertEqual(result['water_c'], 85.5)
+        self.assertEqual(result['pressure_bar'], 3.5)
+
     def test_racing_hold_and_expiry_boundaries(self):
         self.assertFalse(self.sample(0, g=1)['racing'])
         self.assertFalse(self.sample(99, g=1)['racing'])

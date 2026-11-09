@@ -39,10 +39,10 @@ def build_baseline(directory, baseline_sha):
     current_source = (ROOT / 'simulator/main.cpp').read_text()
     before, after = render_function(baseline_source), render_function(current_source)
     baseline_path.write_text(current_source[:after.start()] + before.group() + current_source[after.end():])
-    for name in ('benchmark.hpp', 'platformio.ini', 'build.py', 'telemetry.hpp', 'rendering.cpp'):
+    for name in ('benchmark.hpp', 'platformio.ini', 'build.py', 'telemetry.hpp', 'rendering.cpp', 'compat.hpp', 'sensor_inputs.hpp'):
         shutil.copyfile(ROOT / 'simulator' / name, checkout / 'simulator' / name)
-    # 照度の注入・観測アダプターを共通化し、製品側モジュールは比較元を保つ。
-    shutil.copyfile(ROOT / 'simulator/include/M5CoreS3.h', checkout / 'simulator/include/M5CoreS3.h')
+    # ADC・IMU・照度の生値アダプターを共通化し、製品側モジュールは比較元を保つ。
+    shutil.copytree(ROOT / 'simulator/include', checkout / 'simulator/include', dirs_exist_ok=True)
     dependencies = ROOT / 'simulator/.pio/libdeps/desktop'
     if dependencies.is_dir():
         shutil.copytree(dependencies, checkout / 'simulator/.pio/libdeps/desktop', symlinks=True)
@@ -113,7 +113,8 @@ def main():
     baseline_sha = subprocess.check_output(['git', 'rev-parse', '--verify', f'{args.baseline_ref}^{{commit}}'], cwd=ROOT, text=True).strip()
     checkout_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     driver = b''.join((ROOT / 'simulator' / name).read_bytes() for name in
-                      ('main.cpp', 'benchmark.hpp', 'rendering.cpp', 'telemetry.hpp', 'include/M5CoreS3.h'))
+                      ('main.cpp', 'benchmark.hpp', 'rendering.cpp', 'telemetry.hpp', 'compat.hpp', 'sensor_inputs.hpp',
+                       'include/M5CoreS3.h', 'include/Adafruit_ADS1X15.h', 'include/Wire.h'))
     identical = subprocess.run(['git', 'diff', '--quiet', baseline_sha, '--', 'src', 'include'], cwd=ROOT).returncode == 0
     scenarios = list(SCENARIOS) if args.scenario == 'all' else [args.scenario]
     results = {name: {'before': [], 'after': []} for name in scenarios}

@@ -2,11 +2,8 @@
 
 import csv
 import math
-import struct
-
-
-def float32(value):
-    return struct.unpack('f', struct.pack('f', value))[0]
+from numeric import float32
+from sensor_reference import SensorReference
 
 
 class Reference:
@@ -73,6 +70,12 @@ class Reference:
             for key, sensor, alpha in [('oil_c', 'oil_temp', 0.1), ('water_c', 'water_temp', 0.1),
                                        ('pressure_bar', 'pressure', self.settings['pressure_alpha'])]:
                 target = float32(sample[key]) if self.sensors[sensor] else 0.0
+                if key == 'pressure_bar':
+                    target = min(target, 15.0)
+                    if target >= 11 or sample.get('pressure_fault', False):
+                        target = 0.0
+                elif target >= 199:
+                    target = 0.0
                 previous = self.filtered.get(key, target)
                 self.filtered[key] = float32(previous + float32(float32(alpha) * float32(target - previous)))
             if sample['g'] > 1 and self.filtered['pressure_bar'] <= 3:
@@ -93,20 +96,30 @@ class Reference:
 def add_expectations(directory, metadata):
     frames = metadata['frames']
     reference = Reference(metadata['settings'], metadata['sensors'])
+    sensor = SensorReference(metadata['sensor_settings'], metadata['sensors'])
     count = 0
     tick = -1
     with (directory / 'trace.csv').open(newline='') as source:
         for tick, row in enumerate(csv.DictReader(source)):
-            sample = {key: float(row[key]) for key in ('oil_c', 'water_c', 'pressure_bar', 'g')}
-            sample.update(time_ms=int(row['time_ms']), menu=bool(int(row['menu'])), lux=int(row['lux']))
-            if sample['time_ms'] != tick * 1000 // 60 or not all(math.isfinite(value) for value in sample.values()):
+            now = int(row['time_ms'])
+            raw = {'adc': [int(row[f'adc{channel}']) for channel in range(4)],
+                   'imu': [float(row[axis]) for axis in ('ax', 'ay', 'az')], 'als': int(row['lux'])}
+            if (now != tick * 1000 // 60 or not all(0 <= value <= 2047 for value in raw['adc'])
+                    or not all(math.isfinite(value) for value in raw['imu'])):
                 raise ValueError('期待値の計算に使う60Hz入力が欠損・不正です')
+            acquired = sensor.step(now, raw)
+            sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als']}
             expected = reference.step(sample)
+            expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
+                                  for key, value in acquired.items()}
+            expected['voltage'] = [round(sensor.voltage(value), 6) for value in raw['adc']]
             if tick % 6 == 0:
                 frame = frames[tick // 6]
-                for key, value in sample.items():
-                    if not math.isclose(frame[key], value, abs_tol=0.0006):
-                        raise ValueError(f'録画と60Hz入力の時刻・値が一致しません: {key}, {frame}')
+                if (frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
+                        or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
+                        or any(not math.isclose(before, after, abs_tol=0.000001)
+                               for before, after in zip(frame['raw']['imu'], raw['imu']))):
+                    raise ValueError(f'録画と60Hzの生入力が一致しません: {frame}')
                 frame['expected'] = expected
                 count += 1
     if count != len(frames) or tick != (len(frames) - 1) * 6:
@@ -120,6 +133,15 @@ def check_expectations(frame):
             raise RuntimeError(f'期待する調光状態と実際の設定が一致しません: {key}, {frame}')
     if frame['racing'] != expected['racing'] or frame['low_visible'] != expected['low']:
         raise RuntimeError(f'期待するR・LOWと実際の判定・画素が一致しません: {frame}')
+    for key, tolerance in [('oil_c', 0.002), ('water_c', 0.002), ('pressure_bar', 0.0001)]:
+        if not math.isclose(frame['sensor'][key], expected['sensor'][key], abs_tol=tolerance):
+            raise RuntimeError(f'ADC変換・取得周期・平均化の期待値が一致しません: {key}, {frame}')
+    for key in ('pressure_fault', 'adc_reads', 'adc_last'):
+        if frame['sensor'][key] != expected['sensor'][key]:
+            raise RuntimeError(f'取得・異常判定の期待値が一致しません: {key}, {frame}')
+    if (not math.isclose(frame['g'], expected['sensor']['g'], abs_tol=0.00001)
+            or frame['g_direction'] != expected['sensor']['g_direction']):
+        raise RuntimeError(f'IMUの補正・水平G・方向の期待値が一致しません: {frame}')
     # 部分描画は油温0.1℃、水温0.05℃、油圧0.05bar未満の変化を保持する。
     for key, tolerance in [('oil_c', 0.1006), ('water_c', 0.0506), ('pressure_bar', 0.0506)]:
         if not math.isclose(expected[key], actual[key], abs_tol=tolerance):

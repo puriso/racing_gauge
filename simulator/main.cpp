@@ -23,17 +23,10 @@
 #include "modules/display.h"
 #include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
+#include "modules/sensor.h"
+#include "sensor_inputs.hpp"
 #include "telemetry.hpp"
 
-// 本番のセンサー境界と同じ配列型で接続する。
-// NOLINTBEGIN(modernize-avoid-c-arrays)
-float oilPressureSamples[PRESSURE_SAMPLE_SIZE] = {};
-float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE] = {};
-float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE] = {};
-// NOLINTEND(modernize-avoid-c-arrays)
-bool oilPressureOverVoltage = false;
-float currentGForce = 0.0F;
-const char* currentGDirection = "Right";
 int currentFps = 0;
 
 namespace simulator
@@ -70,7 +63,9 @@ auto options() -> Options&
 }
 std::atomic<int> exitStatus{1};
 
-struct Inputs
+using Inputs = simulator::RawInputs;
+
+struct Targets
 {
   float oil;
   float water;
@@ -112,6 +107,10 @@ auto defaultSeconds() -> unsigned int
   {
     return 136;
   }
+  if (options().scenario == "raw-faults")
+  {
+    return 24;
+  }
   return DEFAULT_SECONDS;
 }
 
@@ -149,7 +148,7 @@ auto pressureDip(float seconds) -> float
   return runningPressure(seconds);
 }
 
-auto sampleCircuit(float progress, float seconds, float pressure) -> Inputs
+auto sampleCircuit(float progress, float seconds, float pressure) -> Targets
 {
   // 瞬間的なGと、継続するコーナリングでの油圧急落を分けて確認する。
   const bool shortSpike = (seconds >= 4.0F && seconds < 4.05F) || (seconds >= 18.0F && seconds < 18.2F);
@@ -164,7 +163,7 @@ auto sampleCircuit(float progress, float seconds, float pressure) -> Inputs
   };
 }
 
-auto sampleRacing(float seconds, float pressure) -> Inputs
+auto sampleRacing(float seconds, float pressure) -> Targets
 {
   const bool spike = seconds >= 2.0F && seconds < 2.05F;
   const bool start = (seconds >= 4.0F && seconds < 4.2F) || (seconds >= 187.0F && seconds < 187.2F);
@@ -180,7 +179,7 @@ auto sampleRacing(float seconds, float pressure) -> Inputs
   return {100.0F, 95.0F, pressure, acceleration, seconds >= 190.0F && seconds < 192.0F, 2};
 }
 
-auto sampleAmbient(float seconds, float pressure) -> Inputs
+auto sampleAmbient(float seconds, float pressure) -> Targets
 {
   // 8秒周期の測定と6点中央値を経て、昼・夕方・夜・昼へ遷移する。
   int lux = 100;
@@ -195,7 +194,12 @@ auto sampleAmbient(float seconds, float pressure) -> Inputs
   return {100.0F, 95.0F, pressure, 0.0F, seconds >= 96.0F && seconds < 98.0F, lux};
 }
 
-auto sample(float progress) -> Inputs
+auto sampleRawFaults(float seconds, float pressure) -> Targets
+{
+  return {100.0F, 95.0F, pressure, seconds >= 12.0F && seconds < 14.0F ? 2.0F : 0.0F, false};
+}
+
+auto sample(float progress) -> Targets
 {
   // 時間指定を変えても同じ順序のシナリオを伸縮する。
   const float seconds = progress * static_cast<float>(defaultSeconds());
@@ -211,6 +215,10 @@ auto sample(float progress) -> Inputs
   if (options().scenario == "ambient")
   {
     return sampleAmbient(seconds, pressure);
+  }
+  if (options().scenario == "raw-faults")
+  {
+    return sampleRawFaults(seconds, pressure);
   }
   if (options().scenario == "pressure-sweep")
   {
@@ -269,15 +277,97 @@ auto sample(float progress) -> Inputs
   };
 }
 
+auto makeInputs(const Targets& target, float seconds) -> Inputs
+{
+  auto input = simulator::sensorInputs(target);
+  if (options().scenario == "circuit")
+  {
+    if (seconds >= 4.0F && seconds < 4.05F)
+    {
+      input.imu = {simulator::FIXTURE_AX_BIAS + target.acceleration, simulator::FIXTURE_AY_BIAS, 1.0F};
+    }
+    else if (seconds >= 18.0F && seconds < 18.2F)
+    {
+      const float diagonal = target.acceleration / std::sqrt(2.0F);
+      input.imu = {simulator::FIXTURE_AX_BIAS + diagonal, simulator::FIXTURE_AY_BIAS - diagonal, 1.0F};
+    }
+    else if (seconds >= 22.0F && seconds < 24.0F)
+    {
+      input.imu[1] = simulator::FIXTURE_AY_BIAS - target.acceleration;
+    }
+    if (seconds >= 14.0F && seconds < 15.0F)
+    {
+      input.imu[2] = 3.0F;  // 縦軸だけの変化では水平Gを発生させない。
+    }
+  }
+  if (options().scenario == "raw-faults")
+  {
+    if (seconds >= 4.0F && seconds < 6.0F)
+    {
+      input.adc[0] = 0;
+    }
+    if (seconds >= 8.0F && seconds < 10.0F)
+    {
+      input.adc[1] = 2047;
+    }
+    if (seconds >= 12.0F && seconds < 14.0F)
+    {
+      input.adc[2] = 1633;  // 4.9V以上となり、油圧の過電圧判定を通る。
+    }
+    if (seconds >= 16.0F && seconds < 18.0F)
+    {
+      input.adc = {0, 0, 0, 0};
+    }
+  }
+  return input;
+}
 // NOLINTEND(readability-magic-numbers)
 
 void inject(const Inputs& input)
 {
-  std::fill_n(oilTemperatureSamples, OIL_TEMP_SAMPLE_SIZE, SENSOR_OIL_TEMP_PRESENT ? input.oil : 0.0F);
-  std::fill_n(waterTemperatureSamples, WATER_TEMP_SAMPLE_SIZE, SENSOR_WATER_TEMP_PRESENT ? input.water : 0.0F);
-  std::fill_n(oilPressureSamples, PRESSURE_SAMPLE_SIZE, SENSOR_OIL_PRESSURE_PRESENT ? input.pressure : 0.0F);
-  currentGForce = input.acceleration;
+  simulator::adcChannels = input.adc;
+  simulator::acceleration = input.imu;
   simulator::ambientLux = input.lux;
+  // 取得周期・起動時補正・リングバッファを含む本番処理をそのまま実行する。
+  acquireSensorData();
+}
+
+void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& target, bool showingMenu)
+{
+  trace << simulator::nowMs;
+  for (const auto count : input.adc)
+  {
+    trace << ',' << count;
+  }
+  for (const auto axis : input.imu)
+  {
+    trace << ',' << axis;
+  }
+  trace << ',' << static_cast<int>(showingMenu) << ',' << input.lux << ',' << target.oil << ',' << target.water << ','
+        << target.pressure << ',' << target.acceleration << '\n';
+}
+
+void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs& input, const Targets& target,
+                        bool showingMenu)
+{
+  manifest << R"({"time_ms":)" << tick * MS_PER_SECOND / TICKS_PER_SECOND << R"(,"raw":{"adc":[)";
+  for (size_t channel = 0; channel < input.adc.size(); ++channel)
+  {
+    if (channel != 0)
+    {
+      manifest << ',';
+    }
+    manifest << input.adc[channel];
+  }
+  manifest << R"(],"imu":[)" << input.imu[0] << ',' << input.imu[1] << ',' << input.imu[2] << R"(],"als":)" << input.lux
+           << R"(},"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
+           << target.pressure << R"(,"g":)" << target.acceleration << R"(},"g":)" << currentGForce << R"(,"lux":)"
+           << input.lux << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)"
+           << isRacingMode << R"(,"sensor":)";
+  writeSensorTelemetry(manifest);
+  manifest << R"(,"actual":)";
+  writeDisplayTelemetry(manifest);
+  manifest << '}';
 }
 
 void captureFrame(unsigned int frame)
@@ -457,12 +547,12 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
     {
       manifest.open(options().capture / "inputs.json");
       manifest.exceptions(std::ios::failbit | std::ios::badbit);
-      manifest << std::boolalpha;
+      manifest << std::boolalpha << std::setprecision(std::numeric_limits<float>::max_digits10);
       trace.open(options().capture / "trace.csv");
       trace.exceptions(std::ios::failbit | std::ios::badbit);
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
-      trace << "time_ms,oil_c,water_c,pressure_bar,g,menu,lux\n";
-      manifest << R"({"scenario":")" << options().scenario << R"(","fps":10,"sensors":{"oil_temp":)"
+      trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g\n";
+      manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":10,"sensors":{"oil_temp":)"
                << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)" << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)"
                << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)" << SENSOR_AMBIENT_LIGHT_PRESENT
                << R"(},"settings":{"pressure_alpha":)" << OIL_PRESSURE_SMOOTHING_ALPHA << R"(,"als_interval_ms":)"
@@ -471,7 +561,9 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
                << R"(,"brightness":[)" << static_cast<int>(BACKLIGHT_DAY) << ',' << static_cast<int>(BACKLIGHT_DUSK) << ','
                << static_cast<int>(BACKLIGHT_NIGHT) << R"(],"racing_hold_ms":)" << RACING_MODE_START_HOLD_MS
                << R"(,"racing_duration_ms":)" << RACING_MODE_DURATION_MS << R"(,"racing_g":)"
-               << RACING_MODE_START_THRESHOLD_G << "},\"frames\":[\n";
+               << RACING_MODE_START_THRESHOLD_G << R"(},"sensor_settings":)";
+      writeSensorSettings(manifest);
+      manifest << R"(,"frames":[)" << '\n';
     }
     std::cout << "Scenario: " << options().scenario << " | Space: pause | Home: replay | M/click: menu\n";
     const auto totalTicks = options().seconds * TICKS_PER_SECOND;
@@ -484,7 +576,9 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
         controls.poll();
       }
       const auto tick = controls.tick;
-      const auto input = sample(static_cast<float>(tick) / static_cast<float>(totalTicks));
+      const float progress = static_cast<float>(tick) / static_cast<float>(totalTicks);
+      const auto target = sample(progress);
+      const auto input = makeInputs(target, progress * static_cast<float>(defaultSeconds()));
       // 再生を戻しても時計は単調増加させ、警告の継続時間やピーク値を壊さない。
       if (!controls.paused)
       {
@@ -492,8 +586,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       }
       if (recording)
       {
-        trace << simulator::nowMs << ',' << input.oil << ',' << input.water << ',' << input.pressure << ','
-              << input.acceleration << ',' << static_cast<int>(showingMenu) << ',' << input.lux << '\n';
+        writeInputTrace(trace, input, target, showingMenu);
       }
 
       if (recording && tick % CAPTURE_STRIDE == 0)
@@ -504,12 +597,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
         {
           manifest << ",\n";
         }
-        manifest << "{\"time_ms\":" << tick * MS_PER_SECOND / TICKS_PER_SECOND << ",\"oil_c\":" << input.oil
-                 << ",\"water_c\":" << input.water << ",\"pressure_bar\":" << input.pressure
-                 << ",\"g\":" << input.acceleration << ",\"lux\":" << input.lux << ",\"menu\":" << showingMenu
-                 << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode << ",\"actual\":";
-        writeDisplayTelemetry(manifest);
-        manifest << '}';
+        writeFrameManifest(manifest, tick, input, target, showingMenu);
       }
       if (offline && tick == totalTicks)
       {
@@ -550,7 +638,7 @@ auto main(int argc, char** argv) -> int
       if (argument == "--help")
       {
         std::cout << "Usage: program [--scenario "
-                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|startup|warm-start|menu] "
+                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|startup|warm-start|menu] "
                      "[--seconds N] [--benchmark NEW_FILE] [--capture "
                      "NEW_DIRECTORY]\n";
         return 0;
@@ -589,7 +677,7 @@ auto main(int argc, char** argv) -> int
     if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
         options().scenario != "warm-start" && options().scenario != "menu" && options().scenario != "cooldown" &&
         options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing" &&
-        options().scenario != "ambient")
+        options().scenario != "ambient" && options().scenario != "raw-faults")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

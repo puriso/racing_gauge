@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def load_segment(recordings, scenario, indices=None):
     directory = recordings / scenario
     metadata = json.loads((directory / "inputs.json").read_text())
-    if metadata["scenario"] != scenario or metadata["fps"] != 10:
-        raise ValueError(f"10fpsの{scenario}録画を指定してください")
+    if metadata.get('schema_version') != 2 or metadata["scenario"] != scenario or metadata["fps"] != 10:
+        raise ValueError(f"record.pyで生成した、生ADC・IMU入力付き10fpsの{scenario}録画を指定してください")
     samples = metadata['frames']
     if not samples:
         raise ValueError("録画フレームがありません")
@@ -27,7 +27,7 @@ def load_segment(recordings, scenario, indices=None):
         with Image.open(directory / f"frame-{index:04d}.png") as source:
             if source.size != (320, 240):
                 raise ValueError("録画フレームは320×240が必要です")
-            yield annotated_frame(source, sample, scenario)
+            yield annotated_frame(source, sample, scenario, metadata['sensor_settings'])
 
 
 def main():

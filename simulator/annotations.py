@@ -7,7 +7,7 @@ SCREEN_ORIGIN = (16, 44)
 MODES = ('DAY', 'DUSK', 'NIGHT')
 
 
-def annotated_frame(source, sample, scenario):
+def annotated_frame(source, sample, scenario, sensor_settings):
     if source.size != (320, 240):
         raise ValueError('メーターの原画像は320×240が必要です')
     expected, actual = sample['expected'], sample['actual']
@@ -31,30 +31,38 @@ def annotated_frame(source, sample, scenario):
         ('PWM / 255', expected['brightness_pwm'], actual['brightness_pwm']),
         ('ALS sample', expected['lux_sample'], actual['lux_sample']),
         ('ALS median', expected['lux_median'], actual['lux_median']),
+        ('Pressure OV', 'YES' if expected['sensor']['pressure_fault'] else 'NO',
+         'YES' if sample['sensor']['pressure_fault'] else 'NO'),
     ]
     for index, (name, wanted, observed) in enumerate(rows):
         y = 78 + index * 28
         label(352, y, name, font=small)
         label(466, y, str(wanted), '#a7dfb4')
         label(552, y, str(observed), '#8fc5ff')
-    label(352, 257, 'MENU' if sample['menu'] else 'GAUGES', '#dfcc9d')
+    label(352, 285, 'MENU' if sample['menu'] else 'GAUGES', '#dfcc9d')
     label(16, 297, 'Production screen 320 x 240 (original pixels)', font=small)
     draw.line((16, 322, 624, 322), fill='#354353')
     label(16, 329, 'SIGNAL')
-    label(204, 329, 'RAW INPUT', '#8fc5ff')
-    label(386, 329, 'EXPECTED FILTER / TARGET', '#a7dfb4')
-    signals = [
-        ('Oil temp', f'{sample["oil_c"]:.2f} C', f'{expected["oil_c"]:.2f} C'),
-        ('Water temp', f'{sample["water_c"]:.2f} C', f'{expected["water_c"]:.2f} C'),
-        ('Oil pressure', f'{sample["pressure_bar"]:.2f} bar', f'{expected["pressure_bar"]:.2f} bar'),
-        ('G / direction', f'{sample["g"]:.2f} G / {sample["g_direction"]}', 'R >= 1.0 G for 100 ms'),
+    label(188, 329, 'RAW SENSOR / VOLTAGE', '#8fc5ff')
+    label(386, 329, 'EXPECTED AVG / FILTER', '#a7dfb4')
+    signals = []
+    for name, key, channel_key, unit in [('Oil temp', 'oil_c', 'oil_channel', 'C'),
+                                         ('Water temp', 'water_c', 'water_channel', 'C'),
+                                         ('Oil pressure', 'pressure_bar', 'pressure_channel', 'bar')]:
+        channel = sensor_settings[channel_key]
+        raw = f'CH{channel} {sample["raw"]["adc"][channel]} / {expected["voltage"][channel]:.3f}V'
+        target = f'{expected["sensor"][key]:.2f} / {expected[key]:.2f} {unit}'
+        signals.append((name, raw, target))
+    axes = '/'.join(f'{axis:+.2f}' for axis in sample['raw']['imu'])
+    signals.extend([
+        ('IMU x/y/z (g)', axes, f'{expected["sensor"]["g"]:.2f} G / {expected["sensor"]["g_direction"]}'),
         ('Ambient light', f'{sample["lux"]} lux', f'{MODES[expected["brightness_mode"]]} / PWM {expected["brightness_pwm"]}'),
-    ]
+    ])
     for index, (name, raw, target) in enumerate(signals):
         y = 354 + index * 24
         label(16, y, name)
-        label(204, y, raw, '#8fc5ff')
+        label(188, y, raw, '#8fc5ff')
         label(386, y, target, '#a7dfb4')
-    label(16, 482, 'RAW = simulated physical input, before smoothing. ALS = sampled light.', font=small)
+    label(16, 482, 'RAW ADC -> calibration -> timed sampling / averages -> filter. IMU axes in g.', font=small)
     # 最下部は動画の操作バー用。R表示や比較値に重ならないよう余白を残す。
     return frame

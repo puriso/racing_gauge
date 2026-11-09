@@ -35,6 +35,11 @@ SCENARIOS = {
         "description": "受光100→12→2→100lux。8秒周期・6点中央値による調光、夜間の詳細画面での最大輝度と復帰を確認",
         "seconds": 136, "snapshots": [0, 16, 24, 48, 64, 88, 96, 98, 104, 120, 136],
     },
+    "raw-faults": {
+        "title": "生ADCの0・上限・過電圧と復帰", "group": "raw",
+        "description": "油温CH0=0、水温CH1=2047、油圧CH2=1633、全ADC=0を順に入力。変換・取得周期・異常判定・回復を本番処理で確認",
+        "seconds": 24, "snapshots": [0, 0.6, 4, 4.6, 6.6, 8.6, 12, 13, 16.6, 18.6, 24],
+    },
     "ramp": {
         "title": "温度の上昇→保持→下降", "group": "temperature",
         "description": "油温-10→170→-10℃・水温-10→130→-10℃。上昇後、そのまま下降。油圧は3〜6barを連続往復",
@@ -79,7 +84,8 @@ def running_pressure(seconds):
 
 
 def validate_inputs(metadata):
-    frames = metadata["frames"]
+    # 目標はADC波形を生成するためだけの値。実際の取得値は別途独立モデルと照合する。
+    frames = [{**frame, **frame['target']} for frame in metadata["frames"]]
     scenario = metadata["scenario"]
     for frame in frames:
         for key, low, high in (("oil_c", -10, 170), ("water_c", -10, 130), ("pressure_bar", 0, 10)):
@@ -125,11 +131,27 @@ def validate_inputs(metadata):
                 raise RuntimeError(f"Rモードの判定・保持・解除が不正です: {samples[time]}")
         if scenario == "circuit":
             for time in (4000, 8000, 18000, 22000):
-                if samples[time]["g"] != 2 or samples[time]["pressure_bar"] != 0.8:
+                if samples[time]["g"] != 2 or not math.isclose(samples[time]["pressure_bar"], 0.8, abs_tol=0.000001):
                     raise RuntimeError(f"2.0Gと油圧の同時急落を再現できていません: {samples[time]}")
     if scenario in ("startup", "warm-start"):
         if frames[0]["oil_c"] != 70 or frames[0]["water_c"] != 70:
             raise RuntimeError("始動時の70℃入力がありません")
+    if scenario == 'raw-faults':
+        samples = {frame['time_ms']: frame for frame in metadata['frames']}
+        for time, channel, count in [(4000, 0, 0), (8000, 1, 2047), (12000, 2, 1633)]:
+            if samples[time]['raw']['adc'][channel] != count:
+                raise RuntimeError(f'生ADCの異常刺激が不正です: {samples[time]}')
+        if (samples[4600]['sensor']['oil_c'] != 200 or samples[8600]['sensor']['water_c'] != 200
+                or not samples[12000]['sensor']['pressure_fault'] or samples[14000]['sensor']['pressure_fault']
+                or samples[16000]['raw']['adc'] != [0, 0, 0, 0]):
+            raise RuntimeError('ADCからの温度異常・油圧過電圧・解除を検出できていません')
+    if scenario == 'circuit':
+        samples = {frame['time_ms']: frame for frame in metadata['frames']}
+        for time, direction in [(4000, 'Front'), (8000, 'Right'), (18100, 'FL'), (22000, 'Left')]:
+            if samples[time]['g_direction'] != direction or not math.isclose(samples[time]['g'], 2, abs_tol=0.00001):
+                raise RuntimeError(f'IMU各軸からのG・方向計算が不正です: {samples[time]}')
+        if samples[14500]['g'] != 0 or samples[14500]['raw']['imu'][2] != 3:
+            raise RuntimeError('縦軸の加速度だけで水平Gを検出しています')
     if scenario in ("ambient", "racing"):
         checkpoints = ({0: 60, 16000: 255, 48000: 200, 88000: 60, 96000: 255, 98000: 60, 120000: 255}
                        if scenario == "ambient" else {0: 60, 4200: 255, 184300: 60, 187300: 255, 190000: 255, 192000: 60})
@@ -162,6 +184,8 @@ def racing_visible(image):
 
 def convert_and_check(directory):
     metadata = json.loads((directory / "inputs.json").read_text())
+    if metadata.get('schema_version') != 2:
+        raise RuntimeError('生ADC・IMU入力を記録したschema_version=2の録画が必要です')
     frames = metadata["frames"]
     config = SCENARIOS[metadata["scenario"]]
     sources = sorted(directory.glob("frame-*.ppm"))
@@ -194,7 +218,7 @@ def convert_and_check(directory):
                        for red, green, blue in image.crop((231, 16, 237, 34)).getdata()):
                     raise RuntimeError(f"油温バーが数値領域へはみ出しています: {frames[index]}")
                 checkpoints = ({0: False, 92000: True, 100000: True, 190000: False} if metadata["scenario"] == "ramp"
-                               else {0: True, 2000: True, 50000: False, 100000: False})
+                               else {0: False, 2000: True, 50000: False, 100000: False})
                 red_bar = any(red > 180 and green < 80 and blue < 80
                               for red, green, blue in image.crop((20, 16, 230, 34)).getdata())
                 if frame["time_ms"] in checkpoints and red_bar != checkpoints[frame["time_ms"]]:
@@ -238,7 +262,7 @@ def encode(directory):
         try:
             for index, sample in enumerate(metadata['frames']):
                 with Image.open(directory / f'frame-{index:04d}.png') as source:
-                    frame = annotated_frame(source, sample, metadata['scenario'])
+                    frame = annotated_frame(source, sample, metadata['scenario'], metadata['sensor_settings'])
                     if index == 0:
                         frame.save(directory / 'poster.png')
                     encoder.stdin.write(frame.tobytes())
@@ -259,7 +283,15 @@ def write_report(output, scenarios):
     for name in scenarios:
         config = SCENARIOS[name]
         metadata = json.loads((output / name / "inputs.json").read_text())
-        data.append({"name": name, **config, "frames": metadata["frames"]})
+        # HTML直開きを維持しつつ、詳細な取得履歴はinputs.jsonに残して埋め込み量を抑える。
+        frames = []
+        for frame in metadata['frames']:
+            value = {key: frame[key] for key in ('time_ms', 'g', 'g_direction', 'lux', 'menu', 'low_visible', 'r_visible', 'raw')}
+            value['sensor'] = {key: round(frame['sensor'][key], 4) for key in ('oil_c', 'water_c', 'pressure_bar')}
+            value['expected'] = {key: frame['expected'][key] for key in ('oil_c', 'water_c', 'pressure_bar', 'brightness_pwm')}
+            value['actual'] = {key: frame['actual'][key] for key in ('brightness_mode', 'brightness_pwm', 'lux_sample', 'lux_median')}
+            frames.append(value)
+        data.append({"name": name, **config, "frames": frames})
     template = (ROOT / "report.html").read_text()
     payload = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
     benchmark = json.loads((output / "benchmark.json").read_text()) if (output / "benchmark.json").is_file() else None
