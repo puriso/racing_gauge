@@ -7,12 +7,13 @@
 
 A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [English quick start](#english-quick-start)
 
-<img src="docs/images/gauge-demo.gif" alt="油温・水温の上昇と、油圧低下によるLOW警告・回復の動作デモ" width="640">
+[等速の動作確認ページを開く](https://puriso.github.io/racing_gauge/)
 
-油温・水温の上昇と、油圧低下時のLOW警告・回復を紹介するSDLシミュレーターの録画です。
-昇温は12.5倍速、LOW警告の場面は等速で再生します。[シミュレーターと録画の使い方](simulator/README.md)。
+油圧3〜6barの連続変動、2.0Gでの油圧急落、Rモードの保持・解除、温度の上昇・下降を、
+PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 
-SDL simulator preview: temperature sweep at 12.5× speed, followed by an oil-pressure drop, LOW warning and recovery at normal speed.
+[Real-time visual review](https://puriso.github.io/racing_gauge/): continuous pressure changes, circuit pressure drops,
+racing-mode transitions, and heating/cooling scenarios. All videos play at normal speed.
 
 <img src="https://github.com/user-attachments/assets/d3a8bfdc-0bba-4519-b64a-f31a1ec9a9f4" alt="Racing Gaugeの表示例" width="640">
 
