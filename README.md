@@ -5,8 +5,8 @@
 
 A compact digital dashboard driven by **M5Stack CoreS3 + ADS1015** that displays:
 
-* **Oil Pressure** via **Defi PDF00903S** (0 – 9.9 bar, 0.5 – 4.5 V)
-* **Oil / Water Temperature** via **Defi PDF00703S** (–40 – 150 °C, 0.5 – 4.5 V)  
+* **Oil Pressure** via **Defi PDF00703S** (0 – 9.9 bar, 0.5 – 4.5 V)
+* **Oil / Water Temperature** via **Defi PDF00903S** (NTC; operating range −20 – 150 °C)
 
 [等速の動作確認ページを開く](https://puriso.github.io/racing_gauge/)
 
@@ -25,7 +25,7 @@ racing-mode transitions, and heating/cooling scenarios. All videos play at norma
 ## 📘 日本語 README
 
 ### 概要
-このプロジェクトは、**M5Stack CoreS3** と **ADS1015** ADC を用いて、Defi 製センサ **PDF00903S**・**PDF00703S** を表示する車載用マルチメーターです。
+このプロジェクトは、**M5Stack CoreS3** と **ADS1015** ADC を用いて、Defi 製センサ **PDF00703S**・**PDF00903S** を表示する車載用マルチメーターです。
 サーキットでの簡易モニタリング用途に最適化しています。
 
 ### 主な機能
@@ -42,9 +42,9 @@ racing-mode transitions, and heating/cooling scenarios. All videos play at norma
 |------------------|----------------------------------|-------------------------|
 | MCU              | **M5Stack CoreS3** (ESP32-S3)    | USB-C, 2.0インチ IPS LCD |
 | ADC              | **ADS1015** 12bit / I²C / 4ch     | アナログ入力 |
-| 圧力センサ       | **PDF00903S** (Defi)              | CH2 / 0.5 – 4.5 V |
-| 温度センサ1      | **PDF00703S** (Defi)              | CH0 / 0.5 – 4.5 V |
-| 温度センサ2      | **PDF00703S** (Defi)              | CH1 / 0.5 – 4.5 V |
+| 圧力センサ       | **PDF00703S** (Defi)              | CH2 / 0.5 – 4.5 V |
+| 温度センサ1      | **PDF00903S** (Defi)              | CH0 / NTC抵抗式 |
+| 温度センサ2      | **PDF00903S** (Defi)              | CH1 / NTC抵抗式 |
 | 電源             | 5V                               | CoreS3 USB経由 または 5Vピン |
 
 > 💡 5Vピンは入力(給電)と外部機器への出力の両方に利用できます。`M5.Power.setExtOutput(true)`で出力を有効化した状態では、外部から同時に給電しないでください。
@@ -85,6 +85,15 @@ graph TD
     end
     OilP -- CH2 --> ADS
 ```
+
+### 温度センサーの仕様範囲 / Temperature sensor operating range
+
+使用する油温・水温センサーは **Defi PDF00903S**、圧力センサーは **PDF00703S** です。
+[メーカーのセンサー仕様](https://defi.nippon-seiki.co.jp/installation/sensor/)と[DIN-Gauge取扱説明書の製品仕様](https://defi.nippon-seiki.co.jp/wp-content/uploads/2025/03/manual_din.pdf)に基づきます。
+温度センサーの動作範囲は **-20〜150℃** です。保存温度範囲（-30〜150℃）やメーターの表示範囲とは異なります。
+確認ページは動作範囲を基準に範囲内・範囲外を比較します。現在のNTC換算モデルの係数はメーカーの校正保証値ではなく、製品側の異常温度判定もこの変更では変えません。
+
+Oil/water temperature uses PDF00903S; pressure uses PDF00703S. Compare preview inputs against the specified −20 to 150°C operating range, separately from storage and meter display ranges. The repository's NTC model is not manufacturer-guaranteed calibration data.
 
 ### センサー対応表
 
@@ -135,8 +144,8 @@ graph TD
 ### Overview
 This project turns an **M5Stack CoreS3** and **ADS1015 ADC** into a simple yet powerful multi-gauge that reads:
 
-- **Oil Pressure** using **Defi PDF00903S** (0.5–4.5 V, 0–9.9 bar)
-- **Oil / Water Temperature** using **Defi PDF00703S** (0.5–4.5 V, –40 to 150°C)  
+- **Oil Pressure** using **Defi PDF00703S** (0.5–4.5 V, 0–9.9 bar)
+- **Oil / Water Temperature** using **Defi PDF00903S** (NTC; operating range −20 to 150°C)
 
 Perfect for vintage cars lacking modern instrumentation or for lightweight track-day data monitoring.
 
@@ -154,9 +163,9 @@ Perfect for vintage cars lacking modern instrumentation or for lightweight track
 |------------------|-------------------------------|-------------------------|
 | MCU              | **M5Stack CoreS3** (ESP32-S3)  | 2.0" IPS, USB-C         |
 | ADC              | **ADS1015** 12-bit, I²C, 4ch    | Analog signal input     |
-| Pressure Sensor  | **PDF00903S** (Defi)           | CH2, 0.5–4.5V           |
-| Temp Sensor 1    | **PDF00703S** (Defi)           | CH0, 0.5–4.5V           |
-| Temp Sensor 2    | **PDF00703S** (Defi)           | CH1, 0.5–4.5V           |
+| Pressure Sensor  | **PDF00703S** (Defi)           | CH2, 0.5–4.5V           |
+| Temp Sensor 1    | **PDF00903S** (Defi)           | CH0, NTC thermistor     |
+| Temp Sensor 2    | **PDF00903S** (Defi)           | CH1, NTC thermistor     |
 | Power Supply     | 5V                             | Powered via USB or 5V pin         |
 
 > 💡 The 5V pin can power the CoreS3 or supply external devices. When `M5.Power.setExtOutput(true)` is active, avoid feeding power from another 5V source at the same time.

@@ -34,8 +34,8 @@ SCENARIOS = {
         "seconds": 40, "snapshots": [0, 4.6, 7, 8, 8.6, 10, 12, 15, 16.6, 19, 20.6, 22, 24, 27, 28.6, 30, 32, 36, 40],
     },
     "temperature-low": {
-        "title": "温度異常・-100℃以下と復帰", "group": "raw",
-        "description": "生ADC1619→1620（約-90.81→-106.61℃）を油温・水温へ順に入力し、同時入力と復帰も確認。現行コードは低温側を異常除外せず負値のまま表示する挙動",
+        "title": "PDF00903Sの動作下限・-20℃前後と復帰", "group": "raw",
+        "description": "PDF00903Sの仕様上の動作下限-20℃を基準に、生ADC1429→1430（約-19.93→-20.04℃）を順に入力。範囲内・範囲外・同時入力・復帰を確認。換算温度はリポジトリのNTCモデルによる参考値",
         "seconds": 40, "snapshots": [0, 4.6, 7, 8, 8.6, 10, 12, 15, 16.6, 19, 20.6, 22, 24, 27, 28.6, 30, 32, 36, 40],
     },
     "adc-steps": {
@@ -335,7 +335,7 @@ def write_report(output, scenarios):
             values['expected_brightness_pwm'] = frame['expected']['brightness_pwm']
             frames.append([values[key] for key in columns])
         cues = [frame_at_or_after(round(second * 1000)) for second in config['snapshots']]
-        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames})
+        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames, "sensor_spec": metadata.get("temperature_sensor_spec")})
     template = (ROOT / "report.html").read_text()
     payload = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace("<", "\\u003c")
     (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload), encoding="utf-8")

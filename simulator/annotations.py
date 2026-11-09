@@ -2,6 +2,7 @@
 
 from PIL import Image, ImageDraw, ImageFont
 from timing import FRAME_RATE
+from fault_cases import TEMPERATURE_SENSOR_SPEC
 
 SIZE = (640, 540)
 SCREEN_ORIGIN = (16, 44)
@@ -22,7 +23,11 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     def label(x, y, text, color='#e9edf3', font=normal):
         draw.text((x, y), text, fill=color, font=font)
 
-    label(16, 12, f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x')
+    heading = f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x'
+    if 'input_temperature_c' in sample:
+        spec = TEMPERATURE_SENSOR_SPEC
+        heading += f" | PDF00903S op {spec['minimum_c']:g}..{spec['maximum_c']:g}C"
+    label(16, 12, heading)
     label(352, 48, 'STATE', '#a7dfb4')
     label(466, 48, 'EXPECT', '#a7dfb4')
     label(552, 48, 'ACTUAL', '#8fc5ff')

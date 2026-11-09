@@ -6,6 +6,17 @@ from sensor_reference import SensorReference
 from timing import FRAME_RATE
 
 
+TEMPERATURE_SENSOR_SPEC = dict(
+    model='Defi PDF00903S', minimum_c=-20.0, maximum_c=150.0, range_kind='operating',
+    source_url='https://defi.nippon-seiki.co.jp/wp-content/uploads/2025/03/manual_din.pdf',
+)
+
+
+def outside_temperature_spec(value):
+    return (not math.isfinite(value) or value < TEMPERATURE_SENSOR_SPEC['minimum_c']
+            or value > TEMPERATURE_SENSOR_SPEC['maximum_c'])
+
+
 CASES = {
     'sensor-disconnect': [
         (4000, 8000, (1666, None, None), 'oil-open', '油温センサー断線相当（入力5V）'),
@@ -21,11 +32,11 @@ CASES = {
         (28000, 32000, (1, 1, None), 'both-over-500', '油温・水温：極端な高温（約583.29℃）'),
     ],
     'temperature-low': [
-        (4000, 8000, (1619, None, None), 'oil-above-minus100', '油温：-100℃の手前（約-90.81℃）'),
-        (8000, 12000, (1620, None, None), 'oil-below-minus100', '油温：-100℃以下（約-106.61℃）'),
-        (16000, 20000, (None, 1619, None), 'water-above-minus100', '水温：-100℃の手前（約-90.81℃）'),
-        (20000, 24000, (None, 1620, None), 'water-below-minus100', '水温：-100℃以下（約-106.61℃）'),
-        (28000, 32000, (1620, 1620, None), 'both-below-minus100', '油温・水温：両方-100℃以下（約-106.61℃）'),
+        (4000, 8000, (1429, None, None), 'oil-inside-limit', '油温：動作下限-20℃の範囲内側（約-19.93℃）'),
+        (8000, 12000, (1430, None, None), 'oil-outside-limit', '油温：動作下限-20℃未満（約-20.04℃）'),
+        (16000, 20000, (None, 1429, None), 'water-inside-limit', '水温：動作下限-20℃の範囲内側（約-19.93℃）'),
+        (20000, 24000, (None, 1430, None), 'water-outside-limit', '水温：動作下限-20℃未満（約-20.04℃）'),
+        (28000, 32000, (1430, 1430, None), 'both-outside-limit', '油温・水温：両方が動作下限未満（約-20.04℃）'),
     ],
 }
 
@@ -43,6 +54,7 @@ def validate_fault_inputs(metadata):
         raise ValueError('断線・異常温度の録画が40秒分そろっていません')
     sensor = SensorReference(metadata['sensor_settings'], metadata['sensors'])
     scenario = metadata['scenario']
+    metadata['temperature_sensor_spec'] = TEMPERATURE_SENSOR_SPEC.copy()
     seen = set()
     for frame in frames:
         counts, name, label = fault_case(scenario, frame['time_ms'])
@@ -70,15 +82,15 @@ def validate_fault_inputs(metadata):
                     raise ValueError('200℃直前の入力がありません')
                 if name.endswith('above-200') and not value >= 200:
                     raise ValueError('200℃以上の入力がありません')
-                if 'below-minus100' in name and not value <= -100:
-                    raise ValueError('-100℃以下の入力がありません')
-                if 'above-minus100' in name and not value > -100:
-                    raise ValueError('-100℃直前の入力がありません')
+                if name.endswith('outside-limit') and not value < TEMPERATURE_SENSOR_SPEC['minimum_c']:
+                    raise ValueError('センサー動作下限未満の入力がありません')
+                if name.endswith('inside-limit') and not value >= TEMPERATURE_SENSOR_SPEC['minimum_c']:
+                    raise ValueError('センサー動作下限の範囲内入力がありません')
             if not math.isfinite(value):
                 raise ValueError('温度換算値が有限値ではありません')
         frame['case'] = name
         frame['case_label'] = label
         frame['input_temperature_c'] = converted
-        frame['input_temperature_abnormal'] = [value >= 200 or value <= -100 for value in converted]
+        frame['input_temperature_abnormal'] = [outside_temperature_spec(value) for value in converted]
     if seen != {'healthy', *(entry[3] for entry in CASES[scenario])}:
         raise ValueError('断線・異常温度・復帰のケースが不足しています')

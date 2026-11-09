@@ -2,7 +2,7 @@
 
 import unittest
 
-from fault_cases import CASES, fault_case, validate_fault_inputs
+from fault_cases import CASES, TEMPERATURE_SENSOR_SPEC, outside_temperature_spec, fault_case, validate_fault_inputs
 from sensor_reference import SensorReference
 from timing import frame_time_ms
 
@@ -53,13 +53,22 @@ class FaultCasesTest(unittest.TestCase):
         self.assertGreaterEqual(data['frames'][22 * 24]['input_temperature_c'][1], 200)
         self.assertTrue(all(value >= 500 for value in data['frames'][30 * 24]['input_temperature_c']))
 
-    def test_low_temperature_crosses_minus_100_from_raw_adc(self):
+    def test_low_temperature_crosses_sensor_operating_minimum_from_raw_adc(self):
         data = fixture('temperature-low')
         validate_fault_inputs(data)
-        self.assertGreater(data['frames'][7 * 24]['input_temperature_c'][0], -100)
-        self.assertLessEqual(data['frames'][10 * 24]['input_temperature_c'][0], -100)
-        self.assertLessEqual(data['frames'][22 * 24]['input_temperature_c'][1], -100)
+        self.assertGreater(data['frames'][7 * 24]['input_temperature_c'][0], -20)
+        self.assertLess(data['frames'][10 * 24]['input_temperature_c'][0], -20)
+        self.assertLess(data['frames'][22 * 24]['input_temperature_c'][1], -20)
         self.assertEqual(data['frames'][30 * 24]['input_temperature_abnormal'], [True, True])
+
+    def test_operating_limits_are_inclusive_and_outside_values_are_flagged(self):
+        self.assertEqual(TEMPERATURE_SENSOR_SPEC['model'], 'Defi PDF00903S')
+        self.assertFalse(outside_temperature_spec(-20))
+        self.assertFalse(outside_temperature_spec(150))
+        self.assertTrue(outside_temperature_spec(-20.001))
+        self.assertTrue(outside_temperature_spec(150.001))
+        self.assertTrue(outside_temperature_spec(float('nan')))
+        self.assertTrue(outside_temperature_spec(float('inf')))
 
     def test_rejects_fault_not_injected(self):
         data = fixture('sensor-disconnect')
@@ -69,7 +78,7 @@ class FaultCasesTest(unittest.TestCase):
 
     def test_rejects_failure_to_reconnect(self):
         data = fixture('temperature-low')
-        data['frames'][-1]['raw']['adc'][0] = 1620
+        data['frames'][-1]['raw']['adc'][0] = 1430
         with self.assertRaisesRegex(ValueError, '復帰'):
             validate_fault_inputs(data)
 

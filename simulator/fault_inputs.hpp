@@ -27,9 +27,9 @@ inline constexpr std::array<AdcFaultPhase, 5> HIGH_TEMPERATURE_PHASES{
     AdcFaultPhase{28000, 32000, {1, 1, -1}},
 };
 inline constexpr std::array<AdcFaultPhase, 5> LOW_TEMPERATURE_PHASES{
-    AdcFaultPhase{4000, 8000, {1619, -1, -1}},     AdcFaultPhase{8000, 12000, {1620, -1, -1}},
-    AdcFaultPhase{16000, 20000, {-1, 1619, -1}},   AdcFaultPhase{20000, 24000, {-1, 1620, -1}},
-    AdcFaultPhase{28000, 32000, {1620, 1620, -1}},
+    AdcFaultPhase{4000, 8000, {1429, -1, -1}},     AdcFaultPhase{8000, 12000, {1430, -1, -1}},
+    AdcFaultPhase{16000, 20000, {-1, 1429, -1}},   AdcFaultPhase{20000, 24000, {-1, 1430, -1}},
+    AdcFaultPhase{28000, 32000, {1430, 1430, -1}},
 };
 // NOLINTEND(readability-magic-numbers)
 
