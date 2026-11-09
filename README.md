@@ -13,14 +13,16 @@ A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [
 PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 生ADCカウント・IMU各軸・照度を本番のセンサー処理へ渡し、変換・補正・取得周期・平均化から表示まで確認します。
 シミュレーションと動画は24FPS・1.0倍速です。
-mainの確認ページは15シナリオを収録し、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
+mainの確認ページは17シナリオを収録し、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
+
+ADC通信異常への対応（[#381](https://github.com/puriso/racing_gauge/pull/381)）はmainへ取り込み済みです。
+[通信異常の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-communication)と[起動時未接続の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-startup)で、5msの変換期限・1秒間隔の再接続・正常復帰を確認できます。
 
 現在レビュー中の変更には、専用の確認ページがあります。mainへ取り込まれた機能とは区別してください。
 
 | PR | 追加内容と確認ページ |
 | --- | --- |
 | [#380](https://github.com/puriso/racing_gauge/pull/380) | LOWの再発・保持を修正し、発生履歴Wを左下に保持。詳細画面から戻るとWを消去。[W履歴の動画](https://puriso.github.io/racing_gauge/previews/pr-380/5139c7b3f342fad1ef6a116c73d7f90c1f6d7ccf/#warning-history) |
-| [#381](https://github.com/puriso/racing_gauge/pull/381) | ADC通信の5ms変換期限・1秒再接続と正常復帰。[通信異常の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-communication)・[起動時未接続の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-startup) |
 
 [Real-time visual review](https://puriso.github.io/racing_gauge/): continuous pressure changes, circuit pressure drops,
 racing-mode transitions, and heating/cooling scenarios. All videos play at normal speed.
@@ -40,6 +42,7 @@ racing-mode transitions, and heating/cooling scenarios. All videos play at norma
 
 - **低油圧警告**：水平Gが1.0 Gを超え、表示用の油圧が3.0 bar以下の状態が500ms継続すると、`LOW`を表示します。警告条件の最終検知から3秒間の表示保持を設けています。
 - **レーシングモード**：水平Gが1.0 G以上の状態が100ms継続すると、3分間、輝度を最大にして`R`を表示します。
+- **ADC通信異常への対応**：変換完了待ちは5msで打ち切り、通信失敗後は1秒間隔で再接続します。正常取得に戻るまで温度・油圧を異常時の値として扱います。
 - **自動調光**：周囲光に応じて3段階の輝度に切り替えます。初期設定では有効です。
 - **デモモード**：外付けADC・センサーを接続せずに表示を確認できます。初期設定では無効です。
 
@@ -189,6 +192,7 @@ DinBaseは別の充電ICも搭載するため、底座を含むすべての充�
 油圧は各フレームで取得し、直近5サンプルの平均に平滑化を適用します。
 水温・油温はそれぞれ500msごとに取得し、直近2サンプル、約1秒分を平均してから表示を平滑化します。
 温度平均は新しいサンプルが入る500msごとに更新されます。
+通信失敗・温度異常時は温度バッファを200℃で初期化し、復帰時は最初の正常値から平均化を再開します。通信失敗時の油圧バッファは0へ初期化します。
 
 低油圧警告・バーの赤色しきい値は[src/modules/low_warning.cpp](src/modules/low_warning.cpp)と[src/modules/display.cpp](src/modules/display.cpp)、
 温度の取得間隔・換算係数は[src/modules/sensor.cpp](src/modules/sensor.cpp)で定義しています。
@@ -241,7 +245,7 @@ ADC入力で4.9V以上の過電圧を検出した場合などは、油圧を0扱
 
 入力電圧が換算可能な範囲を外れる場合は、内部で200°Cを異常値として使用します。
 表示側には199°C以上を0扱いにする処理があります。動作範囲外という入力の分類と、製品側の異常判定は別です。
-通信失敗時の温度平均の初期化・正常値からの復帰は、レビュー中の[#381](https://github.com/puriso/racing_gauge/pull/381)で扱います。
+通信失敗時は温度平均のバッファを異常値で初期化し、復帰時に正常値から再開します。異常値を正常な温度平均へ混ぜたままにしません。
 
 センサーの型番だけで測定精度が決まるわけではありません。
 使用するセンサーの特性、基準抵抗、実際の電源電圧・配線の電圧降下に合わせて、換算係数と`VOLTAGE_DROP`を確認してください。
@@ -254,6 +258,7 @@ ADC入力で4.9V以上の過電圧を検出した場合などは、油圧を0扱
 | パス | 役割 |
 | --- | --- |
 | [src/main.cpp](src/main.cpp) | 初期化・フレーム制御・タッチ操作 |
+| [src/modules/adc_reader.cpp](src/modules/adc_reader.cpp) | ADC通信・5ms変換期限・1秒間隔の再接続 |
 | [src/modules/sensor.cpp](src/modules/sensor.cpp) | ADC・IMU取得、換算、サンプル管理 |
 | [src/modules/display.cpp](src/modules/display.cpp) | ゲージ・詳細画面・最高値 |
 | [src/modules/low_warning.cpp](src/modules/low_warning.cpp) | 低油圧警告・イベント情報 |
@@ -266,12 +271,12 @@ ADC入力で4.9V以上の過電圧を検出した場合などは、油圧を0扱
 [GitHub Actions](.github/workflows/pio-build.yml)では、CoreS3向けファームウェアをビルドし、`firmware`アーティファクトとして保存します。
 Markdownだけの変更は、現在のワークフローでは実行対象外です。
 
-現在レビュー中なのは、低油圧警告とADC通信異常の改善です。内容と動画は冒頭のPR一覧から確認できます。
+mainのCIではADC通信異常・再接続の本番C++テスト11件も実行します。ローカルでの手順は[test/adc_reader/README.md](test/adc_reader/README.md)を参照してください。
+現在レビュー中なのは低油圧警告の改善です。内容と動画は冒頭のPR一覧から確認できます。
 
 | PR | 検証する内容 |
 | --- | --- |
 | [#380](https://github.com/puriso/racing_gauge/pull/380) | 再発・500ms判定・3秒保持・32ビット時刻折り返し、W履歴と詳細画面からの復帰時リセット |
-| [#381](https://github.com/puriso/racing_gauge/pull/381) | 起動時未接続・通信失敗・5ms変換期限・1秒再接続、温度平均の復帰 |
 
 旧#378・#382は未マージで終了しています。#379は#378のブランチへ取り込まれた変更で、mainへの適用済み機能とは扱いません。
 各PRに固有のテストコマンドは、そのPRの本文とブランチ上のガイドを参照してください。
@@ -324,10 +329,9 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. A zero reading can also represent a detected fault.
 
 The sensor table above describes the firmware's conversion model, not manufacturer calibration data.
-Main includes fifteen 24 FPS real-time preview scenarios, including raw ADC sweeps, disconnected signals, and temperature boundaries.
-Pending [#380](https://github.com/puriso/racing_gauge/pull/380) adds a latched W cleared when leaving the detail screen;
-[#381](https://github.com/puriso/racing_gauge/pull/381) adds bounded ADC waits and reconnection, with dedicated communication-failure videos.
-These pending behaviors are separate from main. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
+Main includes seventeen 24 FPS real-time preview scenarios, including raw ADC sweeps, disconnected signals, temperature boundaries, and ADC communication failures.
+ADC waits are bounded to 5ms and reconnection is attempted at one-second intervals; temperature recovery starts from the first valid sample.
+Pending [#380](https://github.com/puriso/racing_gauge/pull/380) adds a latched W cleared when leaving the detail screen. W history is separate from the behavior on main. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
 Hardware accuracy and vehicle behavior require separate verification.
 
 ## ライセンス / License
