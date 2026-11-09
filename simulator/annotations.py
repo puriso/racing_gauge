@@ -41,13 +41,20 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         ('Pressure OV', 'YES' if expected['sensor']['pressure_fault'] else 'NO',
          'YES' if sample['sensor']['pressure_fault'] else 'NO'),
     ]
+    if scenario in ("adc-startup", "adc-communication"):
+        rows.append(("ADC link", "UP" if expected["sensor"]["adc_connected"] else "DOWN", "UP" if sample["sensor"]["adc_connected"] else "DOWN"))
     for index, (name, wanted, observed) in enumerate(rows):
-        y = 78 + index * 28
+        y = 78 + index * 25
         label(352, y, name, font=small)
         label(466, y, str(wanted), '#a7dfb4')
         label(552, y, str(observed), '#8fc5ff')
     label(352, 285, sample.get('case', 'MENU' if sample['menu'] else 'GAUGES'), '#dfcc9d', font=small)
-    if 'input_temperature_c' in sample:
+    if scenario in ('adc-startup', 'adc-communication'):
+        modes = ('OK', 'NO DEVICE', 'BUSY', 'CONFIG WRITE FAIL', 'STATUS READ FAIL', 'RESULT READ FAIL', 'SECOND RESULT FAIL')
+        state = sample['sensor']
+        label(16, 297, f"I2C {modes[sample['raw']['adc_fault']]} | begin attempts {state['adc_begin_calls']} | virtual poll wait {state['adc_wait_ms']}ms", font=small)
+        label(16, 309, f"LAST ADC {state['adc_last'][:3]} | successful conversion reads {state['adc_reads'][:3]}", font=small)
+    elif 'input_temperature_c' in sample:
         oil, water = sample['input_temperature_c']
         label(16, 297, f'INPUT C (pre-avg): {oil:.2f} / {water:.2f}', font=small)
     else:

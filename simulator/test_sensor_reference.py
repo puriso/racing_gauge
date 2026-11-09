@@ -66,6 +66,15 @@ class SensorReferenceTest(unittest.TestCase):
         final = self.sensor.step(2041, self.raw)
         self.assertAlmostEqual(final['oil_c'], 95.05905, places=4)
 
+    def test_temperature_fault_clears_buffers_and_recovery_restarts_averaging(self):
+        self.settle()
+        self.raw['adc'][0] = 0
+        fault = self.sensor.step(1541, self.raw)
+        self.assertEqual(fault['oil_c'], 200)
+        self.raw['adc'][0] = 168
+        recovered = self.sensor.step(2041, self.raw)
+        self.assertAlmostEqual(recovered['oil_c'], 95.05905, places=4)
+
     def test_axis_bias_direction_and_vertical_exclusion(self):
         self.settle()
         for axes, direction in [([2.125, -0.0625, 1], 'Front'), ([-1.875, -0.0625, 1], 'Rear'),
