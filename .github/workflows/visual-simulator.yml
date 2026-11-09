@@ -19,7 +19,7 @@ on:
       scenario:
         description: '録画シナリオ'
         type: choice
-        options: [all, circuit, racing, ambient, raw-faults, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
+        options: [all, sensor-disconnect, temperature-high, temperature-low, adc-steps, circuit, racing, ambient, raw-faults, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
         default: all
 
 permissions:
@@ -77,7 +77,7 @@ jobs:
           PRのコメントにある **等速の確認ページを開く** から、GitHub Pagesで直接確認できます。
           全PNGは **Artifacts → visual-simulator** からダウンロードできます。
           シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
-          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさなど、11シナリオを等速で確認できます。
+          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさ・生ADCの1カウント往復など、15シナリオを等速で確認できます。
           動画の画面外に生ADCカウント・電圧・IMU各軸・変換と平滑化の期待値・照度・輝度の期待／実際を表示します。
           更新・録画は24FPS、全区間1.0倍速です。FPS計測・比較機能は含めません。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
@@ -147,11 +147,11 @@ jobs:
           number, sha = os.environ['PR_NUMBER'], os.environ['EXPECTED_SHA']
           assert re.fullmatch(r'[1-9][0-9]*', number)
           assert re.fullmatch(r'[0-9a-f]{40}', sha)
-          scenarios = 'circuit|racing|ambient|raw-faults|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
+          scenarios = 'sensor-disconnect|temperature-high|temperature-low|adc-steps|circuit|racing|ambient|raw-faults|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
           allowed = re.compile(rf'index\.html|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|poster\.png|inputs\.json)')
           files, total = [], 0
           entries = list(source.rglob('*'))
-          if len(entries) > 60:
+          if len(entries) > 80:
               raise ValueError('公開ファイルが多すぎます')
           for entry in entries:
               info = entry.lstat()
@@ -232,7 +232,7 @@ jobs:
         if: steps.current.outputs.publish == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
-      - name: PRへ確認ページのリンクを作成・更新
+      - name: PRへ確認ページの更新を通知
         if: steps.current.outputs.publish == 'true'
         uses: actions/github-script@v8
         env:
@@ -249,17 +249,21 @@ jobs:
             if (!base || !base.startsWith('https://')) throw new Error('公開URLがありません');
             const url = new URL(`previews/pr-${issue_number}/${expectedSha}/`, base).href;
             const marker = '<!-- racing-gauge-sdl-recording -->';
-            const body = [marker, '### SDL 等速での動作確認', '',
+            const attempt = process.env.GITHUB_RUN_ATTEMPT || '1';
+            const notification = `<!-- racing-gauge-sdl-notification:${context.runId}:${attempt} -->`;
+            const body = [marker, notification, '### 確認ページを更新しました', '',
               `[等速の確認ページを開く](${url})`, '',
               'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
               '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面、照度と調光を確認できます。',
+              '油温・水温・油圧の断線相当、200℃以上・PDF00903Sの動作下限-20℃前後の入力と復帰も、入力換算値と実表示を並べて確認できます。',
+              '生ADCを毎フレーム1カウントずつ増減させ、本番の取得周期のまま中間値を確認できます。',
               '動画の画面外に生ADC・電圧・IMU各軸・取得と平滑化の期待値を表示し、本番センサー処理を通しています。', '',
               '**24FPS・1.0倍速**で全シナリオを確認できます。FPS計測・比較機能は削除しています。', '',
               `[全PNG・MP4をダウンロード](${process.env.ARTIFACT_URL})`, '',
               `対象: ${expectedSha.slice(0, 7)} · [CIの実行](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`,
-              'このURLは対象コミットの録画です。再検証時はこのコメントを更新します。',
+              `CI実行回数: ${attempt}。このURLは対象コミットの録画です。公開に成功するたびに新しいコメントでお知らせします。`,
             ].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
-            const previous = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.includes(marker));
-            if (previous) await github.rest.issues.updateComment({owner, repo, comment_id: previous.id, body});
-            else await github.rest.issues.createComment({owner, repo, issue_number, body});
+            // 同じCI実行の通知だけ重複を避け、過去の通知は残す。
+            if (comments.some(c => c.user?.login === 'github-actions[bot]' && c.body?.includes(notification))) return;
+            await github.rest.issues.createComment({owner, repo, issue_number, body});

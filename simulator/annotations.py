@@ -2,6 +2,7 @@
 
 from PIL import Image, ImageDraw, ImageFont
 from timing import FRAME_RATE
+from fault_cases import TEMPERATURE_SENSOR_SPEC
 
 SIZE = (640, 540)
 SCREEN_ORIGIN = (16, 44)
@@ -22,7 +23,11 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     def label(x, y, text, color='#e9edf3', font=normal):
         draw.text((x, y), text, fill=color, font=font)
 
-    label(16, 12, f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x')
+    heading = f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x'
+    if 'input_temperature_c' in sample:
+        spec = TEMPERATURE_SENSOR_SPEC
+        heading += f" | PDF00903S op {spec['minimum_c']:g}..{spec['maximum_c']:g}C"
+    label(16, 12, heading)
     label(352, 48, 'STATE', '#a7dfb4')
     label(466, 48, 'EXPECT', '#a7dfb4')
     label(552, 48, 'ACTUAL', '#8fc5ff')
@@ -41,8 +46,12 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         label(352, y, name, font=small)
         label(466, y, str(wanted), '#a7dfb4')
         label(552, y, str(observed), '#8fc5ff')
-    label(352, 285, 'MENU' if sample['menu'] else 'GAUGES', '#dfcc9d')
-    label(16, 297, 'Production screen 320 x 240 (original pixels)', font=small)
+    label(352, 285, sample.get('case', 'MENU' if sample['menu'] else 'GAUGES'), '#dfcc9d', font=small)
+    if 'input_temperature_c' in sample:
+        oil, water = sample['input_temperature_c']
+        label(16, 297, f'INPUT C (pre-avg): {oil:.2f} / {water:.2f}', font=small)
+    else:
+        label(16, 297, 'Production screen 320 x 240 (original pixels)', font=small)
     draw.line((16, 322, 624, 322), fill='#354353')
     label(16, 329, 'SIGNAL')
     label(188, 329, 'RAW SENSOR / VOLTAGE', '#8fc5ff')

@@ -15,12 +15,34 @@ from datetime import datetime, timezone
 import imageio_ffmpeg
 from PIL import Image, ImageDraw
 
+from adc_steps import validate_adc_steps
 from annotations import SIZE, annotated_frame
+from fault_cases import CASES, validate_fault_inputs
 from reference import add_expectations, check_expectations
 from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "sensor-disconnect": {
+        "title": "油温・水温・油圧の信号断線と復帰", "group": "raw",
+        "description": "油温・水温の断線相当（5V入力）、油圧信号なし相当（0V）、3本同時、復帰を確認。油圧の断線電圧は配線次第のため、0Vに落ちた条件を模擬",
+        "seconds": 40, "snapshots": [0, 4, 4.6, 8, 10, 12, 12.6, 16, 18, 20, 21, 24, 26, 28, 29, 32, 36, 40],
+    },
+    "temperature-high": {
+        "title": "温度異常・200℃以上と復帰", "group": "raw",
+        "description": "生ADC25→24（約197.57→200.30℃）を油温・水温へ順に入力し、ADC1（約583.29℃）も確認。現行コードの199℃判定・平均化・復帰の挙動を表示",
+        "seconds": 40, "snapshots": [0, 4.6, 7, 8, 8.6, 10, 12, 15, 16.6, 19, 20.6, 22, 24, 27, 28.6, 30, 32, 36, 40],
+    },
+    "temperature-low": {
+        "title": "PDF00903Sの動作下限・-20℃前後と復帰", "group": "raw",
+        "description": "PDF00903Sの仕様上の動作下限-20℃を基準に、生ADC1429→1430（約-19.93→-20.04℃）を順に入力。範囲内・範囲外・同時入力・復帰を確認。換算温度はリポジトリのNTCモデルによる参考値",
+        "seconds": 40, "snapshots": [0, 4.6, 7, 8, 8.6, 10, 12, 15, 16.6, 19, 20.6, 22, 24, 27, 28.6, 30, 32, 36, 40],
+    },
+    "adc-steps": {
+        "title": "生ADCを1カウントずつ増減", "group": "raw",
+        "description": "CH0・CH1・CH2を温度から逆算せず直接0→2047→0へ毎フレーム1カウントずつ増減。専用の保持処理は設けず、本番の取得周期・変換・平均化をそのまま確認",
+        "seconds": 173, "snapshots": [0, 2, 2.041, 3, 6, 12, 25, 41, 52, 68, 70, 87.291, 87.333, 120, 160, 172.583, 173],
+    },
     "circuit": {
         "title": "サーキット・2.0Gと急な油圧低下", "group": "pressure",
         "description": "通常は3〜6barを連続往復。瞬間的な2.0Gと0.8barへの急落、継続低下、LOW点灯・保持・回復を確認",
@@ -85,6 +107,12 @@ def running_pressure(seconds):
 
 
 def validate_inputs(metadata):
+    if metadata["scenario"] in CASES:
+        validate_fault_inputs(metadata)
+        return
+    if metadata["scenario"] == "adc-steps":
+        validate_adc_steps(metadata["frames"])
+        return
     # 目標はADC波形を生成するためだけの値。実際の取得値は別途独立モデルと照合する。
     frames = [{**frame, **frame['target']} for frame in metadata["frames"]]
     scenario = metadata["scenario"]
@@ -286,6 +314,7 @@ def encode(directory):
 
 def write_report(output, scenarios):
     columns = ['time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'adc', 'imu', 'pressure_bar',
+               'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
                'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm']
     data = []
@@ -300,10 +329,13 @@ def write_report(output, scenarios):
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))
             values.update({f'expected_{key}': frame['expected'][key] for key in ('oil_c', 'water_c', 'pressure_bar')})
             values.update({key: frame['actual'][key] for key in ('brightness_mode', 'brightness_pwm', 'lux_sample', 'lux_median')})
+            values.update(case_label=frame.get('case_label', ''), input_temperature_c=frame.get('input_temperature_c'),
+                          input_temperature_abnormal=frame.get('input_temperature_abnormal'),
+                          actual_oil_c=frame['actual']['oil_c'], actual_water_c=frame['actual']['water_c'])
             values['expected_brightness_pwm'] = frame['expected']['brightness_pwm']
             frames.append([values[key] for key in columns])
         cues = [frame_at_or_after(round(second * 1000)) for second in config['snapshots']]
-        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames})
+        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames, "sensor_spec": metadata.get("temperature_sensor_spec")})
     template = (ROOT / "report.html").read_text()
     payload = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace("<", "\\u003c")
     (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload), encoding="utf-8")
