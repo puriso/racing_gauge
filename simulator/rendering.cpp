@@ -3,6 +3,7 @@
 
 // 実機と同じ描画・平滑化・警告処理をリンクする。時刻アダプターはこの翻訳単位に限定する。
 // NOLINTBEGIN(bugprone-suspicious-include)
+#include "../src/modules/adc_reader.cpp"
 #include "../src/modules/backlight.cpp"
 #include "../src/modules/display.cpp"
 #include "../src/modules/low_warning.cpp"
@@ -56,18 +57,6 @@ void writeSensorTelemetry(std::ostream& output)
     }
     output << simulator::adcLastRead[channel];
   }
-  output << "]}";
-}
-
-// SDLではI2C通信だけを生ADCアダプターへ置き換える。期限・再接続はadc_readerの回帰テストで検証する。
-auto readAdcChannel(uint8_t channel, int16_t& value) -> bool
-{
-  if (channel >= simulator::ADC_CHANNEL_COUNT)
-  {
-    return false;
-  }
-  // 本番と同じダミー取得と本取得を通し、変換・平均化はsensor.cppへ任せる。
-  static_cast<void>(Adafruit_ADS1015::readADC_SingleEnded(channel));
-  value = Adafruit_ADS1015::readADC_SingleEnded(channel);
-  return true;
+  output << R"(],"adc_connected":)" << adcInitialized << R"(,"adc_begin_calls":)" << simulator::adcBeginCalls
+         << R"(,"adc_wait_ms":)" << simulator::adcWaitMs << '}';
 }

@@ -3,6 +3,7 @@
 import math
 
 from numeric import float32 as f32
+from adc_bus_reference import AdcBusReference
 
 
 class SensorReference:
@@ -18,6 +19,7 @@ class SensorReference:
         self.last_temp = {'oil_c': 0, 'water_c': 0}
         self.adc_reads = [0] * 4
         self.adc_last = [-1] * 4
+        self.bus = AdcBusReference(self.adc_reads, self.adc_last)
         self.imu_start = 0
         self.offset_count = 0
         self.offset = [0.0] * 3
@@ -47,10 +49,8 @@ class SensorReference:
         return f32(kelvin - f32(273.16))
 
     def read(self, adc, channel):
-        # ダミー変換とセトリング後の本取得を、それぞれ1回として検証する。
-        self.adc_reads[channel] += 2
-        self.adc_last[channel] = adc[channel]
-        return self.voltage(adc[channel])
+        value = self.bus.read(adc, channel)
+        return self.voltage(value) if value is not None else None
 
     def update_imu(self, now, axes):
         if not self.imu_ready:
@@ -77,16 +77,20 @@ class SensorReference:
 
     def step(self, now, raw):
         adc, axes = raw['adc'], [f32(value) for value in raw['imu']]
+        self.bus.frame(now, raw.get('adc_fault', 0))
         if self.update_imu(now, axes):
             voltage = self.read(adc, self.settings['pressure_channel']) if self.enabled['pressure'] else 0.0
-            self.pressure_fault = voltage >= f32(4.9) if self.enabled['pressure'] else False
-            pressure = self.pressure(voltage) if self.enabled['pressure'] else 0.0
+            self.pressure_fault = voltage is not None and voltage >= f32(4.9) if self.enabled['pressure'] else False
+            if voltage is None:
+                self.buffers['pressure_bar'] = [0.0] * len(self.buffers['pressure_bar'])
+            pressure = self.pressure(voltage) if self.enabled['pressure'] and voltage is not None else 0.0
             self.buffers['pressure_bar'][self.indices['pressure_bar']] = pressure
             self.indices['pressure_bar'] = (self.indices['pressure_bar'] + 1) % len(self.buffers['pressure_bar'])
-            for key, sensor, channel in [('oil_c', 'oil_temp', 'oil_channel'), ('water_c', 'water_temp', 'water_channel')]:
+            for key, sensor, channel in [('water_c', 'water_temp', 'water_channel'), ('oil_c', 'oil_temp', 'oil_channel')]:
                 if now - self.last_temp[key] < self.settings['temp_interval_ms']:
                     continue
-                value = self.temperature(self.read(adc, self.settings[channel])) if self.enabled[sensor] else 0.0
+                voltage = self.read(adc, self.settings[channel]) if self.enabled[sensor] else 0.0
+                value = 200.0 if voltage is None else self.temperature(voltage) if self.enabled[sensor] else 0.0
                 if not math.isfinite(value) or value >= 199:
                     self.buffers[key] = [200.0] * len(self.buffers[key])
                     self.indices[key] = 0
@@ -106,4 +110,5 @@ class SensorReference:
                 total = f32(total + value)
             averages[key] = f32(total / len(values))
         return {**averages, 'g': self.g, 'g_direction': self.direction, 'pressure_fault': self.pressure_fault,
-                'adc_reads': self.adc_reads.copy(), 'adc_last': self.adc_last.copy()}
+                'adc_reads': self.adc_reads.copy(), 'adc_last': self.adc_last.copy(),
+                'adc_connected': self.bus.connected, 'adc_begin_calls': self.bus.attempts, 'adc_wait_ms': self.bus.wait}

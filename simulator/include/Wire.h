@@ -1,3 +1,7 @@
 #pragma once
 
-// I2CへのアクセスはADC・IMUアダプターで置き換える。バスの電気特性・待ち時間は再現しない。
+// 外部I2C装置への参照だけを渡す。
+struct TwoWire
+{
+};
+inline TwoWire Wire;

@@ -106,7 +106,7 @@ def add_expectations(directory, metadata):
         for tick, row in enumerate(csv.DictReader(source)):
             now = int(row['time_ms'])
             raw = {'adc': [int(row[f'adc{channel}']) for channel in range(4)],
-                   'imu': [float(row[axis]) for axis in ('ax', 'ay', 'az')], 'als': int(row['lux'])}
+                   'imu': [float(row[axis]) for axis in ('ax', 'ay', 'az')], 'als': int(row['lux']), 'adc_fault': int(row['adc_fault'])}
             if (now != frame_time_ms(tick) or not all(0 <= value <= 2047 for value in raw['adc'])
                     or not all(math.isfinite(value) for value in raw['imu'])):
                 raise ValueError('期待値の計算に使う24FPS入力が欠損・不正です')
@@ -118,6 +118,7 @@ def add_expectations(directory, metadata):
             expected['voltage'] = [round(sensor.voltage(value), 6) for value in raw['adc']]
             frame = frames[tick]
             if (frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
+                    or frame['raw']['adc_fault'] != raw['adc_fault']
                     or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
                     or any(not math.isclose(before, after, abs_tol=0.000001)
                            for before, after in zip(frame['raw']['imu'], raw['imu']))):
@@ -138,7 +139,7 @@ def check_expectations(frame):
     for key, tolerance in [('oil_c', 0.002), ('water_c', 0.002), ('pressure_bar', 0.0001)]:
         if not math.isclose(frame['sensor'][key], expected['sensor'][key], abs_tol=tolerance):
             raise RuntimeError(f'ADC変換・取得周期・平均化の期待値が一致しません: {key}, {frame}')
-    for key in ('pressure_fault', 'adc_reads', 'adc_last'):
+    for key in ('pressure_fault', 'adc_reads', 'adc_last', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms'):
         if frame['sensor'][key] != expected['sensor'][key]:
             raise RuntimeError(f'取得・異常判定の期待値が一致しません: {key}, {frame}')
     if (not math.isclose(frame['g'], expected['sensor']['g'], abs_tol=0.00001)

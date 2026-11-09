@@ -20,6 +20,7 @@
 #include "adc_steps.hpp"
 #include "compat.hpp"
 #include "fault_inputs.hpp"
+#include "modules/adc_reader.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
 #include "modules/racing_indicator.h"
@@ -76,6 +77,14 @@ struct Targets
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
+  if (options().scenario == "adc-communication")
+  {
+    return 56;
+  }
+  if (options().scenario == "adc-startup")
+  {
+    return 16;
+  }
   if (options().scenario == "adc-steps")
   {
     return 173;
@@ -210,6 +219,10 @@ auto sample(double ratio) -> Targets
     return {0.0F, 0.0F, 0.0F, 0.0F, false};
   }
   const float pressure = runningPressure(seconds);
+  if (options().scenario == "adc-startup" || options().scenario == "adc-communication")
+  {
+    return {100.0F, 95.0F, pressure, 0.0F, false};
+  }
   if (simulator::isFaultScenario(options().scenario))
   {
     return {100.0F, 95.0F, pressure, 0.0F, false};
@@ -346,6 +359,10 @@ auto makeInputs(unsigned int frame, const Targets& target, float seconds) -> Inp
 
 void inject(const Inputs& input)
 {
+  simulator::adcWaitMs = 0;
+  simulator::adcFault = (options().scenario == "adc-communication" || options().scenario == "adc-startup")
+                            ? simulator::communicationFault(simulator::nowMs, options().scenario == "adc-startup")
+                            : simulator::AdcFault::Healthy;
   simulator::adcChannels = input.adc;
   simulator::acceleration = input.imu;
   simulator::ambientLux = input.lux;
@@ -365,7 +382,7 @@ void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& ta
     trace << ',' << axis;
   }
   trace << ',' << static_cast<int>(showingMenu) << ',' << input.lux << ',' << target.oil << ',' << target.water << ','
-        << target.pressure << ',' << target.acceleration << '\n';
+        << target.pressure << ',' << target.acceleration << ',' << static_cast<int>(simulator::adcFault) << '\n';
 }
 
 void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs& input, const Targets& target,
@@ -381,7 +398,7 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
     manifest << input.adc[channel];
   }
   manifest << R"(],"imu":[)" << input.imu[0] << ',' << input.imu[1] << ',' << input.imu[2] << R"(],"als":)" << input.lux
-           << '}';
+           << R"(,"adc_fault":)" << static_cast<int>(simulator::adcFault) << '}';
   if (options().scenario != "adc-steps")
   {
     manifest << R"(,"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
@@ -490,6 +507,8 @@ void initializeDisplay()
     throw std::runtime_error("Sprite allocation failed");
   }
   resetGaugeState();
+  simulator::adcFault = options().scenario == "adc-startup" ? simulator::AdcFault::Missing : simulator::AdcFault::Healthy;
+  initializeAdc();
   updateBacklightLevel();
 }
 
@@ -563,7 +582,8 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       trace.open(options().capture / "trace.csv");
       trace.exceptions(std::ios::failbit | std::ios::badbit);
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
-      trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g\n";
+      trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g,adc_"
+               "fault\n";
       manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
                << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)"
                << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)"
@@ -648,7 +668,8 @@ auto main(int argc, char** argv) -> int
       if (argument == "--help")
       {
         std::cout << "Usage: program [--scenario "
-                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|adc-steps|sensor-disconnect|"
+                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|adc-communication|adc-"
+                     "startup|adc-steps|sensor-disconnect|"
                      "temperature-high|temperature-low|startup|warm-start|menu] "
                      "[--seconds N] [--capture "
                      "NEW_DIRECTORY]\n";
@@ -684,8 +705,9 @@ auto main(int argc, char** argv) -> int
     if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
         options().scenario != "warm-start" && options().scenario != "menu" && options().scenario != "cooldown" &&
         options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing" &&
-        options().scenario != "ambient" && options().scenario != "raw-faults" && options().scenario != "adc-steps" &&
-        !simulator::isFaultScenario(options().scenario))
+        options().scenario != "ambient" && options().scenario != "raw-faults" &&
+        options().scenario != "adc-communication" && options().scenario != "adc-startup" &&
+        options().scenario != "adc-steps" && !simulator::isFaultScenario(options().scenario))
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }
