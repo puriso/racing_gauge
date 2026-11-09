@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Racing Gauge · 等速で動作確認</title>
+<style>
+:root{color-scheme:dark;font:15px system-ui,sans-serif;background:#10151b;color:#e9edf3}
+*{box-sizing:border-box}body{margin:0}header,main{max-width:1100px;margin:auto;padding:28px 24px}
+header{padding-bottom:12px}h1{margin:8px 0;font-size:clamp(25px,5vw,38px);letter-spacing:-.03em}
+p{line-height:1.8;color:#b6c1cf}a{color:#8fc5ff}button,select{font:inherit;border:1px solid #394555;border-radius:7px;background:#1b2735;color:#e9edf3;padding:8px 12px;cursor:pointer}
+button:hover,button[aria-pressed=true]{border-color:#91c7ff;background:#253d56}button:focus-visible,a:focus-visible{outline:2px solid #91c7ff;outline-offset:3px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}article{background:#17212c;border:1px solid #2c3948;border-radius:12px;padding:22px;margin-bottom:24px;scroll-margin-top:20px}
+h2{font-size:21px;margin:0 0 8px}video{width:640px;max-width:100%;display:block;background:#000;image-rendering:pixelated;border:1px solid #34414f;border-radius:4px}
+.layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(230px,1fr);gap:24px}.readings{font-variant-numeric:tabular-nums;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.reading{background:#101820;border-radius:6px;padding:10px;color:#afbecd}.reading strong{display:block;font-size:21px;color:#f5f8fc;margin-top:4px}.active{color:#ff8e89!important}
+.badge{display:inline-block;color:#a7dfb4;font-size:12px;letter-spacing:.04em;margin-bottom:8px}.cues{display:flex;gap:7px;flex-wrap:wrap}.cues button{font-size:13px;padding:6px 9px}
+details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-width:100%}.fine{font-size:13px;color:#8fa0b3}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.status{color:#a7dfb4;min-height:1.5em}
+@media(max-width:750px){.layout{grid-template-columns:1fr}header,main{padding:20px 14px}article{padding:15px}}
+</style>
+<header>
+  <span class="badge">RACING GAUGE / VISUAL REVIEW</span>
+  <h1>動きと警告を、等速で確認する</h1>
+  <p>油圧の連続変動、最大2.0Gからの急落、Rモードの保持と解除、温度の上昇・下降を確認できます。<br>全動画は<strong>1.0倍速</strong>。3分の保持も実時間どおりで、下の時刻ボタンから確認箇所へ移動できます。</p>
+  <div class="toolbar"><button id="play-all">全シナリオを順に再生</button><button id="stop">すべて一時停止</button><span id="status" class="status" role="status"></span></div>
+  <nav aria-label="シナリオの絞り込み">
+    <button data-filter="all" aria-pressed="true">すべて</button><button data-filter="pressure" aria-pressed="false">油圧・LOW</button><button data-filter="racing" aria-pressed="false">Rモード</button><button data-filter="temperature" aria-pressed="false">温度の往復・降温</button><button data-filter="operation" aria-pressed="false">始動・詳細画面</button>
+  </nav>
+  <p class="fine">本番の描画・平滑化・Rモード・警告処理を実行しています。入力欄は模擬センサー値で、ゲージ表示には平滑化による遅れがあります。録画は10fps。実機FPS・ADC・電源を検証するものではありません。</p>
+</header>
+<main id="scenarios"></main>
+<script type="application/json" id="scenario-data">@@SCENARIOS@@</script>
+<script>
+'use strict';
+const scenarios = JSON.parse(document.getElementById('scenario-data').textContent);
+const videos = [];
+let queue = false;
+const format = value => `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}.${Math.round(value * 10) % 10}`;
+const container = document.getElementById('scenarios');
+for (const scenario of scenarios) {
+  const card = document.createElement('article');
+  card.id = scenario.name;
+  card.dataset.group = scenario.group;
+  card.innerHTML = `<span class="badge">等速 1.0× / ${scenario.seconds}秒 / 検証成功</span><h2></h2><p class="description"></p><div class="layout"><div><video controls playsinline preload="metadata" poster="${scenario.name}/frame-0000.png"><source src="${scenario.name}/recording.mp4" type="video/mp4"></video><div class="readings"><div class="reading">仮想時刻<strong data-value="time"></strong></div><div class="reading">G入力<strong data-value="g"></strong></div><div class="reading">油圧入力<strong data-value="pressure"></strong></div><div class="reading">R / LOW 表示<strong data-value="mode"></strong></div></div></div><div><h3>確認時刻へ移動</h3><div class="cues"></div><p><a href="${scenario.name}/recording.mp4">MP4を直接開く</a><br><a href="${scenario.name}/inputs.json">入力と判定結果のJSON</a></p><p class="fine">R / LOWは転送先の画素も検証済み。再生時刻に対応する入力と実際の表示状態を表示します。</p></div></div><details><summary>代表フレームを確認する</summary><img loading="lazy" src="${scenario.name}/contact-sheet.png" alt="代表フレーム"></details>`;
+  card.querySelector('h2').textContent = scenario.title;
+  card.querySelector('.description').textContent = scenario.description;
+  const video = card.querySelector('video');
+  video.defaultPlaybackRate = 1;
+  video.playbackRate = 1;
+  const update = () => {
+    const frame = scenario.frames[Math.min(scenario.frames.length - 1, Math.floor(video.currentTime * 10))];
+    card.querySelector('[data-value=time]').textContent = format(frame.time_ms / 1000);
+    card.querySelector('[data-value=g]').textContent = `${frame.g.toFixed(2)} G`;
+    card.querySelector('[data-value=pressure]').textContent = `${frame.pressure_bar.toFixed(2)} bar`;
+    const mode = card.querySelector('[data-value=mode]');
+    mode.textContent = `${frame.r_visible ? 'R 点灯' : 'R 消灯'} / ${frame.low_visible ? 'LOW 点灯' : 'LOW 消灯'}`;
+    mode.classList.toggle('active', frame.r_visible || frame.low_visible);
+  };
+  for (const second of scenario.snapshots) {
+    const button = document.createElement('button');
+    button.textContent = format(second);
+    button.addEventListener('click', () => { video.currentTime = second; update(); });
+    card.querySelector('.cues').append(button);
+  }
+  video.addEventListener('timeupdate', update);
+  video.addEventListener('seeked', update);
+  video.addEventListener('play', () => {
+    for (const other of videos) if (other !== video) other.pause();
+    document.getElementById('status').textContent = `再生中: ${scenario.title}`;
+  });
+  video.addEventListener('ended', () => {
+    if (!queue) return;
+    const next = videos[videos.indexOf(video) + 1];
+    if (next) { next.closest('article').scrollIntoView({behavior: 'smooth'}); next.currentTime = 0; next.play().catch(() => {}); }
+    else { queue = false; document.getElementById('status').textContent = '全シナリオの再生が終了しました'; }
+  });
+  videos.push(video);
+  container.append(card);
+  update();
+}
+for (const button of document.querySelectorAll('[data-filter]')) {
+  button.addEventListener('click', () => {
+    queue = false;
+    for (const item of document.querySelectorAll('[data-filter]')) item.setAttribute('aria-pressed', String(item === button));
+    for (const card of container.children) { card.hidden = button.dataset.filter !== 'all' && card.dataset.group !== button.dataset.filter; if (card.hidden) card.querySelector('video').pause(); }
+  });
+}
+document.getElementById('play-all').addEventListener('click', () => {
+  document.querySelector('[data-filter=all]').click();
+  queue = true;
+  videos[0].currentTime = 0;
+  videos[0].play().catch(() => { queue = false; });
+  videos[0].closest('article').scrollIntoView({behavior: 'smooth'});
+});
+document.getElementById('stop').addEventListener('click', () => { queue = false; videos.forEach(video => video.pause()); document.getElementById('status').textContent = '一時停止中'; });
+</script>
+</html>
