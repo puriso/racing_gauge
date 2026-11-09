@@ -103,6 +103,9 @@ class SensorReference:
                     self.buffers[key][self.indices[key]] = value
                     self.indices[key] = (self.indices[key] + 1) % len(self.buffers[key])
                 self.last_temp[key] = now
+        return self.snapshot()
+
+    def snapshot(self):
         averages = {}
         for key, values in self.buffers.items():
             total = 0.0

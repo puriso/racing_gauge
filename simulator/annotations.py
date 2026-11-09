@@ -27,6 +27,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     if 'input_temperature_c' in sample:
         spec = TEMPERATURE_SENSOR_SPEC
         heading += f" | PDF00903S op {spec['minimum_c']:g}..{spec['maximum_c']:g}C"
+    if sample.get('setup_error'):
+        heading += ' | SETUP / before first loop'
     label(16, 12, heading)
     label(352, 48, 'STATE', '#a7dfb4')
     label(466, 48, 'EXPECT', '#a7dfb4')
@@ -50,7 +52,7 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         label(466, y, str(wanted), '#a7dfb4')
         label(552, y, str(observed), '#8fc5ff')
     if not scenario.startswith('warning-'):
-        label(352, 285, sample.get('case', 'MENU' if sample['menu'] else 'GAUGES'), '#dfcc9d', font=small)
+        label(352, 285, sample.get('case', 'SETUP ERROR' if sample.get('setup_error') else 'MENU' if sample['menu'] else 'GAUGES'), '#dfcc9d', font=small)
     if scenario.startswith('warning-'):
         label(352, 285, 'PR380: ' + expected['warning_state'], '#dfcc9d', font=small)
         observed, wanted = actual['low_event'], expected['low_event']
@@ -78,7 +80,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
                                          ('Oil pressure', 'pressure_bar', 'pressure_channel', 'bar')]:
         channel = sensor_settings[channel_key]
         raw = f'CH{channel} {sample["raw"]["adc"][channel]} / {expected["voltage"][channel]:.3f}V'
-        target = f'{expected["sensor"][key]:.2f} / {expected[key]:.2f} {unit}'
+        filtered = 'not drawn' if expected[key] is None else f'{expected[key]:.2f} {unit}'
+        target = f'{expected["sensor"][key]:.2f} / {filtered}'
         signals.append((name, raw, target))
     axes = '/'.join(f'{axis:+.2f}' for axis in sample['raw']['imu'])
     signals.extend([

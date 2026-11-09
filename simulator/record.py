@@ -47,8 +47,8 @@ SCENARIOS = {
     },
     "adc-startup": {
         "title": "ADC起動時未接続・1秒間隔の再接続と復帰", "group": "raw",
-        "description": "開始時から5秒までADS1015が応答しない条件。ADC未接続でも描画とIMU・照度を更新し、装置の復帰後に正常取得を再開する",
-        "seconds": 16, "snapshots": [0, 1.1, 4, 5, 5.1, 6, 8, 16],
+        "description": "先頭はsetup直後のADS1015初期化失敗画面。初回loopで通常描画へ移り、5秒まで未接続、再接続・正常取得まで確認。初期画面は0秒ボタンと静止画像で確認",
+        "seconds": 16, "snapshots": [0, 0.041, 1.1, 4, 5, 5.1, 6, 8, 16],
     },
     "adc-communication": {
         "title": "ADC通信異常・タイムアウト・再接続と復帰", "group": "raw",
@@ -247,6 +247,15 @@ def warning_visible(image):
                for red, green, blue in image.crop((40, 130, 103, 159)).getdata()) > 100
 
 
+def setup_error_visible(image):
+    # 2行の赤い起動メッセージと、その下にゲージが未描画であることを確認する。
+    def red_count(box):
+        return sum(red > 180 and green < 80 and blue < 80
+                   for red, green, blue in image.crop(box).getdata())
+    return (red_count((0, 0, 300, 16)) > 30 and red_count((0, 16, 300, 32)) > 30
+            and image.crop((0, 40, 320, 240)).getbbox() is None)
+
+
 def history_visible(image):
     return any(red > 180 and green < 80 and blue < 80
                for red, green, blue in image.crop((14, 224, 22, 232)).getdata())
@@ -282,6 +291,7 @@ def convert_and_check(directory):
             seen.add(hashlib.sha256(image.tobytes()).digest())
             image.save(source.with_suffix(".png"))
             frame = frames[index]
+            frame["setup_error_visible"] = setup_error_visible(image)
             frame["low_visible"] = warning_visible(image)
             frame["r_visible"] = racing_visible(image)
             frame["w_visible"] = history_visible(image)
@@ -364,7 +374,7 @@ def encode(directory):
 
 
 def write_report(output, scenarios):
-    columns = ['time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible', 'adc', 'imu', 'pressure_bar',
+    columns = ['time_ms', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible', 'adc', 'imu', 'pressure_bar',
                'low_event', 'expected_low_event', 'warning_state', 'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
                'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
@@ -376,7 +386,7 @@ def write_report(output, scenarios):
         # 列名を共有して数値行にし、24FPSの全区間でもHTMLを直開きできる量に収める。
         frames = []
         for frame in metadata['frames']:
-            values = {key: frame[key] for key in ('time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
+            values = {key: frame[key] for key in ('time_ms', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
             values.update(adc_fault=frame['raw']['adc_fault'])
             values.update({key: frame['sensor'][key] for key in ('adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last')})
             values.update(adc=frame['raw']['adc'], imu=frame['raw']['imu'],
@@ -392,7 +402,7 @@ def write_report(output, scenarios):
             values['expected_brightness_pwm'] = frame['expected']['brightness_pwm']
             frames.append([values[key] for key in columns])
         cues = [frame_at_or_after(round(second * 1000)) for second in config['snapshots']]
-        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames, "sensor_spec": metadata.get("temperature_sensor_spec"), "review": REVIEWS.get(name), "review_spots": review_spots(name, metadata["frames"])})
+        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames, "sensor_spec": metadata.get("temperature_sensor_spec"), "startup_error_title": metadata["startup_error_title"], "startup_error_hint": metadata["startup_error_hint"], "review": REVIEWS.get(name), "review_spots": review_spots(name, metadata["frames"])})
     template = (ROOT / "report.html").read_text()
     payload = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace("<", "\\u003c")
     (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload).replace("@@SPOT_CHECKS@@", (output / "spot-checks.json").read_text().replace("<", "\\u003c")), encoding="utf-8")

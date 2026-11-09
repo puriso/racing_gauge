@@ -40,6 +40,8 @@ class Reference:
         if not self.initialized:
             self.read_light(sample['lux'])
             self.initialized = True
+        if sample.get('setup_error'):
+            return self.snapshot(False)
         if not self.menu and not self.racing and now - self.last_als >= self.settings['als_interval_ms']:
             self.read_light(sample['lux'])
             self.last_als = now
@@ -82,7 +84,11 @@ class Reference:
                 previous = self.filtered.get(key, target)
                 self.filtered[key] = float32(previous + float32(float32(alpha) * float32(target - previous)))
             low = self.warning.step(now, sample['g'], self.filtered['pressure_bar'], sample.get('g_direction', 'Right'))
-        return {**{key: round(value, 4) for key, value in self.filtered.items()},
+        return self.snapshot(low)
+
+    def snapshot(self, low):
+        return {**{key: round(self.filtered[key], 4) if key in self.filtered else None
+                   for key in ('oil_c', 'water_c', 'pressure_bar')},
                 'racing': self.racing, 'low': low, 'warning_history': self.warning.history, 'low_event': self.warning.event.copy(),
                 'warning_state': self.warning.state, 'brightness_mode': self.mode,
                 'brightness_pwm': self.settings['brightness'][self.mode],
@@ -105,14 +111,19 @@ def add_expectations(directory, metadata):
             if (now != frame_time_ms(tick) or not all(0 <= value <= 2047 for value in raw['adc'])
                     or not all(math.isfinite(value) for value in raw['imu'])):
                 raise ValueError('期待値の計算に使う24FPS入力が欠損・不正です')
-            acquired = sensor.step(now, raw)
-            sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als']}
+            setup_error = bool(int(row['setup_error']))
+            if setup_error:
+                sensor.bus.frame(now, raw['adc_fault'])
+                acquired = sensor.snapshot()
+            else:
+                acquired = sensor.step(now, raw)
+            sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als'], 'setup_error': setup_error}
             expected = reference.step(sample)
             expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
                                   for key, value in acquired.items()}
             expected['voltage'] = [round(sensor.voltage(value), 6) for value in raw['adc']]
             frame = frames[tick]
-            if (frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
+            if (frame['setup_error'] != setup_error or frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
                     or frame['raw']['adc_fault'] != raw['adc_fault']
                     or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
                     or any(not math.isclose(before, after, abs_tol=0.000001)
@@ -126,6 +137,8 @@ def add_expectations(directory, metadata):
 
 def check_expectations(frame):
     expected, actual = frame['expected'], frame['actual']
+    if frame['setup_error_visible'] != frame['setup_error']:
+        raise RuntimeError('初期化失敗画面の画素と録画フェーズが一致しません')
     for key in ('brightness_mode', 'brightness_pwm', 'lux_sample', 'lux_median'):
         if actual[key] != expected[key]:
             raise RuntimeError(f'期待する調光状態と実際の設定が一致しません: {key}, {frame}')
@@ -149,5 +162,8 @@ def check_expectations(frame):
         raise RuntimeError(f'低油圧履歴の方向が一致しません: {frame}')
     # 部分描画は油温0.1℃、水温0.05℃、油圧0.05bar未満の変化を保持する。
     for key, tolerance in [('oil_c', 0.1006), ('water_c', 0.0506), ('pressure_bar', 0.0506)]:
-        if not math.isclose(expected[key], actual[key], abs_tol=tolerance):
+        if frame['setup_error']:
+            if expected[key] is not None or actual[key] is not None:
+                raise RuntimeError('初回loop前のゲージ値は未描画です')
+        elif not math.isclose(expected[key], actual[key], abs_tol=tolerance):
             raise RuntimeError(f'平滑化の期待値と描画値の差が更新幅を超えています: {key}, {frame}')

@@ -64,6 +64,22 @@ class ReferenceTest(unittest.TestCase):
         self.assertEqual(self.sample(3100, lux=2, g=1)['brightness_pwm'], 255)
         self.assertEqual(self.sample(183100, lux=2)['brightness_pwm'], 60)
 
+    def test_setup_error_does_not_render_or_start_warning_timers(self):
+        initial = self.sample(0, setup_error=True, g=2, pressure_bar=1, oil_c=200)
+        self.assertIsNone(initial['oil_c'])
+        self.assertIsNone(initial['water_c'])
+        self.assertIsNone(initial['pressure_bar'])
+        self.assertIsNone(self.reference.warning.start)
+        self.assertIsNone(self.reference.g_since)
+        self.assertEqual(self.reference.sample_index, 1)
+
+    def test_first_loop_after_setup_starts_from_first_acquired_values(self):
+        self.sample(0, setup_error=True, pressure_bar=0)
+        first = self.sample(41)
+        self.assertEqual(first['pressure_bar'], 5)
+        self.assertEqual(first['oil_c'], 100)
+        self.assertEqual(self.reference.sample_index, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

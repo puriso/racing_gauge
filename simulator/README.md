@@ -279,3 +279,10 @@ python test/adc_reader/run_tests.py --check-legacy
 python simulator/record.py --scenario adc-communication
 python simulator/record.py --scenario adc-startup
 ```
+
+## 初回のADC初期化エラー画面
+
+`adc-startup`の先頭フレーム（0秒）はsetup直後・初回loop前を収録します。実機と共通の描画関数で、赤い `ADS1015 init failed` / `Check wiring` を描きます。
+確認ページの「初回エラー・loop前」で停止でき、静止画像（poster.png）も直接開けます。続く「初回loop」では通常ゲージへ移り、未接続時の取得値・1秒間隔の再接続・5秒以降の正常復帰を確認します。
+
+録画は24FPS・等速のままです。エラー画面はsetup直後の1フレームとして記録し、確認用の長時間保持は設けません。未描画のゲージ値はJSONでnull、確認ページで「未描画（初回loop前）」と表示します。初回loop前に取得・平均化・平滑化を実行した数値としては扱いません。
