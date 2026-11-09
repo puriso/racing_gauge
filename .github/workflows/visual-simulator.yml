@@ -225,7 +225,7 @@ jobs:
         if: steps.current.outputs.publish == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
-      - name: PRへ確認ページのリンクを作成・更新
+      - name: PRへ確認ページの更新を通知
         if: steps.current.outputs.publish == 'true'
         uses: actions/github-script@v8
         env:
@@ -242,15 +242,17 @@ jobs:
             if (!base || !base.startsWith('https://')) throw new Error('公開URLがありません');
             const url = new URL(`previews/pr-${issue_number}/${expectedSha}/`, base).href;
             const marker = '<!-- racing-gauge-sdl-recording -->';
-            const body = [marker, '### SDL 等速での動作確認', '',
+            const attempt = process.env.GITHUB_RUN_ATTEMPT || '1';
+            const notification = `<!-- racing-gauge-sdl-notification:${context.runId}:${attempt} -->`;
+            const body = [marker, notification, '### 確認ページを更新しました', '',
               `[等速の確認ページを開く](${url})`, '',
               'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
               '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面を確認できます。', '',
               `[全PNG・MP4をダウンロード](${process.env.ARTIFACT_URL})`, '',
               `対象: ${expectedSha.slice(0, 7)} · [CIの実行](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`,
-              'このURLは対象コミットの録画です。再検証時はこのコメントを更新します。',
+              `CI実行回数: ${attempt}。このURLは対象コミットの録画です。公開に成功するたびに新しいコメントでお知らせします。`,
             ].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
-            const previous = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.includes(marker));
-            if (previous) await github.rest.issues.updateComment({owner, repo, comment_id: previous.id, body});
-            else await github.rest.issues.createComment({owner, repo, issue_number, body});
+            // 同じCI実行の通知だけ重複を避け、過去の通知は残す。
+            if (comments.some(c => c.user?.login === 'github-actions[bot]' && c.body?.includes(notification))) return;
+            await github.rest.issues.createComment({owner, repo, issue_number, body});
