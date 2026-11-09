@@ -17,9 +17,9 @@ inline constexpr unsigned int ADC_STEPS_WINDOW_COUNT = 12;
 inline constexpr std::array<int16_t, 4> ADC_STEPS_INITIAL{151, 168, 551, 0};
 inline constexpr std::array<std::array<int16_t, ADC_STEPS_WINDOW_COUNT>, 3> ADC_STEPS_CENTERS{
     {
-        {8, 40, 80, 120, 151, 200, 333, 800, 1300, 1616, 1633, 2039},
-        {8, 80, 120, 151, 168, 250, 333, 800, 1300, 1616, 1633, 2039},
-        {8, 162, 551, 940, 1199, 1400, 1555, 1616, 1633, 1800, 2000, 2039},
+        {8, 24, 39, 80, 98, 151, 237, 299, 1326, 1616, 1633, 2039},
+        {8, 24, 80, 109, 121, 168, 211, 299, 1326, 1616, 1633, 2039},
+        {8, 162, 292, 422, 551, 940, 1199, 1458, 1588, 1620, 1633, 2039},
     },
 };
 // NOLINTEND(readability-magic-numbers)

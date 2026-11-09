@@ -39,6 +39,14 @@ class AdcStepsTest(unittest.TestCase):
         self.assertEqual(self.frames[48 + 32 * 12]['raw']['adc'], [0, 0, 0, 0])
         self.assertEqual(self.frames[48 + (11 * 33 + 16) * 12]['raw']['adc'], [2047, 2047, 2047, 0])
 
+    def test_windows_include_the_adjacent_counts_at_display_and_fault_boundaries(self):
+        boundaries = ((24, 39, 80, 98, 237), (24, 80, 109, 121, 211),
+                      (162, 551, 1199, 1458, 1588, 1633))
+        for channel, counts in enumerate(boundaries):
+            for count in counts:
+                self.assertTrue(any(center - 8 < count < center + 8 for center in CENTERS[channel]),
+                                (channel, count))
+
     def test_rejects_skipped_intermediate_count(self):
         frames = copy.deepcopy(self.frames)
         frames[60]['raw']['adc'][0] = 2
