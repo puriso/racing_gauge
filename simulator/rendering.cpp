@@ -19,7 +19,9 @@ void writeDisplayTelemetry(std::ostream& output)
   output << R"({"oil_c":)" << displayCache.oilTemp << R"(,"water_c":)" << displayCache.waterTempAvg << R"(,"pressure_bar":)"
          << displayCache.pressureAvg << R"(,"brightness_mode":)" << static_cast<int>(currentBrightnessMode)
          << R"(,"brightness_pwm":)" << static_cast<int>(display.getBrightness()) << R"(,"lux_sample":)" << latestLux
-         << R"(,"lux_median":)" << medianLuxValue << '}';
+         << R"(,"lux_median":)" << medianLuxValue << R"(,"low_event":{"g":)" << lastLowEventG << R"(,"pressure_bar":)"
+         << lastLowEventPressure << R"(,"duration_s":)" << lastLowEventDuration << R"(,"direction":")" << lastLowEventDir
+         << R"("}})";
 }
 
 void writeSensorSettings(std::ostream& output)

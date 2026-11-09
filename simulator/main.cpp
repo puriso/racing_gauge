@@ -70,10 +70,20 @@ struct Targets
   int lux = simulator::DEFAULT_AMBIENT_LUX;
 };
 
+auto isWarningReview() -> bool
+{
+  return options().scenario == "warning-repeat" || options().scenario == "warning-pending" ||
+         options().scenario == "warning-brief";
+}
+
 // シナリオの物理量と時点を、README の表と対応するリテラルで記載する。
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
+  if (isWarningReview())
+  {
+    return 12;
+  }
   if (options().scenario == "ramp")
   {
     return 200;
@@ -194,12 +204,36 @@ auto sampleRawFaults(float seconds, float pressure) -> Targets
   return {100.0F, 95.0F, pressure, seconds >= 12.0F && seconds < 14.0F ? 2.0F : 0.0F, false};
 }
 
+auto sampleWarningReview(float seconds) -> Targets
+{
+  const bool first = seconds >= 2.0F && seconds < 3.5F;
+  const bool repeat = options().scenario == "warning-repeat" && seconds >= 4.0F && seconds < 5.5F;
+  const bool pending = options().scenario == "warning-pending" && seconds >= 6.0F && seconds < 7.5F;
+  const bool brief = options().scenario == "warning-brief" && seconds >= 4.0F && seconds < 4.25F;
+  const bool second = repeat || pending || brief;
+  float acceleration = 0.0F;
+  if (first)
+  {
+    acceleration = 1.2F;
+  }
+  else if (second)
+  {
+    acceleration = 1.5F;
+  }
+  const float pressure = first || second ? 1.0F : runningPressure(seconds);
+  return {100.0F, 95.0F, pressure, acceleration, false};
+}
+
 auto sample(double ratio) -> Targets
 {
   // 時間指定を変えても同じ順序のシナリオを伸縮する。
   const auto progress = static_cast<float>(ratio);
   const auto seconds = static_cast<float>(ratio * defaultSeconds());
   const float pressure = runningPressure(seconds);
+  if (isWarningReview())
+  {
+    return sampleWarningReview(seconds);
+  }
   if (options().scenario == "circuit")
   {
     return sampleCircuit(progress, seconds, pressure);
@@ -619,7 +653,8 @@ auto main(int argc, char** argv) -> int
       if (argument == "--help")
       {
         std::cout << "Usage: program [--scenario "
-                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|startup|warm-start|menu] "
+                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|warning-repeat|warning-"
+                     "pending|warning-brief|startup|warm-start|menu] "
                      "[--seconds N] [--capture "
                      "NEW_DIRECTORY]\n";
         return 0;
@@ -654,7 +689,7 @@ auto main(int argc, char** argv) -> int
     if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
         options().scenario != "warm-start" && options().scenario != "menu" && options().scenario != "cooldown" &&
         options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing" &&
-        options().scenario != "ambient" && options().scenario != "raw-faults")
+        options().scenario != "ambient" && options().scenario != "raw-faults" && !isWarningReview())
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

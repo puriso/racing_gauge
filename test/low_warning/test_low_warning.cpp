@@ -65,7 +65,7 @@ static void briefDipPreservesLastEvent()
   update(100, 1.2F, 2.0F);
   update(600, 1.2F, 2.0F);
   update(700, 0.0F, 5.0F);
-  update(800, 1.5F, 1.0F);
+  expect(update(800, 1.5F, 1.0F), "短い再発でも直前のLOW表示を保持する");
   update(900, 0.0F, 5.0F);
   expect(std::fabs(lastLowEventDuration - 0.6F) < 0.001F, "短い低下で直近の警告記録を上書きしない");
   expect(std::fabs(lastLowEventPressure - 2.0F) < 0.001F, "直近の警告の最低油圧を保持する");

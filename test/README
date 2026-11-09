@@ -15,3 +15,6 @@ More information about PlatformIO Unit Testing:
 Python 3とC++17対応コンパイラを使い、本番のlow_warning.cppを実行します。
 描画装置だけをスタブに置き換え、イベント判定・履歴・タイマーの折り返しを確認します。
 変更前の動作確認には --baseline-ref main を指定できます。
+
+低油圧警告の実行結果JSONは `python test/low_warning/run_tests.py --report /tmp/low-warning-results.json` で保存できます。
+`--baseline-ref <commit>` は旧実装へ同じテストを適用します。旧実装のunsigned longはESP32相当のuint32_tへ置き換え、時刻の桁あふれを同じ条件で比較します。

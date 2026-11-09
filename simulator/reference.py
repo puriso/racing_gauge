@@ -3,6 +3,7 @@
 import csv
 import math
 from numeric import float32
+from low_warning_reference import LowWarningReference
 from sensor_reference import SensorReference
 from timing import FRAME_RATE, frame_time_ms
 
@@ -18,8 +19,8 @@ class Reference:
         self.last_als = 0
         self.mode = self.previous_mode = 0
         self.menu = self.racing = False
-        self.racing_until = self.g_since = self.low_since = None
-        self.low_until = 0
+        self.racing_until = self.g_since = None
+        self.warning = LowWarningReference()
         self.initialized = False
 
     def read_light(self, lux):
@@ -68,7 +69,6 @@ class Reference:
 
         low = False
         if not menu:
-            low = now < self.low_until
             for key, sensor, alpha in [('oil_c', 'oil_temp', 0.1), ('water_c', 'water_temp', 0.1),
                                        ('pressure_bar', 'pressure', self.settings['pressure_alpha'])]:
                 target = float32(sample[key]) if self.sensors[sensor] else 0.0
@@ -80,17 +80,10 @@ class Reference:
                     target = 0.0
                 previous = self.filtered.get(key, target)
                 self.filtered[key] = float32(previous + float32(float32(alpha) * float32(target - previous)))
-            if sample['g'] > 1 and self.filtered['pressure_bar'] <= 3:
-                if self.low_since is None:
-                    self.low_since = now
-                if now - self.low_since >= 500:
-                    self.low_until = now + 3000
-                    low = True
-            else:
-                self.low_since = None
-                low = now < self.low_until
+            low = self.warning.step(now, sample['g'], self.filtered['pressure_bar'], sample.get('g_direction', 'Right'))
         return {**{key: round(value, 4) for key, value in self.filtered.items()},
-                'racing': self.racing, 'low': low, 'brightness_mode': self.mode,
+                'racing': self.racing, 'low': low, 'low_event': self.warning.event.copy(),
+                'warning_state': self.warning.state, 'brightness_mode': self.mode,
                 'brightness_pwm': self.settings['brightness'][self.mode],
                 'lux_sample': self.lux_sample, 'lux_median': self.lux_median}
 
@@ -145,6 +138,11 @@ def check_expectations(frame):
     if (not math.isclose(frame['g'], expected['sensor']['g'], abs_tol=0.00001)
             or frame['g_direction'] != expected['sensor']['g_direction']):
         raise RuntimeError(f'IMUの補正・水平G・方向の期待値が一致しません: {frame}')
+    for key in ('g', 'pressure_bar', 'duration_s'):
+        if not math.isclose(expected['low_event'][key], actual['low_event'][key], abs_tol=0.0001):
+            raise RuntimeError(f'低油圧履歴の期待値が一致しません: {key}, {frame}')
+    if expected['low_event']['direction'] != actual['low_event']['direction']:
+        raise RuntimeError(f'低油圧履歴の方向が一致しません: {frame}')
     # 部分描画は油温0.1℃、水温0.05℃、油圧0.05bar未満の変化を保持する。
     for key, tolerance in [('oil_c', 0.1006), ('water_c', 0.0506), ('pressure_bar', 0.0506)]:
         if not math.isclose(expected[key], actual[key], abs_tol=tolerance):

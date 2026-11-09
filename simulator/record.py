@@ -16,11 +16,27 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw
 
 from annotations import SIZE, annotated_frame
+from warning_review import REVIEWS, run_spot_checks, review_spots, validate_review
 from reference import add_expectations, check_expectations
 from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "warning-repeat": {
+        "title": "PR #380・保持中の再発", "group": "reproduction",
+        "description": "最初のLOW点灯→復帰・保持→再発。再発を判定する500msの間もLOWが消えず、次の履歴が別イベントとして残ることを等速で追う修正後の再現動画",
+        "seconds": 12, "snapshots": [0, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 8.5, 12],
+    },
+    "warning-pending": {
+        "title": "PR #380・保持期限をまたぐ再発判定", "group": "reproduction",
+        "description": "旧LOWの保持期限直前に再発。旧表示の消灯後も次の開始時刻を維持し、所定の継続判定で次のLOWが点灯する流れを追う",
+        "seconds": 12, "snapshots": [0, 2, 3, 3.5, 6, 6.25, 6.5, 6.75, 7, 7.5, 8, 11, 12],
+    },
+    "warning-brief": {
+        "title": "PR #380・短い再発と警告履歴", "group": "reproduction",
+        "description": "最初の警告・履歴を作った後に250msだけ再発。LOWの保持が途切れず、直近の有効なG・最低油圧・継続時間が短い低下で上書きされないことを確認",
+        "seconds": 12, "snapshots": [0, 2, 3, 3.5, 4, 4.25, 4.5, 5, 6.5, 8, 12],
+    },
     "circuit": {
         "title": "サーキット・2.0Gと急な油圧低下", "group": "pressure",
         "description": "通常は3〜6barを連続往復。瞬間的な2.0Gと0.8barへの急落、継続低下、LOW点灯・保持・回復を確認",
@@ -97,7 +113,7 @@ def validate_inputs(metadata):
         if not 0 <= frame["lux"] <= 100:
             raise RuntimeError(f"照度入力が0〜100luxの範囲外です: {frame}")
         seconds = index / FRAME_RATE
-        ordinary = scenario not in ("pressure-sweep", "warnings", "circuit") and seconds >= 1
+        ordinary = scenario not in ("pressure-sweep", "warnings", "circuit", *REVIEWS) and seconds >= 1
         if ordinary and not math.isclose(frame["pressure_bar"], running_pressure(seconds), abs_tol=0.0001):
             raise RuntimeError(f"油圧が3〜6barで連続変動していません: {frame}")
     if scenario == "ramp":
@@ -250,6 +266,7 @@ def convert_and_check(directory):
                 sheet.paste(image, (x, y))
                 labels.text((x + 6, y + 243), f'{frames[index]["time_ms"] / 1000:.3f}s', fill="white")
         source.unlink()
+    validate_review(metadata["scenario"], frames)
     if len(seen) < 20:
         raise RuntimeError("描画がほとんど変化していません")
     sheet.save(directory / "contact-sheet.png")
@@ -286,7 +303,7 @@ def encode(directory):
 
 def write_report(output, scenarios):
     columns = ['time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'adc', 'imu', 'pressure_bar',
-               'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
+               'low_event', 'expected_low_event', 'warning_state', 'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
                'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm']
     data = []
     for name in scenarios:
@@ -300,13 +317,16 @@ def write_report(output, scenarios):
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))
             values.update({f'expected_{key}': frame['expected'][key] for key in ('oil_c', 'water_c', 'pressure_bar')})
             values.update({key: frame['actual'][key] for key in ('brightness_mode', 'brightness_pwm', 'lux_sample', 'lux_median')})
+            values['low_event'] = [round(frame['actual']['low_event'][key], 4) for key in ('g', 'pressure_bar', 'duration_s')] + [frame['actual']['low_event']['direction']]
+            values['expected_low_event'] = [round(frame['expected']['low_event'][key], 4) for key in ('g', 'pressure_bar', 'duration_s')] + [frame['expected']['low_event']['direction']]
+            values['warning_state'] = frame['expected']['warning_state']
             values['expected_brightness_pwm'] = frame['expected']['brightness_pwm']
             frames.append([values[key] for key in columns])
         cues = [frame_at_or_after(round(second * 1000)) for second in config['snapshots']]
-        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames})
+        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames, "review": REVIEWS.get(name), "review_spots": review_spots(name, metadata["frames"])})
     template = (ROOT / "report.html").read_text()
     payload = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace("<", "\\u003c")
-    (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload), encoding="utf-8")
+    (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload).replace("@@SPOT_CHECKS@@", (output / "spot-checks.json").read_text().replace("<", "\\u003c")), encoding="utf-8")
 
 
 def export_preview(output, scenarios):
@@ -314,6 +334,7 @@ def export_preview(output, scenarios):
     preview = output / "public"
     preview.mkdir()
     shutil.copyfile(output / "index.html", preview / "index.html")
+    shutil.copyfile(output / "spot-checks.json", preview / "spot-checks.json")
     for scenario in scenarios:
         destination = preview / scenario
         destination.mkdir()
@@ -335,6 +356,7 @@ def main():
         subprocess.run([sys.executable, "-m", "platformio", "run", "-d", str(ROOT), "-e", "desktop"], check=True)
     program = ROOT / ".pio" / "build" / "desktop" / ("program.exe" if os.name == "nt" else "program")
     scenarios = list(SCENARIOS) if args.scenario == "all" else [args.scenario]
+    run_spot_checks(output)
     for scenario in scenarios:
         directory = output / scenario
         subprocess.run(
