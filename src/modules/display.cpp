@@ -166,9 +166,10 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
   fpsChanged = drawFpsOverlay();
 #endif
   bool racingChanged = drawRacingIndicator(mainCanvas);
+  bool historyChanged = drawLowWarningHistory(mainCanvas);
 
   // 値が更新されたときのみスプライトを転送する
-  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged || racingChanged)
+  if (oilChanged || pressureChanged || waterChanged || fpsChanged || warnChanged || racingChanged || historyChanged)
   {
     mainCanvas.pushSprite(0, 0);
   }
@@ -386,6 +387,7 @@ void drawMenuScreen()
 // ────────────────────── ゲージ状態リセット ──────────────────────
 void resetGaugeState()
 {
+  invalidateLowWarningHistoryIndicator();
   // メニュー画面の残像を防ぐため一度画面をクリアする
   mainCanvas.fillScreen(COLOR_BLACK);
   mainCanvas.pushSprite(0, 0);

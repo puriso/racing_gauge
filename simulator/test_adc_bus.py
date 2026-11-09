@@ -57,3 +57,11 @@ class AdcBusTest(unittest.TestCase):
     def test_missing_fault_in_video_input_is_rejected(self):
         with self.assertRaisesRegex(ValueError, '外部応答'):
             validate_communication(dict(scenario='adc-startup', frames=[dict(time_ms=0, raw=dict(adc_fault=0))]))
+
+    def test_video_missing_initial_error_phase_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, '初回エラー画面'):
+            validate_communication(dict(scenario='adc-startup', frames=[dict(time_ms=0, raw=dict(adc_fault=1), setup_error=False)]))
+
+    def test_runtime_failure_is_not_labeled_as_setup_error(self):
+        with self.assertRaisesRegex(ValueError, '初回エラー画面'):
+            validate_communication(dict(scenario='adc-communication', frames=[dict(time_ms=0, raw=dict(adc_fault=0), setup_error=True)]))

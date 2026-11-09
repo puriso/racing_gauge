@@ -50,6 +50,9 @@ jobs:
       - name: ビルド
         run: pio run -e m5stack-cores3
 
+      - name: 低油圧警告の回帰テスト
+        run: python3 test/low_warning/run_tests.py
+
       - name: ファームウェアをアーティファクトで保存
         uses: actions/upload-artifact@v4
         with:

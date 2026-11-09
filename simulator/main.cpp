@@ -23,9 +23,11 @@
 #include "modules/adc_reader.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/low_warning.h"
 #include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
 #include "modules/sensor.h"
+#include "modules/startup_error.h"
 #include "sensor_inputs.hpp"
 #include "telemetry.hpp"
 
@@ -60,6 +62,7 @@ auto options() -> Options&
   return result;
 }
 std::atomic<int> exitStatus{1};
+bool adcInitializationFailed = false;
 
 using Inputs = simulator::RawInputs;
 
@@ -73,10 +76,30 @@ struct Targets
   int lux = simulator::DEFAULT_AMBIENT_LUX;
 };
 
+auto isWarningReview() -> bool
+{
+  return options().scenario == "warning-repeat" || options().scenario == "warning-pending" ||
+         options().scenario == "warning-brief";
+}
+
+auto isAdcOrSensorFaultScenario() -> bool
+{
+  return options().scenario == "adc-startup" || options().scenario == "adc-communication" ||
+         simulator::isFaultScenario(options().scenario);
+}
+
 // シナリオの物理量と時点を、README の表と対応するリテラルで記載する。
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
+  if (options().scenario == "warning-history")
+  {
+    return 20;
+  }
+  if (isWarningReview())
+  {
+    return 12;
+  }
   if (options().scenario == "adc-communication")
   {
     return 56;
@@ -209,6 +232,29 @@ auto sampleRawFaults(float seconds, float pressure) -> Targets
   return {100.0F, 95.0F, pressure, seconds >= 12.0F && seconds < 14.0F ? 2.0F : 0.0F, false};
 }
 
+auto sampleWarningReview(float seconds) -> Targets
+{
+  const bool first = seconds >= 2.0F && seconds < 3.5F;
+  const bool repeat = options().scenario == "warning-repeat" && seconds >= 4.0F && seconds < 5.5F;
+  const bool pending = options().scenario == "warning-pending" && seconds >= 6.0F && seconds < 7.5F;
+  const bool brief = options().scenario == "warning-brief" && seconds >= 4.0F && seconds < 4.25F;
+  const bool history = options().scenario == "warning-history" && seconds >= 14.0F && seconds < 15.5F;
+  const bool second = repeat || pending || brief || history;
+  float acceleration = 0.0F;
+  if (first)
+  {
+    acceleration = 1.2F;
+  }
+  else if (second)
+  {
+    acceleration = 1.5F;
+  }
+  const float pressure = first || second ? 1.0F : runningPressure(seconds);
+  return {
+      100.0F, 95.0F, pressure, acceleration, options().scenario == "warning-history" && seconds >= 8.0F && seconds < 10.0F,
+  };
+}
+
 auto sample(double ratio) -> Targets
 {
   // 時間指定を変えても同じ順序のシナリオを伸縮する。
@@ -219,11 +265,11 @@ auto sample(double ratio) -> Targets
     return {0.0F, 0.0F, 0.0F, 0.0F, false};
   }
   const float pressure = runningPressure(seconds);
-  if (options().scenario == "adc-startup" || options().scenario == "adc-communication")
+  if (isWarningReview() || options().scenario == "warning-history")
   {
-    return {100.0F, 95.0F, pressure, 0.0F, false};
+    return sampleWarningReview(seconds);
   }
-  if (simulator::isFaultScenario(options().scenario))
+  if (isAdcOrSensorFaultScenario())
   {
     return {100.0F, 95.0F, pressure, 0.0F, false};
   }
@@ -370,7 +416,7 @@ void inject(const Inputs& input)
   acquireSensorData();
 }
 
-void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& target, bool showingMenu)
+void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& target, bool showingMenu, bool setupError)
 {
   trace << simulator::nowMs;
   for (const auto count : input.adc)
@@ -382,11 +428,12 @@ void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& ta
     trace << ',' << axis;
   }
   trace << ',' << static_cast<int>(showingMenu) << ',' << input.lux << ',' << target.oil << ',' << target.water << ','
-        << target.pressure << ',' << target.acceleration << ',' << static_cast<int>(simulator::adcFault) << '\n';
+        << target.pressure << ',' << target.acceleration << ',' << static_cast<int>(simulator::adcFault) << ','
+        << setupError << '\n';
 }
 
 void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs& input, const Targets& target,
-                        bool showingMenu)
+                        bool showingMenu, bool setupError)
 {
   manifest << R"({"time_ms":)" << tick * MS_PER_SECOND / TICKS_PER_SECOND << R"(,"raw":{"adc":[)";
   for (size_t channel = 0; channel < input.adc.size(); ++channel)
@@ -404,8 +451,9 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
     manifest << R"(,"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
              << target.pressure << R"(,"g":)" << target.acceleration << '}';
   }
-  manifest << R"(,"g":)" << currentGForce << R"(,"lux":)" << input.lux << R"(,"menu":)" << showingMenu
-           << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode << R"(,"sensor":)";
+  manifest << R"(,"setup_error":)" << setupError << R"(,"g":)" << currentGForce << R"(,"lux":)" << input.lux
+           << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode
+           << R"(,"sensor":)";
   writeSensorTelemetry(manifest);
   manifest << R"(,"actual":)";
   writeDisplayTelemetry(manifest);
@@ -508,7 +556,11 @@ void initializeDisplay()
   }
   resetGaugeState();
   simulator::adcFault = options().scenario == "adc-startup" ? simulator::AdcFault::Missing : simulator::AdcFault::Healthy;
-  initializeAdc();
+  adcInitializationFailed = !initializeAdc();
+  if (adcInitializationFailed)
+  {
+    drawAdcInitializationError(display);
+  }
   updateBacklightLevel();
 }
 
@@ -531,6 +583,7 @@ auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
   }
   if (showingMenu && !menu)
   {
+    resetLowWarningHistory();
     resetGaugeState();
     updateBacklightLevel();
   }
@@ -583,7 +636,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       trace.exceptions(std::ios::failbit | std::ios::badbit);
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
       trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g,adc_"
-               "fault\n";
+               "fault,setup_error\n";
       manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
                << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)"
                << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)"
@@ -595,7 +648,8 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
                << RACING_MODE_START_HOLD_MS << R"(,"racing_duration_ms":)" << RACING_MODE_DURATION_MS << R"(,"racing_g":)"
                << RACING_MODE_START_THRESHOLD_G << R"(},"sensor_settings":)";
       writeSensorSettings(manifest);
-      manifest << R"(,"frames":[)" << '\n';
+      manifest << R"(,"startup_error_title":")" << ADC_INIT_ERROR_TITLE << R"(","startup_error_hint":")"
+               << ADC_INIT_ERROR_HINT << R"(","frames":[)" << '\n';
     }
     std::cout << "Scenario: " << options().scenario << " | 24FPS | Space: pause | Home: replay | M/click: menu\n";
     const auto totalTicks = options().seconds * TICKS_PER_SECOND;
@@ -612,13 +666,14 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       const auto target = sample(progress);
       const auto input = makeInputs(tick, target, static_cast<float>(progress * defaultSeconds()));
       // 再生を戻しても時計は単調増加させ、警告の継続時間やピーク値を壊さない。
-      if (!controls.paused)
+      const bool setupError = tick == 0 && simulator::nowMs == 0 && adcInitializationFailed;
+      if (!controls.paused && !setupError)
       {
         showingMenu = renderFrame(input, controls.manualMenu, showingMenu);
       }
       if (recording)
       {
-        writeInputTrace(trace, input, target, showingMenu);
+        writeInputTrace(trace, input, target, showingMenu, setupError);
       }
 
       if (recording)
@@ -628,7 +683,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
         {
           manifest << ",\n";
         }
-        writeFrameManifest(manifest, tick, input, target, showingMenu);
+        writeFrameManifest(manifest, tick, input, target, showingMenu, setupError);
       }
       if (recording && tick == totalTicks)
       {
@@ -670,7 +725,8 @@ auto main(int argc, char** argv) -> int
         std::cout << "Usage: program [--scenario "
                      "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|adc-communication|adc-"
                      "startup|adc-steps|sensor-disconnect|"
-                     "temperature-high|temperature-low|startup|warm-start|menu] "
+                     "temperature-high|temperature-low|warning-history|warning-repeat|warning-pending|warning-brief|"
+                     "startup|warm-start|menu] "
                      "[--seconds N] [--capture "
                      "NEW_DIRECTORY]\n";
         return 0;
@@ -707,7 +763,8 @@ auto main(int argc, char** argv) -> int
         options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing" &&
         options().scenario != "ambient" && options().scenario != "raw-faults" &&
         options().scenario != "adc-communication" && options().scenario != "adc-startup" &&
-        options().scenario != "adc-steps" && !simulator::isFaultScenario(options().scenario))
+        options().scenario != "adc-steps" && !simulator::isFaultScenario(options().scenario) && !isWarningReview() &&
+        options().scenario != "warning-history")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

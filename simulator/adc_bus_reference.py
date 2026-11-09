@@ -56,6 +56,8 @@ def validate_communication(metadata):
     for frame in frames:
         if frame['raw']['adc_fault'] != fault_input(name, frame['time_ms']):
             raise ValueError('ADC外部応答の入力がシナリオと一致しません')
+        if bool(frame.get('setup_error')) != (name == 'adc-startup' and frame['time_ms'] == 0):
+            raise ValueError('初回エラー画面はsetup直後の先頭フレームだけで確認します')
     if name not in ('adc-startup', 'adc-communication'):
         return
     faults = {frame['raw']['adc_fault'] for frame in frames}

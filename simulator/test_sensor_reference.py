@@ -85,6 +85,15 @@ class SensorReferenceTest(unittest.TestCase):
         result = self.sensor.step(1291, self.raw | {'imu': [0.125, -0.0625, 3]})
         self.assertEqual(result['g'], 0)
 
+    def test_setup_snapshot_does_not_acquire_adc_or_calibrate_imu(self):
+        self.sensor.bus.frame(0, 1)
+        initial = self.sensor.snapshot()
+        self.assertEqual(initial['adc_begin_calls'], 1)
+        self.assertFalse(initial['adc_connected'])
+        self.assertEqual(initial['adc_reads'], [0] * 4)
+        self.assertEqual(self.sensor.offset_count, 0)
+        self.assertEqual(initial['oil_c'], 0)
+
 
 if __name__ == '__main__':
     unittest.main()

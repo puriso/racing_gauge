@@ -27,6 +27,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     if 'input_temperature_c' in sample:
         spec = TEMPERATURE_SENSOR_SPEC
         heading += f" | PDF00903S op {spec['minimum_c']:g}..{spec['maximum_c']:g}C"
+    if sample.get('setup_error'):
+        heading += ' | SETUP / before first loop'
     label(16, 12, heading)
     label(352, 48, 'STATE', '#a7dfb4')
     label(466, 48, 'EXPECT', '#a7dfb4')
@@ -34,6 +36,7 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     rows = [
         ('R mode', 'ON' if expected['racing'] else 'OFF', 'ON' if sample['racing'] else 'OFF'),
         ('LOW', 'ON' if expected['low'] else 'OFF', 'ON' if sample['low_visible'] else 'OFF'),
+        ('W history', 'ON' if expected['warning_history'] else 'OFF', 'ON' if actual['warning_history'] else 'OFF'),
         ('Light mode', MODES[expected['brightness_mode']], MODES[actual['brightness_mode']]),
         ('PWM / 255', expected['brightness_pwm'], actual['brightness_pwm']),
         ('ALS sample', expected['lux_sample'], actual['lux_sample']),
@@ -44,12 +47,20 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     if scenario in ("adc-startup", "adc-communication"):
         rows.append(("ADC link", "UP" if expected["sensor"]["adc_connected"] else "DOWN", "UP" if sample["sensor"]["adc_connected"] else "DOWN"))
     for index, (name, wanted, observed) in enumerate(rows):
-        y = 78 + index * 25
+        y = 78 + index * 22
         label(352, y, name, font=small)
         label(466, y, str(wanted), '#a7dfb4')
         label(552, y, str(observed), '#8fc5ff')
-    label(352, 285, sample.get('case', 'MENU' if sample['menu'] else 'GAUGES'), '#dfcc9d', font=small)
-    if scenario in ('adc-startup', 'adc-communication'):
+    if not scenario.startswith('warning-'):
+        label(352, 285, sample.get('case', 'SETUP ERROR' if sample.get('setup_error') else 'MENU' if sample['menu'] else 'GAUGES'), '#dfcc9d', font=small)
+    if scenario.startswith('warning-'):
+        label(352, 285, 'PR380: ' + expected['warning_state'], '#dfcc9d', font=small)
+        observed, wanted = actual['low_event'], expected['low_event']
+        label(16, 306, f"LAST EVENT act/exp: G {observed['g']:.2f}/{wanted['g']:.2f} | "
+              f"min {observed['pressure_bar']:.2f}/{wanted['pressure_bar']:.2f}bar | "
+              f"time {observed['duration_s']:.2f}/{wanted['duration_s']:.2f}s | "
+              f"dir {observed['direction']}/{wanted['direction']}", font=small)
+    elif scenario in ('adc-startup', 'adc-communication'):
         modes = ('OK', 'NO DEVICE', 'BUSY', 'CONFIG WRITE FAIL', 'STATUS READ FAIL', 'RESULT READ FAIL', 'SECOND RESULT FAIL')
         state = sample['sensor']
         label(16, 297, f"I2C {modes[sample['raw']['adc_fault']]} | begin attempts {state['adc_begin_calls']} | virtual poll wait {state['adc_wait_ms']}ms", font=small)
@@ -69,7 +80,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
                                          ('Oil pressure', 'pressure_bar', 'pressure_channel', 'bar')]:
         channel = sensor_settings[channel_key]
         raw = f'CH{channel} {sample["raw"]["adc"][channel]} / {expected["voltage"][channel]:.3f}V'
-        target = f'{expected["sensor"][key]:.2f} / {expected[key]:.2f} {unit}'
+        filtered = 'not drawn' if expected[key] is None else f'{expected[key]:.2f} {unit}'
+        target = f'{expected["sensor"][key]:.2f} / {filtered}'
         signals.append((name, raw, target))
     axes = '/'.join(f'{axis:+.2f}' for axis in sample['raw']['imu'])
     signals.extend([

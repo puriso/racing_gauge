@@ -18,16 +18,37 @@ from PIL import Image, ImageDraw
 from adc_steps import validate_adc_steps
 from adc_bus_reference import validate_communication
 from annotations import SIZE, annotated_frame
+from warning_review import REVIEWS, run_spot_checks, review_spots, validate_review
 from fault_cases import CASES, validate_fault_inputs
 from reference import add_expectations, check_expectations
 from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "warning-history": {
+        "title": "LOW発生履歴W・保持・画面復帰・リセット・再発", "group": "pressure",
+        "description": "LOW成立で左下Wが点灯。LOW消灯後もWを保持。8秒の詳細画面で履歴を確認し、10秒にゲージへ戻るとWを消去。再発で再点灯する",
+        "seconds": 20, "snapshots": [0, 2.625, 7, 8, 10, 12, 14.625, 19],
+    },
+    "warning-repeat": {
+        "title": "PR #380・保持中の再発", "group": "reproduction",
+        "description": "最初のLOW点灯→復帰・保持→再発。再発を判定する500msの間もLOWが消えず、次の履歴が別イベントとして残ることを等速で追う修正後の再現動画",
+        "seconds": 12, "snapshots": [0, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 8.5, 12],
+    },
+    "warning-pending": {
+        "title": "PR #380・保持期限をまたぐ再発判定", "group": "reproduction",
+        "description": "旧LOWの保持期限直前に再発。旧表示の消灯後も次の開始時刻を維持し、所定の継続判定で次のLOWが点灯する流れを追う",
+        "seconds": 12, "snapshots": [0, 2, 3, 3.5, 6, 6.25, 6.5, 6.75, 7, 7.5, 8, 11, 12],
+    },
+    "warning-brief": {
+        "title": "PR #380・短い再発と警告履歴", "group": "reproduction",
+        "description": "最初の警告・履歴を作った後に250msだけ再発。LOWの保持が途切れず、直近の有効なG・最低油圧・継続時間が短い低下で上書きされないことを確認",
+        "seconds": 12, "snapshots": [0, 2, 3, 3.5, 4, 4.25, 4.5, 5, 6.5, 8, 12],
+    },
     "adc-startup": {
         "title": "ADC起動時未接続・1秒間隔の再接続と復帰", "group": "raw",
-        "description": "開始時から5秒までADS1015が応答しない条件。ADC未接続でも描画とIMU・照度を更新し、装置の復帰後に正常取得を再開する",
-        "seconds": 16, "snapshots": [0, 1.1, 4, 5, 5.1, 6, 8, 16],
+        "description": "先頭はsetup直後のADS1015初期化失敗画面。初回loopで通常描画へ移り、5秒まで未接続、再接続・正常取得まで確認。初期画面は0秒ボタンと静止画像で確認",
+        "seconds": 16, "snapshots": [0, 0.041, 1.1, 4, 5, 5.1, 6, 8, 16],
     },
     "adc-communication": {
         "title": "ADC通信異常・タイムアウト・再接続と復帰", "group": "raw",
@@ -139,7 +160,7 @@ def validate_inputs(metadata):
         if not 0 <= frame["lux"] <= 100:
             raise RuntimeError(f"照度入力が0〜100luxの範囲外です: {frame}")
         seconds = index / FRAME_RATE
-        ordinary = scenario not in ("pressure-sweep", "warnings", "circuit") and seconds >= 1
+        ordinary = scenario not in ("pressure-sweep", "warnings", "circuit", "warning-history", *REVIEWS) and seconds >= 1
         if ordinary and not math.isclose(frame["pressure_bar"], running_pressure(seconds), abs_tol=0.0001):
             raise RuntimeError(f"油圧が3〜6barで連続変動していません: {frame}")
     if scenario == "ramp":
@@ -160,6 +181,8 @@ def validate_inputs(metadata):
                 or values[:10 * FRAME_RATE + 1] != sorted(values[:10 * FRAME_RATE + 1])
                 or values[10 * FRAME_RATE:] != sorted(values[10 * FRAME_RATE:], reverse=True)):
             raise RuntimeError("油圧の上昇・下降入力が不正です")
+    if scenario == "warning-history":
+        return
     if scenario == "warnings":
         at = lambda time_ms: frames[frame_at_or_after(time_ms)]
         for time, pressure in ((8100, 3.1), (12100, 3.0), (16200, 2.9), (23000, 2.9), (30000, 6.0)):
@@ -224,6 +247,20 @@ def warning_visible(image):
                for red, green, blue in image.crop((40, 130, 103, 159)).getdata()) > 100
 
 
+def setup_error_visible(image):
+    # 2行の赤い起動メッセージと、その下にゲージが未描画であることを確認する。
+    def red_count(box):
+        return sum(red > 180 and green < 80 and blue < 80
+                   for red, green, blue in image.crop(box).getdata())
+    return (red_count((0, 0, 300, 16)) > 30 and red_count((0, 16, 300, 32)) > 30
+            and image.crop((0, 40, 320, 240)).getbbox() is None)
+
+
+def history_visible(image):
+    return any(red > 180 and green < 80 and blue < 80
+               for red, green, blue in image.crop((14, 224, 22, 232)).getdata())
+
+
 def racing_visible(image):
     return any(red > 180 and green < 80 and blue < 80
                for red, green, blue in image.crop((0, 224, 12, 237)).getdata())
@@ -254,8 +291,10 @@ def convert_and_check(directory):
             seen.add(hashlib.sha256(image.tobytes()).digest())
             image.save(source.with_suffix(".png"))
             frame = frames[index]
+            frame["setup_error_visible"] = setup_error_visible(image)
             frame["low_visible"] = warning_visible(image)
             frame["r_visible"] = racing_visible(image)
+            frame["w_visible"] = history_visible(image)
             check_expectations(frame)
             if not frame["menu"] and frame["r_visible"] != frame["racing"]:
                 raise RuntimeError(f"Rモードと実際のR表示が一致しません: {frame}")
@@ -292,6 +331,14 @@ def convert_and_check(directory):
                 sheet.paste(image, (x, y))
                 labels.text((x + 6, y + 243), f'{frames[index]["time_ms"] / 1000:.3f}s', fill="white")
         source.unlink()
+    if metadata["scenario"] == "warning-history":
+        for seconds, menu, history, visible in [(7, False, True, True), (8, True, True, False),
+                                                (10, False, False, False), (12, False, False, False),
+                                                (19, False, True, True)]:
+            frame = frames[seconds * FRAME_RATE]
+            if (frame['menu'], frame['actual']['warning_history'], frame['w_visible']) != (menu, history, visible):
+                raise RuntimeError(f'詳細画面から戻る際のWリセットが不正です: {frame}')
+    validate_review(metadata["scenario"], frames)
     if len(seen) < 20:
         raise RuntimeError("描画がほとんど変化していません")
     sheet.save(directory / "contact-sheet.png")
@@ -327,8 +374,8 @@ def encode(directory):
 
 
 def write_report(output, scenarios):
-    columns = ['time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'adc', 'imu', 'pressure_bar',
-               'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
+    columns = ['time_ms', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible', 'adc', 'imu', 'pressure_bar',
+               'low_event', 'expected_low_event', 'warning_state', 'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
                'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
                'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm']
@@ -339,23 +386,26 @@ def write_report(output, scenarios):
         # 列名を共有して数値行にし、24FPSの全区間でもHTMLを直開きできる量に収める。
         frames = []
         for frame in metadata['frames']:
-            values = {key: frame[key] for key in ('time_ms', 'g', 'lux', 'low_visible', 'r_visible')}
+            values = {key: frame[key] for key in ('time_ms', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
             values.update(adc_fault=frame['raw']['adc_fault'])
             values.update({key: frame['sensor'][key] for key in ('adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last')})
             values.update(adc=frame['raw']['adc'], imu=frame['raw']['imu'],
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))
             values.update({f'expected_{key}': frame['expected'][key] for key in ('oil_c', 'water_c', 'pressure_bar')})
             values.update({key: frame['actual'][key] for key in ('brightness_mode', 'brightness_pwm', 'lux_sample', 'lux_median')})
+            values['low_event'] = [round(frame['actual']['low_event'][key], 4) for key in ('g', 'pressure_bar', 'duration_s')] + [frame['actual']['low_event']['direction']]
+            values['expected_low_event'] = [round(frame['expected']['low_event'][key], 4) for key in ('g', 'pressure_bar', 'duration_s')] + [frame['expected']['low_event']['direction']]
+            values['warning_state'] = frame['expected']['warning_state']
             values.update(case_label=frame.get('case_label', ''), input_temperature_c=frame.get('input_temperature_c'),
                           input_temperature_abnormal=frame.get('input_temperature_abnormal'),
                           actual_oil_c=frame['actual']['oil_c'], actual_water_c=frame['actual']['water_c'])
             values['expected_brightness_pwm'] = frame['expected']['brightness_pwm']
             frames.append([values[key] for key in columns])
         cues = [frame_at_or_after(round(second * 1000)) for second in config['snapshots']]
-        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames, "sensor_spec": metadata.get("temperature_sensor_spec")})
+        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames, "sensor_spec": metadata.get("temperature_sensor_spec"), "startup_error_title": metadata["startup_error_title"], "startup_error_hint": metadata["startup_error_hint"], "review": REVIEWS.get(name), "review_spots": review_spots(name, metadata["frames"])})
     template = (ROOT / "report.html").read_text()
     payload = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace("<", "\\u003c")
-    (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload), encoding="utf-8")
+    (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload).replace("@@SPOT_CHECKS@@", (output / "spot-checks.json").read_text().replace("<", "\\u003c")), encoding="utf-8")
 
 
 def export_preview(output, scenarios):
@@ -363,6 +413,7 @@ def export_preview(output, scenarios):
     preview = output / "public"
     preview.mkdir()
     shutil.copyfile(output / "index.html", preview / "index.html")
+    shutil.copyfile(output / "spot-checks.json", preview / "spot-checks.json")
     for scenario in scenarios:
         destination = preview / scenario
         destination.mkdir()
@@ -384,6 +435,7 @@ def main():
         subprocess.run([sys.executable, "-m", "platformio", "run", "-d", str(ROOT), "-e", "desktop"], check=True)
     program = ROOT / ".pio" / "build" / "desktop" / ("program.exe" if os.name == "nt" else "program")
     scenarios = list(SCENARIOS) if args.scenario == "all" else [args.scenario]
+    run_spot_checks(output)
     for scenario in scenarios:
         directory = output / scenario
         subprocess.run(

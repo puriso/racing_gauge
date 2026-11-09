@@ -6,9 +6,11 @@
 #include "modules/adc_reader.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/low_warning.h"
 #include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
 #include "modules/sensor.h"
+#include "modules/startup_error.h"
 
 // ── FPS 計測用 ──
 unsigned long lastFpsSecond = 0;  // 直近1秒判定用
@@ -83,11 +85,7 @@ void setup()
   if (!initializeAdc())
   {
     Serial.println("[ADS1015] init failed… all analog values will be 0");
-    M5.Lcd.setTextSize(2);
-    M5.Lcd.setTextColor(COLOR_RED);
-    M5.Lcd.setCursor(0, 0);
-    M5.Lcd.println("ADS1015 init failed");
-    M5.Lcd.println("Check wiring");
+    drawAdcInitializationError(M5.Lcd);
   }
 #endif
 
@@ -139,6 +137,7 @@ void loop()
     }
     else
     {
+      resetLowWarningHistory();
       resetGaugeState();
       // メニュー終了後は元の輝度に戻す
 #if SENSOR_AMBIENT_LIGHT_PRESENT

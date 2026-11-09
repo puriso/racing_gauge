@@ -9,28 +9,63 @@
 
 // 直近の低油圧イベント情報
 float lastLowEventG = 0.0F;             // 発生時のG値
-const char *lastLowEventDir = "Right";  // Gの向き
+const char* lastLowEventDir = "Right";  // Gの向き
 float lastLowEventDuration = 0.0F;      // 継続時間[s]
 float lastLowEventPressure = 0.0F;      // そのときの油圧[bar]
+
+// LOW成立の履歴は保持期限では消さず、詳細画面から戻るときに消す。
+static bool lowWarningHistory = false;
+static bool historyIndicatorDrawn = false;
+
+auto hasLowWarningHistory() -> bool { return lowWarningHistory; }
+
+void resetLowWarningHistory() { lowWarningHistory = false; }
+
+void invalidateLowWarningHistoryIndicator() { historyIndicatorDrawn = false; }
+
+auto drawLowWarningHistory(M5Canvas& canvas) -> bool
+{
+  constexpr int HISTORY_X = 14;
+  constexpr int HISTORY_Y = LCD_HEIGHT - 16;
+  if (lowWarningHistory == historyIndicatorDrawn)
+  {
+    return false;
+  }
+
+  constexpr int GLYPH_SIZE = 8;
+  canvas.fillRect(HISTORY_X, HISTORY_Y, GLYPH_SIZE, GLYPH_SIZE, COLOR_BLACK);
+  if (lowWarningHistory)
+  {
+    canvas.setFont(&fonts::Font0);
+    canvas.setTextSize(1);
+    canvas.setTextColor(COLOR_RED, COLOR_BLACK);
+    canvas.setTextDatum(m5gfx::textdatum_t::top_left);
+    canvas.drawString("W", HISTORY_X, HISTORY_Y);
+  }
+  historyIndicatorDrawn = lowWarningHistory;
+  return true;
+}
 
 // 警告表示の状態をまとめた構造体
 struct LowWarningState
 {
-  unsigned long startMs = 0;                              // 条件成立開始時刻
-  unsigned long showUntilMs = 0;                          // 表示継続終了時刻
+  uint32_t startMs = 0;                                   // 条件成立開始時刻
+  uint32_t lastWarningMs = 0;                             // 最後に警告条件を満たした時刻
+  bool eventActive = false;                               // 条件成立中か
+  bool eventQualified = false;                            // 0.5秒継続して警告対象になったか
+  bool warningHeld = false;                               // 警告の表示保持中か
   bool isShowing = false;                                 // 現在表示中か
   float peakG = 0.0F;                                     // 期間中の最大G
   float minPressure = std::numeric_limits<float>::max();  // 期間中の最低油圧
-  const char *eventDir = "Right";                         // 発生方向
+  const char* eventDir = "Right";                         // 発生方向
   int boxX = 0;                                           // 最後に描画したボックス座標
   int boxY = 0;
   int boxW = 0;
   int boxH = 0;
-  bool eventLogged = false;  // イベント記録済みか
 };
 
 // 油圧警告表示。現在の表示状態とその変更の有無を返す
-bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool &stateChanged)
+bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool& stateChanged)
 {
   constexpr int GAUGE_X = 0;    // 油圧ゲージの左上X
   constexpr int GAUGE_Y = 60;   // 油圧ゲージの左上Y
@@ -65,25 +100,25 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
 
   static LowWarningState state;  // 表示状態
 
-  constexpr float G_FORCE_THRESHOLD = 1.0F;          // G判定値
-  constexpr float PRESSURE_THRESHOLD = 3.0F;         // 油圧閾値
-  constexpr unsigned long WARNING_DELAY_MS = 500UL;  // 継続時間
-  constexpr unsigned long WARNING_HOLD_MS = 3000UL;  // 表示継続時間
+  constexpr float G_FORCE_THRESHOLD = 1.0F;   // G判定値
+  constexpr float PRESSURE_THRESHOLD = 3.0F;  // 油圧閾値
+  constexpr uint32_t WARNING_DELAY_MS = 500;  // 継続時間
+  constexpr uint32_t WARNING_HOLD_MS = 3000;  // 表示継続時間
   bool conditionMet = (gForce > G_FORCE_THRESHOLD && pressure <= PRESSURE_THRESHOLD);
-  unsigned long now = millis();
-  bool shouldShow = false;
+  uint32_t now = millis();
   bool prevShowing = state.isShowing;  // 前回表示中だったか
 
   if (conditionMet)
   {
-    if (state.startMs == 0 || state.eventLogged)
+    if (!state.eventActive)
     {
       // 新しいイベント開始
       state.startMs = now;
       state.peakG = gForce;
       state.minPressure = pressure;
       state.eventDir = currentGDirection;
-      state.eventLogged = false;
+      state.eventActive = true;
+      state.eventQualified = false;
     }
     else
     {
@@ -91,28 +126,38 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
       state.peakG = std::max(state.peakG, gForce);
       state.minPressure = std::min(state.minPressure, pressure);
     }
-    if (now - state.startMs >= WARNING_DELAY_MS)
+    uint32_t elapsedMs = now - state.startMs;
+    if (elapsedMs >= WARNING_DELAY_MS)
     {
       // 0.5秒以上継続したら警告表示
-      state.showUntilMs = now + WARNING_HOLD_MS;  // 表示を3秒維持
-      shouldShow = true;
+      state.lastWarningMs = now;
+      state.warningHeld = true;
+      state.eventQualified = true;
+      lowWarningHistory = true;
     }
   }
   else
   {
-    if (state.startMs != 0 && !state.eventLogged)
+    if (state.eventActive && state.eventQualified)
     {
       // 条件解除時にイベント情報を記録
       lastLowEventG = state.peakG;
       lastLowEventDir = state.eventDir;
-      lastLowEventDuration = (now - state.startMs) / 1000.0F;
+      uint32_t eventDurationMs = now - state.startMs;
+      lastLowEventDuration = static_cast<float>(eventDurationMs) / 1000.0F;
       lastLowEventPressure = state.minPressure;
-      state.eventLogged = true;
     }
-    if (now < state.showUntilMs)
-    {
-      shouldShow = true;  // 表示継続期間内
-    }
+    state.eventActive = false;
+    state.eventQualified = false;
+  }
+
+  // 表示保持とイベント判定を独立させ、再発時も前の警告を保持する。
+  // 絶対時刻を比較せず、millis() の32ビット折り返しを扱える差分で判定する。
+  uint32_t warningElapsedMs = now - state.lastWarningMs;
+  bool shouldShow = state.warningHeld && warningElapsedMs < WARNING_HOLD_MS;
+  if (!shouldShow)
+  {
+    state.warningHeld = false;
   }
 
   if (shouldShow)
@@ -132,8 +177,7 @@ bool drawLowPressureWarning(M5Canvas &canvas, float gForce, float pressure, bool
   {
     // 表示継続時間が過ぎたので警告を消去
     canvas.fillRect(state.boxX, state.boxY, state.boxW, state.boxH, COLOR_BLACK);
-    // 次回のイベントに備えて状態をリセット
-    state = {};
+    // 表示の消去では、判定待ちの次のイベントをリセットしない。
   }
 
   stateChanged = (shouldShow != prevShowing);

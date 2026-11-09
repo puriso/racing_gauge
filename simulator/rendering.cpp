@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "compat.hpp"
 #include "telemetry.hpp"
 
@@ -10,17 +12,37 @@
 #include "../src/modules/racing_indicator.cpp"
 #include "../src/modules/racing_mode.cpp"
 #include "../src/modules/sensor.cpp"
+#include "../src/modules/startup_error.cpp"
 // NOLINTEND(bugprone-suspicious-include)
 
 // FPSの計測・表示はシミュレーターへ持ち込まない。
 static_assert(FPS_DISPLAY_ENABLED == 0, "FPS measurement overlays are unavailable in the simulator");
 
+static void writeRenderedValue(std::ostream& output, float value)
+{
+  if (std::isfinite(value))
+  {
+    output << value;
+  }
+  else
+  {
+    output << "null";
+  }
+}
+
 void writeDisplayTelemetry(std::ostream& output)
 {
-  output << R"({"oil_c":)" << displayCache.oilTemp << R"(,"water_c":)" << displayCache.waterTempAvg << R"(,"pressure_bar":)"
-         << displayCache.pressureAvg << R"(,"brightness_mode":)" << static_cast<int>(currentBrightnessMode)
-         << R"(,"brightness_pwm":)" << static_cast<int>(display.getBrightness()) << R"(,"lux_sample":)" << latestLux
-         << R"(,"lux_median":)" << medianLuxValue << '}';
+  output << R"({"oil_c":)";
+  writeRenderedValue(output, displayCache.oilTemp);
+  output << R"(,"water_c":)";
+  writeRenderedValue(output, displayCache.waterTempAvg);
+  output << R"(,"pressure_bar":)";
+  writeRenderedValue(output, displayCache.pressureAvg);
+  output << R"(,"brightness_mode":)" << static_cast<int>(currentBrightnessMode) << R"(,"brightness_pwm":)"
+         << static_cast<int>(display.getBrightness()) << R"(,"lux_sample":)" << latestLux << R"(,"lux_median":)"
+         << medianLuxValue << R"(,"warning_history":)" << hasLowWarningHistory() << R"(,"low_event":{"g":)" << lastLowEventG
+         << R"(,"pressure_bar":)" << lastLowEventPressure << R"(,"duration_s":)" << lastLowEventDuration
+         << R"(,"direction":")" << lastLowEventDir << R"("}})";
 }
 
 void writeSensorSettings(std::ostream& output)
