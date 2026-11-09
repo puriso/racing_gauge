@@ -19,7 +19,7 @@ on:
       scenario:
         description: '録画シナリオ'
         type: choice
-        options: [all, ramp, warnings, startup, warm-start, menu]
+        options: [all, circuit, racing, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
         default: all
 
 permissions:
@@ -29,6 +29,7 @@ jobs:
   record:
     outputs:
       artifact_url: ${{ steps.recording.outputs.artifact-url }}
+      preview_artifact_id: ${{ steps.preview.outputs.artifact-id }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -48,6 +49,14 @@ jobs:
         env:
           SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
         run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --output simulator/out/ci
+      - name: 公開用の確認ページを保存
+        id: preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-report
+          path: simulator/out/ci/public/
+          if-no-files-found: error
+          retention-days: 14
       - name: MP4・PNG・HTML を保存
         id: recording
         if: always()
@@ -61,29 +70,166 @@ jobs:
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
           ### SDL 目視テスト録画
-          この実行の **Artifacts → visual-simulator** をダウンロード・展開し、`index.html` を開いてください。
+          PRのコメントにある **等速の確認ページを開く** から、GitHub Pagesで直接確認できます。
+          全PNGは **Artifacts → visual-simulator** からダウンロードできます。
           シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
-          油温-10〜170℃・水温-10〜130℃・油圧0〜10bar、短い油圧低下、始動時70℃、詳細画面の復帰を確認できます。
+          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降など、9シナリオを等速で確認できます。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
           SUMMARY
 
-  comment:
+  publish:
     needs: record
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
+      actions: read
+      contents: write
+      pages: write
+      id-token: write
       pull-requests: write
     concurrency:
-      group: sdl-visual-comment-${{ github.event.pull_request.number }}
+      group: visual-pages-publication
       cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: 録画レポートへのリンクを PR に作成・更新
+      - name: 最新の未マージPRか確認
+        id: current
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: pull } = await github.rest.pulls.get({
+              ...context.repo, pull_number: context.issue.number,
+            });
+            core.setOutput('publish', pull.state === 'open' &&
+              pull.head.sha === context.payload.pull_request.head.sha ? 'true' : 'false');
+      - name: 公開用ブランチを取得
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: visual-previews
+          path: preview-store
+      - name: 今回の確認ページだけを取得
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.record.outputs.preview_artifact_id }}
+          path: ${{ runner.temp }}/visual-report
+          merge-multiple: true
+      - name: 公開ファイルを検証してPR別に保存
+        if: steps.current.outputs.publish == 'true'
+        env:
+          REPORT_DIR: ${{ runner.temp }}/visual-report
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import html
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+          import stat
+
+          source = Path(os.environ['REPORT_DIR'])
+          number, sha = os.environ['PR_NUMBER'], os.environ['EXPECTED_SHA']
+          assert re.fullmatch(r'[1-9][0-9]*', number)
+          assert re.fullmatch(r'[0-9a-f]{40}', sha)
+          scenarios = 'circuit|racing|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
+          allowed = re.compile(rf'index\.html|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|frame-0000\.png|inputs\.json)')
+          files, total = [], 0
+          entries = list(source.rglob('*'))
+          if len(entries) > 50:
+              raise ValueError('公開ファイルが多すぎます')
+          for entry in entries:
+              info = entry.lstat()
+              if stat.S_ISLNK(info.st_mode):
+                  raise ValueError('シンボリックリンクは公開しません')
+              relative = entry.relative_to(source).as_posix()
+              if stat.S_ISDIR(info.st_mode):
+                  if not re.fullmatch(scenarios, relative):
+                      raise ValueError(f'不正なディレクトリ: {relative}')
+                  continue
+              if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not allowed.fullmatch(relative):
+                  raise ValueError(f'不正なファイル: {relative}')
+              limit = 16 * 1024 * 1024 if entry.suffix == '.mp4' else 8 * 1024 * 1024
+              if info.st_size > limit:
+                  raise ValueError(f'ファイルが大きすぎます: {relative}')
+              total += info.st_size
+              files.append((entry, relative))
+          names = {relative for _, relative in files}
+          if 'index.html' not in names or len(files) < 5 or total > 64 * 1024 * 1024:
+              raise ValueError('公開レポートが不完全、または大きすぎます')
+          for directory in {relative.split('/')[0] for relative in names if '/' in relative}:
+              required = {f'{directory}/{name}' for name in ('recording.mp4', 'contact-sheet.png', 'frame-0000.png', 'inputs.json')}
+              if not required.issubset(names):
+                  raise ValueError(f'シナリオのファイルが不足しています: {directory}')
+          docs = Path('preview-store/docs')
+          prefix = docs / 'previews' / f'pr-{number}'
+          for parent in (docs, docs / 'previews', prefix):
+              if parent.is_symlink():
+                  raise ValueError('公開先のリンクは使用しません')
+          destination = prefix / sha
+          if destination.is_symlink():
+              raise ValueError('公開先のリンクは使用しません')
+          if destination.exists():
+              shutil.rmtree(destination)
+          destination.mkdir(parents=True)
+          for entry, relative in files:
+              target = destination / relative
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(entry, target)
+          (docs / '.nojekyll').touch()
+          (prefix / 'index.html').write_text(
+              f'<!doctype html><html lang="ja"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={sha}/">'
+              f'<title>PR #{number} の等速確認</title><a href="{sha}/">PR #{number} の確認ページを開く</a></html>')
+          links = []
+          for path in sorted((docs / 'previews').glob('pr-*'), key=lambda p: int(p.name.removeprefix('pr-')) if re.fullmatch(r'pr-[0-9]+', p.name) else -1, reverse=True):
+              if re.fullmatch(r'pr-[0-9]+', path.name) and (path / 'index.html').is_file():
+                  label = html.escape(path.name.replace('pr-', 'PR #'))
+                  links.append(f'<li><a href="previews/{path.name}/">{label} の等速動画を確認する</a></li>')
+          (docs / 'index.html').write_text(
+              '<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+              '<title>Racing Gauge · PR確認ページ</title><style>body{font:17px system-ui;background:#10151b;color:#eee;max-width:850px;margin:50px auto;padding:20px}a{color:#9bcaff}li{margin:18px 0}</style>'
+              '<h1>Racing Gauge · PR確認ページ</h1><p>全動画は等速です。各PRの最新の検証済み録画を開けます。</p><ul>' + ''.join(links) + '</ul></html>')
+          print(f'公開準備: PR #{number}, {len(files)} files, {total} bytes')
+          PY
+      - name: 公開用ブランチを更新
+        if: steps.current.outputs.publish == 'true'
+        working-directory: preview-store
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- docs
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "PR #${PR_NUMBER}: real-time visual report ${EXPECTED_SHA}"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:visual-previews; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            git pull --rebase origin visual-previews
+          done
+      - name: GitHub Pages用の成果物を保存
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: preview-store/docs
+      - name: 確認ページを公開
+        if: steps.current.outputs.publish == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: PRへ確認ページのリンクを作成・更新
+        if: steps.current.outputs.publish == 'true'
         uses: actions/github-script@v8
         env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
           ARTIFACT_URL: ${{ needs.record.outputs.artifact_url }}
         with:
           script: |
@@ -91,34 +237,20 @@ jobs:
             const issue_number = context.issue.number;
             const expectedSha = context.payload.pull_request.head.sha;
             const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
-            // 古いコミットの録画で最新コメントを上書きしない。
-            if (pull.state !== 'open' || pull.head.sha !== expectedSha) {
-              core.info('更新済み、またはクローズされた PR のためコメントを省略します。');
-              return;
-            }
-            const artifactUrl = process.env.ARTIFACT_URL;
-            if (!artifactUrl) throw new Error('録画成果物の URL がありません。');
+            if (pull.state !== 'open' || pull.head.sha !== expectedSha) return;
+            const base = process.env.PAGE_URL;
+            if (!base || !base.startsWith('https://')) throw new Error('公開URLがありません');
+            const url = new URL(`previews/pr-${issue_number}/${expectedSha}/`, base).href;
             const marker = '<!-- racing-gauge-sdl-recording -->';
-            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
-            const body = [
-              marker,
-              '### SDL 目視テスト録画',
-              '',
-              `[録画レポートをダウンロード（MP4・index.html）](${artifactUrl})`,
-              '',
-              'ZIP を展開し、`index.html` をブラウザーで開いてください。各 `recording.mp4` も直接再生できます。',
-              '油温-10〜170℃・水温-10〜130℃・油圧0〜10bar、LOW境界への瞬間的な低下と回復、始動時70℃を録画しています。',
-              '',
-              `対象: ${expectedSha.slice(0, 7)} · [CI の実行](${runUrl}) · 成果物の保存期間: 14日`,
-              '同じ PR の録画が成功するたび、このコメントを更新します。',
+            const body = [marker, '### SDL 等速での動作確認', '',
+              `[等速の確認ページを開く](${url})`, '',
+              'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
+              '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面を確認できます。', '',
+              `[全PNG・MP4をダウンロード](${process.env.ARTIFACT_URL})`, '',
+              `対象: ${expectedSha.slice(0, 7)} · [CIの実行](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`,
+              'このURLは対象コミットの録画です。再検証時はこのコメントを更新します。',
             ].join('\n');
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner, repo, issue_number, per_page: 100,
-            });
-            const previous = comments.find(comment =>
-              comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker));
-            if (previous) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
+            const previous = comments.find(c => c.user?.login === 'github-actions[bot]' && c.body?.includes(marker));
+            if (previous) await github.rest.issues.updateComment({owner, repo, comment_id: previous.id, body});
+            else await github.rest.issues.createComment({owner, repo, issue_number, body});

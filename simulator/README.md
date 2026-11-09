@@ -1,16 +1,46 @@
-# SDL シミュレーターと CI 録画
+# SDLシミュレーターと等速での動作確認
 
-実機なしで、racing_gauge の表示を動かして目視確認するための環境です。
-[M5GFX の SDL シミュレーター](https://github.com/m5stack/M5GFX/blob/master/examples/PlatformIO_SDL/README.md)を使い、
-**本番の描画・フォント・平滑化・ピーク記録・警告処理**をデスクトップ向けにビルドします。
-別の PlatformIO プロジェクトなので、実機のビルド・書き込み設定には影響しません。
+[確認ページをブラウザーで開く](https://puriso.github.io/racing_gauge/)
 
-## ローカルで表示する
+本番の描画・フォント・平滑化・Rモード・LOW警告をSDLで実行し、**等速のMP4とindex.html**にまとめます。
+PRのコメントから、ZIPを展開せずGitHub Pages上の確認ページを直接開けます。
+すべて1.0倍速です。Rモードの3分保持も実時間どおりに保存し、確認時刻ボタンから場面へ移動できます。
 
-Python 3.11 以降と C++17 コンパイラーが必要です。macOS と Ubuntu の録画を検証対象とします。
-Windows への SDL 導入は上記の公式手順を参照してください。このプロジェクトでの Windows 動作は未検証です。
+## シナリオ
 
-macOS（Xcode Command Line Tools を導入済みの場合）:
+通常走行の油圧は、4秒周期で**3.0〜6.0barを連続往復**します。
+始動直後、意図的な急落、専用の全レンジ試験を除き、5.0barで固定する場面はありません。
+
+| シナリオ | 長さ | 確認する内容 |
+| --- | --- | --- |
+| `circuit` | 36秒 | 最大2.0Gの瞬間入力と油圧0.8barへの急落。短時間の非点灯、継続時のR・LOW、回復・保持・消灯 |
+| `racing` | 196秒 | 50msの2.0GではRに入らず、1.0G継続で進入。G解除後も3分保持し、時限解除・再進入・詳細画面での解除を確認 |
+| `ramp` | 200秒 | 油温-10→170→-10℃、水温-10→130→-10℃。上昇後、同じ動画内で保持から下降へ進む |
+| `cooldown` | 100秒 | 高温から低温へ下降。バーの消去、赤表示の解除、低温端を確認 |
+| `pressure-sweep` | 20秒 | 油圧0→10→0barの専用全レンジ試験。上昇・下降、8bar以上の赤表示を確認 |
+| `warnings` | 40秒 | 通常変動中に3.1/3.0/2.9barへ250ms低下。2.9barの2秒保持でLOW点灯・保持・解除 |
+| `startup` | 30秒 | 最初の1秒は70℃、その後-10℃へ戻って暖機。始動時の読み値の推移を確認 |
+| `warm-start` | 30秒 | 70℃から暖機。始動後は油圧3〜6barで連続変動 |
+| `menu` | 20秒 | 8〜13秒は詳細画面。油圧の変動、通常表示への復帰や残像を確認 |
+
+`circuit`の主な時刻:
+
+| 時刻 | 入力・確認する動作 |
+| --- | --- |
+| 4.00〜4.05秒 | 2.0Gと0.8barへ同時に急変。50msではR・LOWとも非点灯 |
+| 8.00〜10.50秒 | 2.0Gと0.8barを継続。R進入、LOW点灯、油圧回復後の表示保持 |
+| 18.00〜18.20秒 | 2.0Gと0.8barへ200msだけ低下。LOWは点灯しない |
+| 22.00〜24.00秒 | 再度継続して急落。LOWの再点灯と回復を確認 |
+
+`racing`の確認時刻は2.1秒（短いGで非進入）、4.2秒（進入）、184秒（保持中）、
+184.3秒（3分後の解除）、187.3秒（再進入）、190秒（詳細画面での解除）です。
+入力とゲージ表示には本番の平滑化による遅れがあります。
+Rは1.0G以上が100ms継続、LOWは1.0G超かつ表示用油圧3bar以下が500ms継続すると点灯します。
+
+## ローカルで起動する
+
+Python 3.11以降、C++17コンパイラー、SDL2とpkg-configが必要です。
+macOSではXcode Command Line Toolsも必要です。
 
 ```sh
 brew install sdl2 pkg-config
@@ -23,134 +53,84 @@ sudo apt-get update
 sudo apt-get install -y build-essential libsdl2-dev pkg-config
 ```
 
-以下はリポジトリのルートで実行します。
+リポジトリのルートで実行します。
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r simulator/requirements.txt
 pio run -d simulator -e desktop
-simulator/.pio/build/desktop/program --scenario ramp
+simulator/.pio/build/desktop/program --scenario circuit
 ```
 
-320×240 の画面を 2 倍で表示します。`ramp` は100秒で全レンジを確認し、終点で止まります。
-油温・水温は90秒かけて上昇し、最初の2秒と最後の8秒は端の値を保持します。
-数値は本番と同じ平滑化を通るため、入力値に対して表示に遅れがあります。
+320×240の本番描画を2倍で表示します。
+Spaceで一時停止、Homeで再生を戻し、Mまたはクリックで詳細画面を切り替えます。
+再生を戻しても仮想時計・ピーク値・平滑化履歴は保持します。初期状態で比較する場合は再起動してください。
+`--seconds`では5〜240秒の再生時間を指定できます。Rの保持時間自体は本番設定のままです。
 
-| 操作 | 動作 |
-| --- | --- |
-| Space | 一時停止・再開 |
-| Home | シナリオを最初から再生（ピーク値・平滑化履歴は保持） |
-| M または画面クリック | 詳細画面を表示・解除 |
-| ウィンドウを閉じる | 終了 |
-
-`--scenario warnings`・`startup`・`warm-start`・`menu` でも起動できます。
-Space で一時停止すると、入力・仮想時刻・平滑化・描画をまとめて停止します（M/クリックの反映は再開後）。
-まっさらな状態で比較する場合は、プロセスを再起動してください。
-
-## 録画する
+## 録画と確認ページを生成する
 
 ```sh
-python simulator/record.py
+python simulator/record.py --output simulator/out/my-review
 ```
 
-ウィンドウを開かずに 5 シナリオを実行し、`simulator/out/<日時>/index.html` にまとめます。
-ブラウザーで HTML を開くか、各フォルダーの **recording.mp4** を再生してください。
-HTML は動画を参照するため、出力フォルダー全体を保持してください。
+9シナリオを実行し、`simulator/out/my-review/index.html`を作ります。
+ファイルをブラウザーで直接開けます。動画を参照するため、フォルダー全体を保持してください。
+`--scenario circuit`などで個別に実行でき、ビルド済みなら`--skip-build`を付けられます。
+既存の出力先は上書きしません。FFmpegはPythonパッケージに同梱されています。
+
+- `index.html`: シナリオ一覧、確認時刻への移動、等速での連続再生、G・油圧入力とR・LOWの表示状態
+- `<scenario>/recording.mp4`: H.264、10fps、等速。終点の1フレーム（0.1秒）も含む
+- `<scenario>/frame-*.png`: 100msごとの全転送先フレーム。圧縮にじみのない画素確認用
+- `<scenario>/contact-sheet.png`: 代表フレームの一覧
+- `<scenario>/inputs.json`: 模擬入力、時刻、本番R判定、画素から確認したR・LOWの状態
+- `public/`: 公開用のindex.html・MP4・代表画像・JSON。全PNGは含めず、公開データ量を抑える
+
+入力範囲、連続した油圧変動、温度の上昇・下降、Rの非進入・進入・保持・解除を自動検証します。
+さらに実際の転送先PNGでR表示との一致、LOWの点灯・保持・消灯、油温バーの枠内描画と赤色の解除を確認します。
+MP4も再デコードして破損を検出します。それ以外の外観は確認ページで目視してください。
+
+## GIFが必要な場合
+
+CIはGIFを自動生成せず、等速動画の確認ページを公開します。
+個別にGIFを作る場合も、全区間を10fps・1.0倍速で保存します。倍速化や途中区間の省略はしません。
 
 ```sh
-python simulator/record.py --scenario ramp --output simulator/out/my-review
+python simulator/make_demo.py --recordings simulator/out/my-review --scenario circuit --output simulator/out/circuit.gif
 ```
 
-既にビルド済みなら `--skip-build` を付けられます。指定した出力先が存在する場合は停止し、上書きしません。
-FFmpeg は Python パッケージに同梱されたバイナリーを使用するため、追加インストールは不要です。
+## GitHub PagesとCI
 
-| シナリオ | 長さ | 入力・確認箇所 |
-| --- | --- | --- |
-| `ramp` | 100秒 | 油温 **-10→170℃**・水温 **-10→130℃**を90秒で上昇。油圧 **0→10bar**。低温・高温の両端を保持 |
-| `warnings` | 40秒 | 油温70→90℃・水温70→85℃をゆっくり上昇。油圧5barからLOW境界の直上・一致・直下へ短時間低下して回復 |
-| `startup` | 30秒 | 油温・水温が始動直後の1秒だけ70℃。-10℃に戻り、油温50℃・水温40℃までゆっくり上昇。ピーク値の残り方も確認 |
-| `warm-start` | 30秒 | 油温・水温が70℃から始まり、そのまま油温95℃・水温90℃まで暖機。始動1秒で油圧0→5bar |
-| `menu` | 20秒 | 油温70→90℃・水温70→85℃、油圧5bar。8〜13秒は詳細画面。ピーク値と通常表示への復帰 |
+[SDL Visual Recording](../.github/workflows/visual-simulator.yml)は、描画・設定・シミュレーターに関係するPRとmainへのpushで実行します。
+手動実行ではシナリオを選べます。
 
-`warnings` の油圧入力（各低下の後は5barへ回復）:
+同じリポジトリ内のPRでは、録画・検証が成功するとGitHub Pagesへ公開し、既存のPRコメントを更新します。
+確認URLは`previews/pr-<番号>/<コミットSHA>/`です。コミットごとの録画を保持し、PRごとの入口からは最新の成功した録画を開けます。
+公開用ファイルは`visual-previews`ブランチの`docs/`へ保存し、GitHub Pages用の成果物として明示的にデプロイします。
+main・PRのコードは公開処理で変更しません。
 
-| 時刻 | 入力 | 確認する動作 |
-| --- | --- | --- |
-| 8.00〜8.25秒 | 3.1bar | LOW境界の直上へ250msだけ低下 |
-| 12.00〜12.25秒 | 3.0bar | LOW境界に250msだけ一致 |
-| 16.00〜16.25秒 | 2.9bar | 境界の直下へ250msだけ低下。LOWが点灯しないこと |
-| 22.00〜24.00秒 | 2.9bar | 2秒保持してLOW点灯。その後5barへ回復し、表示保持を経て解除 |
+PagesはGitHub Actions方式で設定し、`github-pages`環境から信頼する同一リポジトリ内PRの公開を許可します。
+fork・Dependabotでは公開とコメントを省略します。録画ジョブは読み取り専用です。
+公開ジョブは検証済みの成果物だけを使い、許可したパス・通常ファイル・サイズ上限を確認します。
+公開ブランチのコードや成果物内のスクリプトは実行しません。公開を直列化し、別PRの録画も保持します。
 
-現行のLOW条件は **1G超かつ平滑化後の油圧3bar以下が0.5秒継続**です。
-この録画では6〜30秒に1.2Gを与えます。短時間の3.0bar入力は平滑化により表示側が3bar以下に達しない場合があり、
-その挙動も本番コードのまま確認します。温度の上昇速度は最大約2.1℃/秒です（始動時70℃から低温へ戻る1回の変化を除く）。
-`startup` は70℃表示の原因や異常判定を仮定せず、読み値の推移だけを再現します。
-CLIの `--seconds` ではシナリオ全体を伸縮できます。CI録画は上表の時間を固定して使用します。
-
-出力内容:
-
-- `recording.mp4`: 320×240、H.264、10fps。シナリオの長さ＋終点1フレーム（0.1秒）の動画
-- `frame-*.png`: 100msごとの全フレーム。5シナリオ合計2,205枚。圧縮によるにじみのない静止画確認用
-- `contact-sheet.png`: シナリオ別の代表フレーム。油圧の境界値・警告・回復や、始動時70℃の前後も抜粋
-- `inputs.json`: 各フレームの模擬入力・時刻・センサーの有効設定。表示値ではなくセンサー境界へ渡す前の物理量
-
-録画処理は、フレーム数・時刻・画面サイズ・空白・描画の変化・`ramp` 入力の単調増加を検査し、
-温度の上昇速度・始動時70℃・油圧の境界値と回復も検査します。
-既定の有効センサー構成では、LOW領域のPNGから短い低下での非点灯、継続低下での点灯・保持・回復後の消灯も検証します。
-全レンジ録画では、130℃を超えた油温バーが数値領域へはみ出さないことも検証します。
-MP4 が正常にデコードできることも確認します。それ以外の見た目の判定は人が行います。
-
-## README の紹介用 GIF を更新する
-
-`record.py` で生成した録画の出力先を指定すると、本番描画のPNGから紹介用GIFを再生成できます。
-
-```sh
-python simulator/make_demo.py --recordings simulator/out/my-review
-```
-
-`ramp` と `warnings` の両方を含む録画が必要です（`record.py` の既定値 `all` で生成できます）。
-出力は `docs/images/gauge-demo.gif` です。全レンジの昇温を12.5倍速、
-油圧低下・LOW点灯・回復の21.5〜28.5秒を等速で抜粋し、再生速度を画面外の帯に表示します。
-GIFは紹介用の抜粋です。全シナリオの確認にはMP4または全PNGを使用してください。
-
-## CI で確認する
-
-[SDL Visual Recording](../.github/workflows/visual-simulator.yml) が、描画・設定・シミュレーターを変更した PR と
-main への push で実行されます。手動実行ではシナリオを選べます（ワークフローが main に入った後）。
-
-同じリポジトリ内の PR では、録画成功後に **録画レポートをダウンロード** というリンクを自動コメントします。
-リンク先の ZIP を展開して `index.html` を開いてください。再実行時はコメントを増やさず、同じコメントを更新します。
-HTML を公開ホスティングする機能はありません。
-
-fork と Dependabot の PR はコメントを省略し、Checks から成果物を開く方法を使用します。
-録画ジョブは読み取り権限で実行し、PR コメントの権限はコードを実行しない専用ジョブに限定しています。
-
-1. PR の Checks、または GitHub の Actions から **SDL Visual Recording** の実行を開きます。
-2. **Artifacts → visual-simulator** をダウンロード・展開します。
-3. `index.html` または各 `recording.mp4` を開きます。成果物は 14 日間保存されます。
-
-実行結果ごとの録画を比較すれば、バーの欠け、文字の重なり、警告の出入り、詳細画面から戻った際の残像を確認できます。
-CI の実行画面から SDL を遠隔操作する機能はありません。操作したい場合はローカルのウィンドウを使用します。
+全PNGを含む`visual-simulator`成果物はActionsに14日間保存します。
+公開用の動画とHTMLはGit履歴として残ります。mainへのpushと手動実行では成果物の保存までを行います。
 
 ## 実装範囲
 
-`rendering.cpp` から `src/modules/` の本番コードを直接使用します。
-センサーの取得境界だけを置き換え、サンプル配列へ物理量を渡します。
-照度センサーは固定値です。ADC の電圧換算、I²C、IMU、電源回路、タッチの実機ドライバーは実行しません。
-
-録画では仮想時刻で毎秒 60 回の描画処理を行い、6 回に 1 回、**転送先のフレームバッファ**を取得します。
-実時間の経過を待たずに実行でき、PC の速さによって警告の保持時間や入力が変わりません。
-出力動画の 10fps は録画の設定値であり、実機 FPS の測定結果ではありません。
-
-M5GFX は `0.3.0` に固定しています。ファームウェア側の解決バージョンを更新した際は、
-`simulator/platformio.ini` も確認してください。画面の回転は SDL の CoreS3 パネルに合わせて `0` にしています。
-実機の初期化処理全体をエミュレートするものではありません。
+[M5GFX SDL](https://github.com/m5stack/M5GFX/blob/master/examples/PlatformIO_SDL/README.md)の本番レンダラーを使用します。
+`rendering.cpp`が`src/modules/`を直接リンクし、センサー配列と時刻を仮想化します。
+毎秒60回の本番処理を実行し、6回に1回、転送先フレームバッファを保存します。
+仮想実行自体は実時間より速く完了しますが、生成した動画の再生速度は等速です。
+録画の10fpsは実機FPSの測定値ではありません。ADC・I²C・IMU・電源・タッチの実機ドライバーは検証しません。
+ファームウェア側のビルド・書き込み設定は変更しません。
 
 ## English
 
-This separate PlatformIO native project runs the production gauge renderer on M5GFX SDL.
-Use `pio run -d simulator -e desktop`, then launch `simulator/.pio/build/desktop/program`.
-`python simulator/record.py` captures the full-range ramp, pressure-boundary dips, transient/warm startup and menu scenarios into MP4, PNG and an offline HTML report.
-GitHub Actions publishes these files as the `visual-simulator` artifact.
-Sensor inputs and application time are simulated; hardware FPS, ADC, I²C and power behavior are outside its scope.
+The simulator runs production rendering, smoothing, LOW warnings and racing-mode logic through M5GFX SDL.
+Nine real-time scenarios cover continuous 3–6bar pressure, sudden 2.0G/pressure drops, R activation/three-minute hold/expiry,
+heating followed by cooling, pressure range sweeps, startup and menu transitions.
+The HTML review page offers normal-speed video, timestamp links and input/state readouts.
+Trusted same-repository PRs publish a commit-specific GitHub Pages URL; full PNG artifacts remain in Actions for 14 days.
+Optional GIF generation is also real-time. Hardware accuracy, vehicle behavior and hardware FPS are outside this simulator's scope.
