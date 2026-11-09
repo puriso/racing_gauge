@@ -36,7 +36,7 @@ details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-wid
     <div id="fps-results" hidden>
       <div class="fps-summary"><div class="reading">変更前<strong id="fps-before"></strong></div><div class="reading">変更後<strong id="fps-after"></strong></div><div class="reading">計測差<strong id="fps-change"></strong></div></div>
       <p class="fine" id="fps-method"></p>
-      <p class="fine">描画・判定処理とフレームバッファへの転送にかかった実時間から算出しています。画像保存・動画変換・待機・SDLの画面提示は含みません。<strong>CoreS3実機のFPSは未測定</strong>です。</p>
+      <p class="fine">描画・判定処理とフレームバッファへの転送にかかった実時間から算出しています。画像保存・動画変換・アプリ側のFPS上限待機は除外し、SDLドライバー内部の待機・OSの割り込みは含みます。実画面への提示FPSとは別で、<strong>CoreS3実機のFPSは未測定</strong>です。</p>
       <p class="fine notice" id="fps-source-note" hidden>製品側の描画コードと設定は比較元と同一です。計測差にはPCの負荷・ばらつきやシミュレーターの遷移処理が含まれ、実機の改善率を示すものではありません。</p>
       <details><summary>シナリオごとの平均FPS・計測条件</summary>
         <div class="table-scroll"><table><thead><tr><th>シナリオ</th><th>変更前（PC）</th><th>変更後（PC）</th><th>計測差</th></tr></thead><tbody id="fps-rows"></tbody></table></div>
