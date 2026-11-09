@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -17,6 +18,7 @@
 #include "compat.hpp"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
 
 // 本番のセンサー境界と同じ配列型で接続する。
@@ -30,6 +32,10 @@ float currentGForce = 0.0F;
 const char* currentGDirection = "Right";
 int currentFps = 0;
 
+// 描画処理が保持する最高温度も録画に保存し、詳細画面中の更新を検証する。
+extern float recordedMaxWaterTemp;
+extern int recordedMaxOilTempTop;
+
 namespace simulator
 {
 uint32_t nowMs = 0;
@@ -41,7 +47,7 @@ constexpr unsigned int TICKS_PER_SECOND = 60;
 constexpr unsigned int CAPTURE_STRIDE = 6;
 constexpr unsigned int DEFAULT_SECONDS = 20;
 constexpr unsigned int MIN_SECONDS = 5;
-constexpr unsigned int MAX_SECONDS = 120;
+constexpr unsigned int MAX_SECONDS = 240;
 constexpr unsigned int MS_PER_SECOND = 1000;
 constexpr unsigned int US_PER_SECOND = 1000000;
 constexpr unsigned int SDL_STEP_MS = 128;
@@ -78,7 +84,7 @@ auto defaultSeconds() -> unsigned int
 {
   if (options().scenario == "ramp")
   {
-    return 100;
+    return 200;
   }
   if (options().scenario == "warnings")
   {
@@ -88,12 +94,31 @@ auto defaultSeconds() -> unsigned int
   {
     return 30;
   }
+  if (options().scenario == "cooldown")
+  {
+    return 100;
+  }
+  if (options().scenario == "circuit")
+  {
+    return 36;
+  }
+  if (options().scenario == "racing")
+  {
+    return 196;
+  }
   return DEFAULT_SECONDS;
 }
 
 auto interpolate(float start, float end, float progress) -> float
 {
   return start + ((end - start) * std::clamp(progress, 0.0F, 1.0F));
+}
+
+auto runningPressure(float seconds) -> float
+{
+  // 4秒周期の三角波で3〜6barを連続的に往復する。
+  const float phase = std::fmod(seconds, 4.0F) / 2.0F;
+  return 3.0F + (3.0F * (phase <= 1.0F ? phase : 2.0F - phase));
 }
 
 auto pressureDip(float seconds) -> float
@@ -115,13 +140,63 @@ auto pressureDip(float seconds) -> float
   {
     return 2.9F;
   }
-  return 5.0F;
+  return runningPressure(seconds);
+}
+
+auto sampleCircuit(float progress, float seconds, float pressure) -> Inputs
+{
+  // 瞬間的なGと、継続するコーナリングでの油圧急落を分けて確認する。
+  const bool shortSpike = (seconds >= 4.0F && seconds < 4.05F) || (seconds >= 18.0F && seconds < 18.2F);
+  const bool corner = (seconds >= 8.0F && seconds < 10.5F) || (seconds >= 22.0F && seconds < 24.0F);
+  const bool event = shortSpike || corner;
+  return {
+      interpolate(95.0F, 125.0F, progress),
+      interpolate(90.0F, 112.0F, progress),
+      event ? 0.8F : pressure,
+      event ? 2.0F : 0.0F,
+      false,
+  };
+}
+
+auto sampleRacing(float seconds, float pressure) -> Inputs
+{
+  const bool spike = seconds >= 2.0F && seconds < 2.05F;
+  const bool start = (seconds >= 4.0F && seconds < 4.2F) || (seconds >= 187.0F && seconds < 187.2F);
+  float acceleration = 0.0F;
+  if (spike)
+  {
+    acceleration = 2.0F;
+  }
+  else if (start)
+  {
+    acceleration = 1.0F;
+  }
+  return {100.0F, 95.0F, pressure, acceleration, seconds >= 190.0F && seconds < 192.0F};
 }
 
 auto sample(float progress) -> Inputs
 {
   // 時間指定を変えても同じ順序のシナリオを伸縮する。
   const float seconds = progress * static_cast<float>(defaultSeconds());
+  const float pressure = runningPressure(seconds);
+  if (options().scenario == "circuit")
+  {
+    return sampleCircuit(progress, seconds, pressure);
+  }
+  if (options().scenario == "racing")
+  {
+    return sampleRacing(seconds, pressure);
+  }
+  if (options().scenario == "pressure-sweep")
+  {
+    const float sweep = progress <= 0.5F ? progress * 2.0F : (1.0F - progress) * 2.0F;
+    return {100.0F, 95.0F, interpolate(0.0F, 10.0F, sweep), 0.0F, false};
+  }
+  if (options().scenario == "cooldown")
+  {
+    const float cooling = (seconds - 2.0F) / 90.0F;
+    return {interpolate(170.0F, -10.0F, cooling), interpolate(130.0F, -10.0F, cooling), pressure, 0.0F, false};
+  }
   if (options().scenario == "warnings")
   {
     return {
@@ -140,7 +215,7 @@ auto sample(float progress) -> Inputs
     return {
         initialReading ? 70.0F : interpolate(-10.0F, 50.0F, warming),
         initialReading ? 70.0F : interpolate(-10.0F, 40.0F, warming),
-        interpolate(0.0F, 5.0F, seconds),
+        pressure * std::clamp(seconds, 0.0F, 1.0F),
         0.0F,
         false,
     };
@@ -150,7 +225,7 @@ auto sample(float progress) -> Inputs
     return {
         interpolate(70.0F, 95.0F, progress),
         interpolate(70.0F, 90.0F, progress),
-        interpolate(0.0F, 5.0F, seconds),
+        pressure * std::clamp(seconds, 0.0F, 1.0F),
         0.0F,
         false,
     };
@@ -158,18 +233,14 @@ auto sample(float progress) -> Inputs
   if (options().scenario == "menu")
   {
     return {
-        interpolate(70.0F, 90.0F, progress), interpolate(70.0F, 85.0F, progress), 5.0F, 0.0F,
+        interpolate(70.0F, 90.0F, progress), interpolate(70.0F, 85.0F, progress), pressure, 0.0F,
         seconds >= 8.0F && seconds < 13.0F,
     };
   }
   // 両端を保持し、平滑化後の低温・高温も目視しやすくする。
-  const float warming = (seconds - 2.0F) / 90.0F;
+  const float warming = seconds < 100.0F ? (seconds - 2.0F) / 90.0F : (190.0F - seconds) / 90.0F;
   return {
-      interpolate(-10.0F, 170.0F, warming),
-      interpolate(-10.0F, 130.0F, warming),
-      interpolate(0.0F, 10.0F, (seconds - 2.0F) / 10.0F),
-      0.0F,
-      false,
+      interpolate(-10.0F, 170.0F, warming), interpolate(-10.0F, 130.0F, warming), pressure, 0.0F, false,
   };
 }
 
@@ -268,19 +339,22 @@ void initializeDisplay()
 auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
 {
   inject(input);
-  updateRacingMode(simulator::nowMs, currentGForce);
   const bool menu = input.menu || manualMenu;
+  if (!showingMenu && menu)
+  {
+    // 実機の詳細画面への遷移と同じく、Rモードを解除する。
+    forceStopRacingMode();
+  }
+  updateRacingMode(simulator::nowMs, currentGForce);
   if (showingMenu && !menu)
   {
     resetGaugeState();
   }
+  // 実機と同じく、詳細画面中も計測値と最高値を更新し、ゲージ描画だけを省略する。
+  updateGauges(!menu);
   if (menu)
   {
     drawMenuScreen();
-  }
-  else
-  {
-    updateGauges();
   }
   return menu;
 }
@@ -298,6 +372,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
     {
       manifest.open(options().capture / "inputs.json");
       manifest.exceptions(std::ios::failbit | std::ios::badbit);
+      manifest << std::boolalpha;
       manifest << R"({"scenario":")" << options().scenario << R"(","fps":10,"sensors":{"oil_temp":)"
                << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)" << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)"
                << SENSOR_OIL_PRESSURE_PRESENT << "},\"frames\":[\n";
@@ -330,7 +405,8 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
         }
         manifest << "{\"time_ms\":" << tick * MS_PER_SECOND / TICKS_PER_SECOND << ",\"oil_c\":" << input.oil
                  << ",\"water_c\":" << input.water << ",\"pressure_bar\":" << input.pressure
-                 << ",\"g\":" << input.acceleration << ",\"menu\":" << (showingMenu ? "true" : "false") << '}';
+                 << ",\"g\":" << input.acceleration << ",\"menu\":" << showingMenu << ",\"racing\":" << isRacingMode
+                 << ",\"max_oil_c\":" << recordedMaxOilTempTop << ",\"max_water_c\":" << recordedMaxWaterTemp << '}';
       }
       if (recording && tick == totalTicks)
       {
@@ -374,8 +450,10 @@ auto main(int argc, char** argv) -> int
       const std::string argument = argv[i];
       if (argument == "--help")
       {
-        std::cout << "Usage: program [--scenario ramp|warnings|startup|warm-start|menu] [--seconds N] [--capture "
-                     "NEW_DIRECTORY]\n";
+        std::cout
+            << "Usage: program [--scenario ramp|cooldown|pressure-sweep|warnings|circuit|racing|startup|warm-start|menu] "
+               "[--seconds N] [--capture "
+               "NEW_DIRECTORY]\n";
         return 0;
       }
       if (i + 1 >= argc)
@@ -396,7 +474,7 @@ auto main(int argc, char** argv) -> int
         const auto seconds = std::stoul(value);
         if (seconds < MIN_SECONDS || seconds > MAX_SECONDS)
         {
-          throw std::runtime_error("Duration must be 5..120 seconds");
+          throw std::runtime_error("Duration must be 5..240 seconds");
         }
         options().seconds = static_cast<unsigned int>(seconds);
       }
@@ -406,7 +484,8 @@ auto main(int argc, char** argv) -> int
       }
     }
     if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
-        options().scenario != "warm-start" && options().scenario != "menu")
+        options().scenario != "warm-start" && options().scenario != "menu" && options().scenario != "cooldown" &&
+        options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }
@@ -416,7 +495,7 @@ auto main(int argc, char** argv) -> int
     }
     if (options().seconds < MIN_SECONDS || options().seconds > MAX_SECONDS)
     {
-      throw std::runtime_error("Duration must be 5..120 seconds");
+      throw std::runtime_error("Duration must be 5..240 seconds");
     }
     if (!options().capture.empty() && !std::filesystem::create_directory(options().capture))
     {

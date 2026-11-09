@@ -7,6 +7,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -16,27 +17,57 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "circuit": {
+        "title": "サーキット・2.0Gと急な油圧低下", "group": "pressure",
+        "description": "通常は3〜6barを連続往復。瞬間的な2.0Gと0.8barへの急落、継続低下、LOW点灯・保持・回復を確認",
+        "seconds": 36, "snapshots": [0, 4, 4.1, 8, 9.5, 10.5, 14, 18.1, 23.5, 28, 36],
+    },
+    "racing": {
+        "title": "Rモード・進入から3分後の解除まで", "group": "racing",
+        "description": "50msの2.0Gでは非進入。1.0G継続で進入し、G解除後も3分保持。再進入と詳細画面での解除も等速で確認",
+        "seconds": 196, "snapshots": [0, 2, 2.1, 4.2, 5, 184, 184.3, 187.3, 190, 192, 196],
+    },
     "ramp": {
-        "description": "油温 -10→170℃・水温 -10→130℃を90秒で上昇。油圧 0→10bar、両端を保持",
-        "seconds": 100, "snapshots": [0, 2, 20, 50, 92, 100],
+        "title": "温度の上昇→保持→下降", "group": "temperature",
+        "description": "油温-10→170→-10℃・水温-10→130→-10℃。上昇後、そのまま下降。油圧は3〜6barを連続往復",
+        "seconds": 200, "snapshots": [0, 2, 50, 92, 100, 145, 190, 200],
+    },
+    "cooldown": {
+        "title": "高温からの降温・赤表示の解除", "group": "temperature",
+        "description": "油温170→-10℃・水温130→-10℃を90秒で下降。バーの消去・赤色からの復帰・低温端を確認",
+        "seconds": 100, "snapshots": [0, 2, 25, 50, 75, 92, 100],
+    },
+    "pressure-sweep": {
+        "title": "油圧0→10→0bar", "group": "pressure",
+        "description": "専用の全レンジ確認。0→10→0barを往復し、上昇・下降時の弧と8barの赤色境界を確認",
+        "seconds": 20, "snapshots": [0, 4, 8, 10, 12, 16, 20],
     },
     "warnings": {
-        "description": "油圧5→3.1/3.0/2.9→5barの各250ms低下と、2.9barを2秒保持するLOW警告・回復",
+        "title": "LOW境界・短時間低下と継続低下", "group": "pressure",
+        "description": "3〜6barの変動中、3.1/3.0/2.9barへ各250ms低下。2.9barを2秒保持しLOW点灯と回復を確認",
         "seconds": 40, "snapshots": [0, 8.1, 12.1, 16.2, 23, 24.2, 27.5, 30, 40],
     },
     "startup": {
+        "title": "始動直後70℃→低温→暖機", "group": "operation",
         "description": "始動直後1秒は油温・水温70℃、その後-10℃に戻ってゆっくり暖機",
         "seconds": 30, "snapshots": [0, 0.9, 1, 2, 10, 30],
     },
     "warm-start": {
+        "title": "70℃からの暖機", "group": "operation",
         "description": "油温・水温とも70℃から始動し、そのままゆっくり上昇",
         "seconds": 30, "snapshots": [0, 0.5, 1, 10, 20, 30],
     },
     "menu": {
+        "title": "詳細画面と通常表示への復帰", "group": "operation",
         "description": "油温・水温がゆっくり上昇。8〜13秒は詳細画面、通常画面への復帰を確認",
         "seconds": 20, "snapshots": [0, 4, 8, 12, 16, 20],
     },
 }
+
+
+def running_pressure(seconds):
+    phase = (seconds % 4) / 2
+    return 3 + 3 * (phase if phase <= 1 else 2 - phase)
 
 
 def validate_inputs(metadata):
@@ -46,28 +77,68 @@ def validate_inputs(metadata):
         for key, low, high in (("oil_c", -10, 170), ("water_c", -10, 130), ("pressure_bar", 0, 10)):
             if not low <= frame[key] <= high:
                 raise RuntimeError(f"入力が検証範囲外です: {scenario}, {key}, {frame}")
+        if not 0 <= frame["g"] <= 2:
+            raise RuntimeError(f"G入力が0〜2.0Gの範囲外です: {frame}")
+        seconds = frame["time_ms"] / 1000
+        ordinary = scenario not in ("pressure-sweep", "warnings", "circuit") and seconds >= 1
+        if ordinary and not math.isclose(frame["pressure_bar"], running_pressure(seconds), abs_tol=0.0001):
+            raise RuntimeError(f"油圧が3〜6barで連続変動していません: {frame}")
     if scenario == "ramp":
-        for key, start, end in (("oil_c", -10, 170), ("water_c", -10, 130), ("pressure_bar", 0, 10)):
+        for key, start, peak in (("oil_c", -10, 170), ("water_c", -10, 130)):
             values = [frame[key] for frame in frames]
-            if values[0] != start or values[-1] != end or values != sorted(values):
-                raise RuntimeError(f"上昇シナリオの入力が不正です: {key}")
+            if (values[0] != start or values[-1] != start or max(values) != peak
+                    or values[:1001] != sorted(values[:1001])
+                    or values[1000:] != sorted(values[1000:], reverse=True)):
+                raise RuntimeError(f"上昇後、そのまま下降する温度入力が不正です: {key}")
+    if scenario == "cooldown":
+        for key, start in (("oil_c", 170), ("water_c", 130)):
+            values = [frame[key] for frame in frames]
+            if values[0] != start or values[-1] != -10 or values != sorted(values, reverse=True):
+                raise RuntimeError(f"降温シナリオの入力が不正です: {key}")
+    if scenario == "pressure-sweep":
+        values = [frame["pressure_bar"] for frame in frames]
+        if (values[0] != 0 or values[-1] != 0 or max(values) != 10
+                or values[:101] != sorted(values[:101]) or values[100:] != sorted(values[100:], reverse=True)):
+            raise RuntimeError("油圧の上昇・下降入力が不正です")
     if scenario == "warnings":
         samples = {frame["time_ms"]: frame for frame in frames}
-        for time, pressure in ((8100, 3.1), (12100, 3.0), (16200, 2.9), (23000, 2.9), (30000, 5.0)):
+        for time, pressure in ((8100, 3.1), (12100, 3.0), (16200, 2.9), (23000, 2.9), (30000, 6.0)):
             if not math.isclose(samples[time]["pressure_bar"], pressure, abs_tol=0.0001):
                 raise RuntimeError(f"油圧の境界値・回復入力が不正です: {time}")
+    if scenario in ("circuit", "racing"):
+        samples = {frame["time_ms"]: frame for frame in frames}
+        expected = ({4100: False, 8200: True, 14000: True, 36000: True} if scenario == "circuit" else
+                    {2100: False, 4200: True, 5000: True, 184000: True, 184300: False,
+                     187300: True, 190000: False, 192000: False, 196000: False})
+        for time, racing in expected.items():
+            if samples[time]["racing"] != racing:
+                raise RuntimeError(f"Rモードの判定・保持・解除が不正です: {samples[time]}")
+        if scenario == "circuit":
+            for time in (4000, 8000, 18000, 22000):
+                if samples[time]["g"] != 2 or samples[time]["pressure_bar"] != 0.8:
+                    raise RuntimeError(f"2.0Gと油圧の同時急落を再現できていません: {samples[time]}")
     if scenario in ("startup", "warm-start"):
         if frames[0]["oil_c"] != 70 or frames[0]["water_c"] != 70:
             raise RuntimeError("始動時の70℃入力がありません")
     if scenario == "startup":
         if frames[10]["oil_c"] != -10 or frames[10]["water_c"] != -10:
             raise RuntimeError("始動時70℃から低温へ戻る入力がありません")
+    if scenario == "menu":
+        # 詳細画面中も本番と同じ最高値更新を続けることを確認する。
+        for key, peak_key, sensor in (("oil_c", "max_oil_c", "oil_temp"),
+                                      ("water_c", "max_water_c", "water_temp")):
+            expected = 0
+            for frame in frames:
+                value = frame[key] if metadata["sensors"][sensor] else 0
+                expected = max(expected, int(value) if sensor == "oil_temp" else value)
+                if not math.isclose(frame[peak_key], expected, abs_tol=0.001):
+                    raise RuntimeError(f"詳細画面中の最高温度が更新されていません: {peak_key}, {frame}")
     # 始動直後の70℃→低温の変化以外、温度はゆっくり上昇させる。
     for before, after in zip(frames, frames[1:]):
         for key in ("oil_c", "water_c"):
             if scenario == "startup" and after["time_ms"] == 1000:
                 continue
-            if not 0 <= after[key] - before[key] <= 0.21:
+            if abs(after[key] - before[key]) > 0.21:
                 raise RuntimeError(f"温度が急変しています: {scenario}, {after}")
 
 
@@ -75,6 +146,11 @@ def warning_visible(image):
     # 通常の赤い目盛りを避け、LOW ボックス中央の赤背景を検出する。
     return sum(red > 180 and green < 80 and blue < 80
                for red, green, blue in image.crop((40, 130, 103, 159)).getdata()) > 100
+
+
+def racing_visible(image):
+    return any(red > 180 and green < 80 and blue < 80
+               for red, green, blue in image.crop((0, 224, 12, 237)).getdata())
 
 
 def convert_and_check(directory):
@@ -98,11 +174,22 @@ def convert_and_check(directory):
                 raise RuntimeError(f"空白またはサイズ不正のフレーム: {source}")
             seen.add(hashlib.sha256(image.tobytes()).digest())
             image.save(source.with_suffix(".png"))
+            frame = frames[index]
+            frame["low_visible"] = warning_visible(image)
+            frame["r_visible"] = racing_visible(image)
+            if not frame["menu"] and frame["r_visible"] != frame["racing"]:
+                raise RuntimeError(f"Rモードと実際のR表示が一致しません: {frame}")
             # 130℃を超えた油温バーが右側の数値領域へはみ出さないことを確認する。
-            if metadata["scenario"] == "ramp" and metadata["sensors"]["oil_temp"]:
+            if metadata["scenario"] in ("ramp", "cooldown") and metadata["sensors"]["oil_temp"]:
                 if any(red > 180 and green < 80 and blue < 80
                        for red, green, blue in image.crop((231, 16, 237, 34)).getdata()):
                     raise RuntimeError(f"油温バーが数値領域へはみ出しています: {frames[index]}")
+                checkpoints = ({0: False, 92000: True, 100000: True, 190000: False} if metadata["scenario"] == "ramp"
+                               else {0: True, 2000: True, 50000: False, 100000: False})
+                red_bar = any(red > 180 and green < 80 and blue < 80
+                              for red, green, blue in image.crop((20, 16, 230, 34)).getdata())
+                if frame["time_ms"] in checkpoints and red_bar != checkpoints[frame["time_ms"]]:
+                    raise RuntimeError(f"昇温・降温時の油温バーの赤色と解除が不正です: {frame}")
             if metadata["scenario"] == "warnings" and metadata["sensors"]["pressure"]:
                 visible = warning_visible(image)
                 time = frames[index]["time_ms"]
@@ -112,6 +199,12 @@ def convert_and_check(directory):
                     raise RuntimeError(f"継続する低油圧・解除後の保持でLOWが点灯していません: {time}")
                 if time >= 27500 and visible:
                     raise RuntimeError(f"油圧回復後もLOWが残っています: {time}")
+            if metadata["scenario"] == "circuit" and metadata["sensors"]["pressure"]:
+                expected = {4100: False, 9500: True, 10500: True, 14000: False,
+                            18100: False, 23500: True, 26000: True, 28000: False}
+                time = frame["time_ms"]
+                if time in expected and frame["low_visible"] != expected[time]:
+                    raise RuntimeError(f"急落・復帰時のLOW表示が不正です: {frame}")
             if index in snapshots:
                 tile = snapshots.index(index)
                 x, y = (tile % 3) * 320, (tile // 3) * 264
@@ -121,6 +214,7 @@ def convert_and_check(directory):
     if len(seen) < 20:
         raise RuntimeError("描画がほとんど変化していません")
     sheet.save(directory / "contact-sheet.png")
+    (directory / "inputs.json").write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
     return metadata
 
 
@@ -128,6 +222,7 @@ def encode(directory):
     subprocess.run(
         [imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-loglevel", "error", "-framerate", "10",
          "-i", str(directory / "frame-%04d.png"), "-c:v", "libx264", "-crf", "18",
+         "-vf", "pad=iw:ih+56:0:0:color=0x10151b",
          "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(directory / "recording.mp4")],
         check=True, timeout=120,
     )
@@ -140,29 +235,26 @@ def encode(directory):
 
 
 def write_report(output, scenarios):
-    sections = []
+    data = []
+    for name in scenarios:
+        config = SCENARIOS[name]
+        metadata = json.loads((output / name / "inputs.json").read_text())
+        data.append({"name": name, **config, "frames": metadata["frames"]})
+    template = (ROOT / "report.html").read_text()
+    payload = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+    (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload), encoding="utf-8")
+
+
+def export_preview(output, scenarios):
+    # 公開用には動画と代表画像だけを含め、全PNGはActionsの成果物へ残す。
+    preview = output / "public"
+    preview.mkdir()
+    shutil.copyfile(output / "index.html", preview / "index.html")
     for scenario in scenarios:
-        sections.append(f'''<section><h2>{html.escape(scenario)}</h2>
-<p>{html.escape(SCENARIOS[scenario]["description"])}</p>
-<video controls loop playsinline preload="metadata" poster="{scenario}/frame-0000.png"
- src="{scenario}/recording.mp4"></video>
-<p><a href="{scenario}/recording.mp4">MP4 を開く</a> ·
-<a href="{scenario}/contact-sheet.png">代表フレーム</a> ·
-<a href="{scenario}/inputs.json">入力と時刻（JSON）</a></p>
-<details><summary>代表フレームを表示</summary>
-<img src="{scenario}/contact-sheet.png" alt="{scenario} の代表フレーム"></details></section>''')
-    (output / "index.html").write_text('''<!doctype html>
-<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>racing_gauge — SDL visual review</title>
-<style>body{font:16px system-ui;background:#16191d;color:#eee;max-width:1000px;margin:32px auto;padding:0 20px}
-a{color:#8dcaff}section{border-top:1px solid #444;padding:20px 0}video{width:640px;max-width:100%;image-rendering:pixelated}
-img{max-width:100%}p{line-height:1.7}</style>
-<h1>racing_gauge SDL 録画</h1>
-<p>本番の描画コードへ模擬入力を渡し、320×240 の転送先フレームバッファを録画しています。
-各シナリオを10fpsで保存し、終点フレームも含めます。全レンジ100秒・油圧変動40秒・始動各30秒・詳細画面20秒。
-センサー入力値は JSON、無劣化の描画は各 PNG で確認できます。
-実機のフレームレートや ADC・電源回路を検証するものではありません。</p>
-''' + "\n".join(sections) + "</html>\n", encoding="utf-8")
+        destination = preview / scenario
+        destination.mkdir()
+        for name in ("recording.mp4", "contact-sheet.png", "frame-0000.png", "inputs.json"):
+            shutil.copyfile(output / scenario / name, destination / name)
 
 
 def main():
@@ -189,6 +281,7 @@ def main():
         convert_and_check(directory)
         encode(directory)
     write_report(output, scenarios)
+    export_preview(output, scenarios)
     print(f"録画とレポート: {output / 'index.html'}")
 
 
