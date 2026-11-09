@@ -87,9 +87,9 @@ Windowsでは`COM11`、Linuxでは`/dev/ttyACM0`など、環境に合ったポ�
 | --- | --- | --- |
 | 本体 | M5Stack CoreS3 / ESP32-S3 | 320 × 240画素の内蔵ディスプレイ |
 | ADC | ADS1015 / 12bit・4チャンネル | I²Cアドレス`0x48` |
-| 油温 | Defi PDF00703Sを想定したNTC抵抗式 | ADS1015 A0 / CH0 |
-| 水温 | Defi PDF00703Sを想定したNTC抵抗式 | ADS1015 A1 / CH1 |
-| 油圧 | Defi PDF00903Sを想定した電圧出力式 | ADS1015 A2 / CH2 |
+| 油温 | Defi PDF00903Sを想定したNTC抵抗式 | ADS1015 A0 / CH0 |
+| 水温 | Defi PDF00903Sを想定したNTC抵抗式 | ADS1015 A1 / CH1 |
+| 油圧 | Defi PDF00703Sを想定した電圧出力式 | ADS1015 A2 / CH2 |
 | 外部I²C SDA | CoreS3 GPIO9 | ADS1015 SDAとのレベル整合が必要 |
 | 外部I²C SCL | CoreS3 GPIO8 | ADS1015 SCLとのレベル整合が必要 |
 
@@ -214,6 +214,10 @@ ADC入力で4.9V以上の過電圧を検出した場合などは、油圧を0扱
 この0表示だけでは、実際の低油圧と配線・センサーの異常を区別できません。
 
 ### 水温・油温
+
+使用する温度センサーは **Defi PDF00903S** です。圧力センサーは **PDF00703S** です。
+[メーカーのセンサー仕様](https://defi.nippon-seiki.co.jp/installation/sensor/)と[取扱説明書](https://defi.nippon-seiki.co.jp/wp-content/uploads/2025/03/manual_din.pdf)に基づき、温度センサーの**動作範囲は-20〜150℃**です。
+保存温度範囲（-30〜150℃）やメーターの表示範囲とは区別します。動作範囲外というだけで故障を断定するものではありません。
 
 10kΩの基準抵抗、`R25 = 10kΩ`、`B = 3380K`のβ式を使用します。
 以下は実装の換算モデルから求めた参考値であり、センサー製造元の保証値や実測の校正データではありません。
