@@ -151,7 +151,8 @@ jobs:
           allowed = re.compile(rf'index\.html|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|poster\.png|inputs\.json)')
           files, total = [], 0
           entries = list(source.rglob('*'))
-          if len(entries) > 80:
+          # 各シナリオはディレクトリ1件＋公開ファイル4件、ルートHTML1件。
+          if len(entries) > 1 + 5 * len(scenarios.split('|')):
               raise ValueError('公開ファイルが多すぎます')
           for entry in entries:
               info = entry.lstat()
@@ -170,7 +171,8 @@ jobs:
               total += info.st_size
               files.append((entry, relative))
           names = {relative for _, relative in files}
-          if 'index.html' not in names or len(files) < 5 or total > 64 * 1024 * 1024:
+          # 全17動画と通信状態付きJSONの実測約67MiBを収める。
+          if 'index.html' not in names or len(files) < 5 or total > 80 * 1024 * 1024:
               raise ValueError('公開レポートが不完全、または大きすぎます')
           for directory in {relative.split('/')[0] for relative in names if '/' in relative}:
               required = {f'{directory}/{name}' for name in ('recording.mp4', 'contact-sheet.png', 'poster.png', 'inputs.json')}
