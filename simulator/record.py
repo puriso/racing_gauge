@@ -15,12 +15,18 @@ from datetime import datetime, timezone
 import imageio_ffmpeg
 from PIL import Image, ImageDraw
 
+from adc_steps import validate_adc_steps
 from annotations import SIZE, annotated_frame
 from reference import add_expectations, check_expectations
 from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "adc-steps": {
+        "title": "生ADCを1カウントずつ増減", "group": "raw",
+        "description": "CH0・CH1・CH2を温度から逆算せず直接増減。通常域・境界・異常域の12区間で各17カウントを往復し、各値を500ms保持して実際の取得・変換・中間値を確認",
+        "seconds": 200, "snapshots": [0, 2, 6, 10, 18.5, 35, 39, 43, 51.5, 55.5, 59.5, 68, 72, 76, 134, 138, 142, 150.5, 183.5, 187.5, 191.5, 200],
+    },
     "circuit": {
         "title": "サーキット・2.0Gと急な油圧低下", "group": "pressure",
         "description": "通常は3〜6barを連続往復。瞬間的な2.0Gと0.8barへの急落、継続低下、LOW点灯・保持・回復を確認",
@@ -85,6 +91,9 @@ def running_pressure(seconds):
 
 
 def validate_inputs(metadata):
+    if metadata["scenario"] == "adc-steps":
+        validate_adc_steps(metadata["frames"])
+        return
     # 目標はADC波形を生成するためだけの値。実際の取得値は別途独立モデルと照合する。
     frames = [{**frame, **frame['target']} for frame in metadata["frames"]]
     scenario = metadata["scenario"]

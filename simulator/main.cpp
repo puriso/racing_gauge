@@ -17,6 +17,7 @@
 #include <thread>
 #include <vector>
 
+#include "adc_steps.hpp"
 #include "compat.hpp"
 #include "modules/backlight.h"
 #include "modules/display.h"
@@ -74,7 +75,7 @@ struct Targets
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
-  if (options().scenario == "ramp")
+  if (options().scenario == "ramp" || options().scenario == "adc-steps")
   {
     return 200;
   }
@@ -199,6 +200,10 @@ auto sample(double ratio) -> Targets
   // 時間指定を変えても同じ順序のシナリオを伸縮する。
   const auto progress = static_cast<float>(ratio);
   const auto seconds = static_cast<float>(ratio * defaultSeconds());
+  if (options().scenario == "adc-steps")
+  {
+    return {0.0F, 0.0F, 0.0F, 0.0F, false};
+  }
   const float pressure = runningPressure(seconds);
   if (options().scenario == "circuit")
   {
@@ -273,8 +278,18 @@ auto sample(double ratio) -> Targets
   };
 }
 
-auto makeInputs(const Targets& target, float seconds) -> Inputs
+auto makeInputs(unsigned int frame, const Targets& target, float seconds) -> Inputs
 {
+  if (options().scenario == "adc-steps")
+  {
+    // 温度・油圧の目標値から逆算せず、生カウント自体を増減させる。
+    return {
+        simulator::adcSteps(frame),
+        {simulator::FIXTURE_AX_BIAS, simulator::FIXTURE_AY_BIAS, 1.0F},
+        false,
+        simulator::DEFAULT_AMBIENT_LUX,
+    };
+  }
   auto input = simulator::sensorInputs(target);
   if (options().scenario == "circuit")
   {
@@ -356,10 +371,14 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
     manifest << input.adc[channel];
   }
   manifest << R"(],"imu":[)" << input.imu[0] << ',' << input.imu[1] << ',' << input.imu[2] << R"(],"als":)" << input.lux
-           << R"(},"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
-           << target.pressure << R"(,"g":)" << target.acceleration << R"(},"g":)" << currentGForce << R"(,"lux":)"
-           << input.lux << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)"
-           << isRacingMode << R"(,"sensor":)";
+           << '}';
+  if (options().scenario != "adc-steps")
+  {
+    manifest << R"(,"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
+             << target.pressure << R"(,"g":)" << target.acceleration << '}';
+  }
+  manifest << R"(,"g":)" << currentGForce << R"(,"lux":)" << input.lux << R"(,"menu":)" << showingMenu
+           << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode << R"(,"sensor":)";
   writeSensorTelemetry(manifest);
   manifest << R"(,"actual":)";
   writeDisplayTelemetry(manifest);
@@ -561,7 +580,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       const auto tick = controls.tick;
       const double progress = static_cast<double>(tick) / static_cast<double>(totalTicks);
       const auto target = sample(progress);
-      const auto input = makeInputs(target, static_cast<float>(progress * defaultSeconds()));
+      const auto input = makeInputs(tick, target, static_cast<float>(progress * defaultSeconds()));
       // 再生を戻しても時計は単調増加させ、警告の継続時間やピーク値を壊さない。
       if (!controls.paused)
       {
@@ -618,10 +637,11 @@ auto main(int argc, char** argv) -> int
       const std::string argument = argv[i];
       if (argument == "--help")
       {
-        std::cout << "Usage: program [--scenario "
-                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|startup|warm-start|menu] "
-                     "[--seconds N] [--capture "
-                     "NEW_DIRECTORY]\n";
+        std::cout
+            << "Usage: program [--scenario "
+               "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|adc-steps|startup|warm-start|menu] "
+               "[--seconds N] [--capture "
+               "NEW_DIRECTORY]\n";
         return 0;
       }
       if (i + 1 >= argc)
@@ -654,7 +674,7 @@ auto main(int argc, char** argv) -> int
     if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
         options().scenario != "warm-start" && options().scenario != "menu" && options().scenario != "cooldown" &&
         options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing" &&
-        options().scenario != "ambient" && options().scenario != "raw-faults")
+        options().scenario != "ambient" && options().scenario != "raw-faults" && options().scenario != "adc-steps")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }
@@ -665,6 +685,10 @@ auto main(int argc, char** argv) -> int
     if (options().seconds < MIN_SECONDS || options().seconds > MAX_SECONDS)
     {
       throw std::runtime_error("Duration must be 5..240 seconds");
+    }
+    if (options().scenario == "adc-steps" && options().seconds != defaultSeconds())
+    {
+      throw std::runtime_error("adc-steps requires 200 seconds to hold every count for 500ms");
     }
     prepareOfflineOutput();
     lgfx::Panel_sdl::addKeyCodeMapping(SDLK_SPACE, PAUSE_PIN);

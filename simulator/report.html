@@ -20,10 +20,10 @@ details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-wid
 <header>
   <span class="badge">RACING GAUGE / VISUAL REVIEW</span>
   <h1>動きと警告を、等速で確認する</h1>
-  <p>油圧の連続変動、最大2.0Gからの急落、Rモードの保持と解除、温度の上昇・下降を確認できます。<br>全動画は<strong>24FPS・1.0倍速</strong>。3分の保持も実時間どおりで、下の時刻ボタンから確認箇所へ移動できます。</p>
+  <p>油圧の連続変動、最大2.0Gからの急落、Rモードの保持と解除、温度の上昇・下降を確認できます。<br>生ADCを1カウントずつ増減し、取得後の中間値も確認できます。<br>全動画は<strong>24FPS・1.0倍速</strong>。3分の保持も実時間どおりで、下の時刻ボタンから確認箇所へ移動できます。</p>
   <div class="toolbar"><button id="play-all">全シナリオを順に再生</button><button id="stop">すべて一時停止</button><span id="status" class="status" role="status"></span></div>
   <nav aria-label="シナリオの絞り込み">
-    <button data-filter="all" aria-pressed="true">すべて</button><button data-filter="pressure" aria-pressed="false">油圧・LOW</button><button data-filter="racing" aria-pressed="false">Rモード</button><button data-filter="temperature" aria-pressed="false">温度の往復・降温</button><button data-filter="operation" aria-pressed="false">始動・詳細画面</button><button data-filter="ambient" aria-pressed="false">照度・調光</button><button data-filter="raw" aria-pressed="false">生センサー・異常</button>
+    <button data-filter="all" aria-pressed="true">すべて</button><button data-filter="pressure" aria-pressed="false">油圧・LOW</button><button data-filter="racing" aria-pressed="false">Rモード</button><button data-filter="temperature" aria-pressed="false">温度の往復・降温</button><button data-filter="operation" aria-pressed="false">始動・詳細画面</button><button data-filter="ambient" aria-pressed="false">照度・調光</button><button data-filter="raw" aria-pressed="false">生ADC増減・異常</button>
   </nav>
   <p class="fine">ADC・IMU・照度の取得境界を模擬し、本番のセンサー変換・取得周期・平均化・描画・警告処理を実行しています。動画内の画面外に入力と期待値を焼き込んでいます。RAW SENSORはADCカウントとIMU各軸、照度の取得値です。EXPECTED AVG / FILTERはADC変換・電圧補正・取得周期・移動平均・平滑化を独立計算した期待値です。EXPECT / ACTUALでR・LOW・輝度を比較できます。照度は受光入力・最新取得値・中央値を区別しています。シナリオの温度・油圧はADC波形を作る目標値で、表示へ直接渡していません。ADCの量子化・起動時補正・500msの温度取得・丸め・部分描画による差や遅れも再現します。更新・録画は24FPSの設定値です。ADC/I²Cの通信時間・電気特性・電源は未検証です。</p>
 </header>
