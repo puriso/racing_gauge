@@ -15,6 +15,9 @@ from datetime import datetime, timezone
 import imageio_ffmpeg
 from PIL import Image, ImageDraw
 
+from annotations import SIZE, annotated_frame
+from reference import add_expectations, check_expectations
+
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
     "circuit": {
@@ -26,6 +29,11 @@ SCENARIOS = {
         "title": "Rモード・進入から3分後の解除まで", "group": "racing",
         "description": "50msの2.0Gでは非進入。1.0G継続で進入し、G解除後も3分保持。再進入と詳細画面での解除も等速で確認",
         "seconds": 196, "snapshots": [0, 2, 2.1, 4.2, 5, 184, 184.3, 187.3, 190, 192, 196],
+    },
+    "ambient": {
+        "title": "照度・昼→夕方→夜→昼と詳細画面", "group": "ambient",
+        "description": "受光100→12→2→100lux。8秒周期・6点中央値による調光、夜間の詳細画面での最大輝度と復帰を確認",
+        "seconds": 136, "snapshots": [0, 16, 24, 48, 64, 88, 96, 98, 104, 120, 136],
     },
     "ramp": {
         "title": "温度の上昇→保持→下降", "group": "temperature",
@@ -79,6 +87,8 @@ def validate_inputs(metadata):
                 raise RuntimeError(f"入力が検証範囲外です: {scenario}, {key}, {frame}")
         if not 0 <= frame["g"] <= 2:
             raise RuntimeError(f"G入力が0〜2.0Gの範囲外です: {frame}")
+        if not 0 <= frame["lux"] <= 100:
+            raise RuntimeError(f"照度入力が0〜100luxの範囲外です: {frame}")
         seconds = frame["time_ms"] / 1000
         ordinary = scenario not in ("pressure-sweep", "warnings", "circuit") and seconds >= 1
         if ordinary and not math.isclose(frame["pressure_bar"], running_pressure(seconds), abs_tol=0.0001):
@@ -120,6 +130,13 @@ def validate_inputs(metadata):
     if scenario in ("startup", "warm-start"):
         if frames[0]["oil_c"] != 70 or frames[0]["water_c"] != 70:
             raise RuntimeError("始動時の70℃入力がありません")
+    if scenario in ("ambient", "racing"):
+        checkpoints = ({0: 60, 16000: 255, 48000: 200, 88000: 60, 96000: 255, 98000: 60, 120000: 255}
+                       if scenario == "ambient" else {0: 60, 4200: 255, 184300: 60, 187300: 255, 190000: 255, 192000: 60})
+        samples = {frame["time_ms"]: frame for frame in frames}
+        for time, brightness in checkpoints.items():
+            if samples[time]["actual"]["brightness_pwm"] != brightness:
+                raise RuntimeError(f"調光・R・詳細画面の輝度遷移が不正です: {samples[time]}")
     if scenario == "startup":
         if frames[10]["oil_c"] != -10 or frames[10]["water_c"] != -10:
             raise RuntimeError("始動時70℃から低温へ戻る入力がありません")
@@ -152,6 +169,7 @@ def convert_and_check(directory):
         raise RuntimeError(f"録画が不完全です: {directory}")
     if [frame["time_ms"] for frame in frames] != list(range(0, config["seconds"] * 1000 + 1, 100)):
         raise RuntimeError("録画時刻が 100ms 間隔ではありません")
+    add_expectations(directory, metadata)
     validate_inputs(metadata)
     seen = set()
     snapshots = [round(seconds * 10) for seconds in config["snapshots"]]
@@ -167,6 +185,7 @@ def convert_and_check(directory):
             frame = frames[index]
             frame["low_visible"] = warning_visible(image)
             frame["r_visible"] = racing_visible(image)
+            check_expectations(frame)
             if not frame["menu"] and frame["r_visible"] != frame["racing"]:
                 raise RuntimeError(f"Rモードと実際のR表示が一致しません: {frame}")
             # 130℃を超えた油温バーが右側の数値領域へはみ出さないことを確認する。
@@ -209,13 +228,24 @@ def convert_and_check(directory):
 
 
 def encode(directory):
-    subprocess.run(
-        [imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-loglevel", "error", "-framerate", "10",
-         "-i", str(directory / "frame-%04d.png"), "-c:v", "libx264", "-crf", "18",
-         "-vf", "pad=iw:ih+56:0:0:color=0x10151b",
-         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(directory / "recording.mp4")],
-        check=True, timeout=120,
-    )
+    metadata = json.loads((directory / "inputs.json").read_text())
+    command = [imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-loglevel", "error", "-f", "rawvideo",
+               "-pixel_format", "rgb24", "-video_size", f'{SIZE[0]}x{SIZE[1]}', "-framerate", "10",
+               "-i", "pipe:0", "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+               "-movflags", "+faststart", str(directory / "recording.mp4")]
+    # メーターの原画像は変更せず、動画への入力時だけ外側の比較欄を合成する。
+    with subprocess.Popen(command, stdin=subprocess.PIPE) as encoder:
+        try:
+            for index, sample in enumerate(metadata['frames']):
+                with Image.open(directory / f'frame-{index:04d}.png') as source:
+                    frame = annotated_frame(source, sample, metadata['scenario'])
+                    if index == 0:
+                        frame.save(directory / 'poster.png')
+                    encoder.stdin.write(frame.tobytes())
+        finally:
+            encoder.stdin.close()
+        if encoder.wait(timeout=120):
+            raise RuntimeError(f'動画の生成に失敗しました: {directory}')
     # エンコード後のファイルもデコードし、欠損した動画を成果物にしない。
     subprocess.run(
         [imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-v", "error", "-xerror", "-i",
@@ -247,7 +277,7 @@ def export_preview(output, scenarios):
     for scenario in scenarios:
         destination = preview / scenario
         destination.mkdir()
-        for name in ("recording.mp4", "contact-sheet.png", "frame-0000.png", "inputs.json"):
+        for name in ("recording.mp4", "contact-sheet.png", "poster.png", "inputs.json"):
             shutil.copyfile(output / scenario / name, destination / name)
 
 

@@ -1,3 +1,4 @@
+#include <M5CoreS3.h>
 #include <SDL.h>
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -21,6 +23,7 @@
 #include "modules/display.h"
 #include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
+#include "telemetry.hpp"
 
 // 本番のセンサー境界と同じ配列型で接続する。
 // NOLINTBEGIN(modernize-avoid-c-arrays)
@@ -74,6 +77,7 @@ struct Inputs
   float pressure;
   float acceleration;
   bool menu;
+  int lux = simulator::DEFAULT_AMBIENT_LUX;
 };
 
 // シナリオの物理量と時点を、README の表と対応するリテラルで記載する。
@@ -103,6 +107,10 @@ auto defaultSeconds() -> unsigned int
   if (options().scenario == "racing")
   {
     return 196;
+  }
+  if (options().scenario == "ambient")
+  {
+    return 136;
   }
   return DEFAULT_SECONDS;
 }
@@ -169,7 +177,22 @@ auto sampleRacing(float seconds, float pressure) -> Inputs
   {
     acceleration = 1.0F;
   }
-  return {100.0F, 95.0F, pressure, acceleration, seconds >= 190.0F && seconds < 192.0F};
+  return {100.0F, 95.0F, pressure, acceleration, seconds >= 190.0F && seconds < 192.0F, 2};
+}
+
+auto sampleAmbient(float seconds, float pressure) -> Inputs
+{
+  // 8秒周期の測定と6点中央値を経て、昼・夕方・夜・昼へ遷移する。
+  int lux = 100;
+  if (seconds >= 24.0F && seconds < 64.0F)
+  {
+    lux = 12;
+  }
+  else if (seconds >= 64.0F && seconds < 104.0F)
+  {
+    lux = 2;
+  }
+  return {100.0F, 95.0F, pressure, 0.0F, seconds >= 96.0F && seconds < 98.0F, lux};
 }
 
 auto sample(float progress) -> Inputs
@@ -184,6 +207,10 @@ auto sample(float progress) -> Inputs
   if (options().scenario == "racing")
   {
     return sampleRacing(seconds, pressure);
+  }
+  if (options().scenario == "ambient")
+  {
+    return sampleAmbient(seconds, pressure);
   }
   if (options().scenario == "pressure-sweep")
   {
@@ -250,6 +277,7 @@ void inject(const Inputs& input)
   std::fill_n(waterTemperatureSamples, WATER_TEMP_SAMPLE_SIZE, SENSOR_WATER_TEMP_PRESENT ? input.water : 0.0F);
   std::fill_n(oilPressureSamples, PRESSURE_SAMPLE_SIZE, SENSOR_OIL_PRESSURE_PRESENT ? input.pressure : 0.0F);
   currentGForce = input.acceleration;
+  simulator::ambientLux = input.lux;
 }
 
 void captureFrame(unsigned int frame)
@@ -337,17 +365,26 @@ void initializeDisplay()
 auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
 {
   inject(input);
+  static unsigned long lastAlsMeasurementTime = 0;
+  // 実機loopと同じ順序で測定し、R・詳細画面の間は自動調光を止める。
+  if (!showingMenu && !isRacingMode && simulator::nowMs - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
+  {
+    updateBacklightLevel();
+    lastAlsMeasurementTime = simulator::nowMs;
+  }
   const bool menu = input.menu || manualMenu;
   if (!showingMenu && menu)
   {
     // 実機の詳細画面への遷移と同じく、Rモードを解除する。
     forceStopRacingMode();
+    applyBrightnessMode(BrightnessMode::Day);
   }
-  updateRacingMode(simulator::nowMs, currentGForce);
   if (showingMenu && !menu)
   {
     resetGaugeState();
+    updateBacklightLevel();
   }
+  updateRacingMode(simulator::nowMs, currentGForce);
   if (menu)
   {
     drawMenuScreen();
@@ -407,9 +444,11 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
 {
   try
   {
+    simulator::ambientLux = sample(0.0F).lux;
     initializeDisplay();
 
     std::ofstream manifest;
+    std::ofstream trace;
     const bool recording = !options().capture.empty();
     const bool benchmarking = !options().benchmark.empty();
     const bool offline = recording || benchmarking;
@@ -419,9 +458,20 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       manifest.open(options().capture / "inputs.json");
       manifest.exceptions(std::ios::failbit | std::ios::badbit);
       manifest << std::boolalpha;
+      trace.open(options().capture / "trace.csv");
+      trace.exceptions(std::ios::failbit | std::ios::badbit);
+      trace << std::setprecision(std::numeric_limits<float>::max_digits10);
+      trace << "time_ms,oil_c,water_c,pressure_bar,g,menu,lux\n";
       manifest << R"({"scenario":")" << options().scenario << R"(","fps":10,"sensors":{"oil_temp":)"
                << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)" << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)"
-               << SENSOR_OIL_PRESSURE_PRESENT << "},\"frames\":[\n";
+               << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)" << SENSOR_AMBIENT_LIGHT_PRESENT
+               << R"(},"settings":{"pressure_alpha":)" << OIL_PRESSURE_SMOOTHING_ALPHA << R"(,"als_interval_ms":)"
+               << ALS_MEASUREMENT_INTERVAL_MS << R"(,"median_size":)" << MEDIAN_BUFFER_SIZE << R"(,"lux_day":)"
+               << static_cast<int>(LUX_THRESHOLD_DAY) << R"(,"lux_dusk":)" << static_cast<int>(LUX_THRESHOLD_DUSK)
+               << R"(,"brightness":[)" << static_cast<int>(BACKLIGHT_DAY) << ',' << static_cast<int>(BACKLIGHT_DUSK) << ','
+               << static_cast<int>(BACKLIGHT_NIGHT) << R"(],"racing_hold_ms":)" << RACING_MODE_START_HOLD_MS
+               << R"(,"racing_duration_ms":)" << RACING_MODE_DURATION_MS << R"(,"racing_g":)"
+               << RACING_MODE_START_THRESHOLD_G << "},\"frames\":[\n";
     }
     std::cout << "Scenario: " << options().scenario << " | Space: pause | Home: replay | M/click: menu\n";
     const auto totalTicks = options().seconds * TICKS_PER_SECOND;
@@ -440,6 +490,11 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       {
         showingMenu = processFrame(benchmark, tick, input, controls.manualMenu, showingMenu);
       }
+      if (recording)
+      {
+        trace << simulator::nowMs << ',' << input.oil << ',' << input.water << ',' << input.pressure << ','
+              << input.acceleration << ',' << static_cast<int>(showingMenu) << ',' << input.lux << '\n';
+      }
 
       if (recording && tick % CAPTURE_STRIDE == 0)
       {
@@ -451,7 +506,10 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
         }
         manifest << "{\"time_ms\":" << tick * MS_PER_SECOND / TICKS_PER_SECOND << ",\"oil_c\":" << input.oil
                  << ",\"water_c\":" << input.water << ",\"pressure_bar\":" << input.pressure
-                 << ",\"g\":" << input.acceleration << ",\"menu\":" << showingMenu << ",\"racing\":" << isRacingMode << '}';
+                 << ",\"g\":" << input.acceleration << ",\"lux\":" << input.lux << ",\"menu\":" << showingMenu
+                 << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode << ",\"actual\":";
+        writeDisplayTelemetry(manifest);
+        manifest << '}';
       }
       if (offline && tick == totalTicks)
       {
@@ -491,10 +549,10 @@ auto main(int argc, char** argv) -> int
       const std::string argument = argv[i];
       if (argument == "--help")
       {
-        std::cout
-            << "Usage: program [--scenario ramp|cooldown|pressure-sweep|warnings|circuit|racing|startup|warm-start|menu] "
-               "[--seconds N] [--benchmark NEW_FILE] [--capture "
-               "NEW_DIRECTORY]\n";
+        std::cout << "Usage: program [--scenario "
+                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|startup|warm-start|menu] "
+                     "[--seconds N] [--benchmark NEW_FILE] [--capture "
+                     "NEW_DIRECTORY]\n";
         return 0;
       }
       if (i + 1 >= argc)
@@ -530,7 +588,8 @@ auto main(int argc, char** argv) -> int
     }
     if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
         options().scenario != "warm-start" && options().scenario != "menu" && options().scenario != "cooldown" &&
-        options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing")
+        options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing" &&
+        options().scenario != "ambient")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

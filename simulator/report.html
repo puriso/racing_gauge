@@ -24,9 +24,9 @@ details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-wid
   <p>油圧の連続変動、最大2.0Gからの急落、Rモードの保持と解除、温度の上昇・下降を確認できます。<br>全動画は<strong>1.0倍速</strong>。3分の保持も実時間どおりで、下の時刻ボタンから確認箇所へ移動できます。</p>
   <div class="toolbar"><button id="play-all">全シナリオを順に再生</button><button id="stop">すべて一時停止</button><span id="status" class="status" role="status"></span></div>
   <nav aria-label="シナリオの絞り込み">
-    <button data-filter="all" aria-pressed="true">すべて</button><button data-filter="pressure" aria-pressed="false">油圧・LOW</button><button data-filter="racing" aria-pressed="false">Rモード</button><button data-filter="temperature" aria-pressed="false">温度の往復・降温</button><button data-filter="operation" aria-pressed="false">始動・詳細画面</button>
+    <button data-filter="all" aria-pressed="true">すべて</button><button data-filter="pressure" aria-pressed="false">油圧・LOW</button><button data-filter="racing" aria-pressed="false">Rモード</button><button data-filter="temperature" aria-pressed="false">温度の往復・降温</button><button data-filter="operation" aria-pressed="false">始動・詳細画面</button><button data-filter="ambient" aria-pressed="false">照度・調光</button>
   </nav>
-  <p class="fine">本番の描画・平滑化・Rモード・警告処理を実行しています。入力欄は模擬センサー値で、ゲージ表示には平滑化による遅れがあります。録画は10fps。実機FPS・ADC・電源を検証するものではありません。</p>
+  <p class="fine">本番の描画・平滑化・Rモード・警告処理を実行しています。動画内の画面外に入力と期待値を焼き込んでいます。RAW INPUTは模擬入力、EXPECTED FILTERは60Hzの入力履歴から独立計算した平滑化の期待値です。EXPECT / ACTUALでR・LOW・輝度を比較できます。照度は受光入力・最新取得値・中央値を区別しています。数値の丸めや部分描画の更新幅によって、実画面の数字とは差があります。録画は10fps。実機FPS・ADC・電源を検証するものではありません。</p>
 </header>
 <section class="performance" aria-labelledby="performance-title">
   <article>
@@ -84,7 +84,7 @@ for (const scenario of scenarios) {
   const card = document.createElement('article');
   card.id = scenario.name;
   card.dataset.group = scenario.group;
-  card.innerHTML = `<span class="badge">等速 1.0× / ${scenario.seconds}秒 / 検証成功</span><h2></h2><p class="description"></p><div class="layout"><div><video controls playsinline preload="metadata" poster="${scenario.name}/frame-0000.png"><source src="${scenario.name}/recording.mp4" type="video/mp4"></video><div class="readings"><div class="reading">仮想時刻<strong data-value="time"></strong></div><div class="reading">G入力<strong data-value="g"></strong></div><div class="reading">油圧入力<strong data-value="pressure"></strong></div><div class="reading">R / LOW 表示<strong data-value="mode"></strong></div></div></div><div><h3>確認時刻へ移動</h3><div class="cues"></div><p><a href="${scenario.name}/recording.mp4">MP4を直接開く</a><br><a href="${scenario.name}/inputs.json">入力と判定結果のJSON</a></p><p class="fine">R / LOWは転送先の画素も検証済み。再生時刻に対応する入力と実際の表示状態を表示します。</p></div></div><details><summary>代表フレームを確認する</summary><img loading="lazy" src="${scenario.name}/contact-sheet.png" alt="代表フレーム"></details>`;
+  card.innerHTML = `<span class="badge">等速 1.0× / ${scenario.seconds}秒 / 検証成功</span><h2></h2><p class="description"></p><div class="layout"><div><video controls playsinline preload="metadata" poster="${scenario.name}/poster.png"><source src="${scenario.name}/recording.mp4" type="video/mp4"></video><div class="readings"><div class="reading">仮想時刻<strong data-value="time"></strong></div><div class="reading">G入力<strong data-value="g"></strong></div><div class="reading">油圧入力<strong data-value="pressure"></strong></div><div class="reading">R / LOW 表示<strong data-value="mode"></strong></div><div class="reading">受光入力 / 最新 / 中央値<strong data-value="lux"></strong></div><div class="reading">輝度 期待 / 実際<strong data-value="brightness"></strong></div><div class="reading">油圧 期待（平滑化）<strong data-value="expected-pressure"></strong></div><div class="reading">油温 / 水温 期待（平滑化）<strong data-value="expected-temperature"></strong></div></div></div><div><h3>確認時刻へ移動</h3><div class="cues"></div><p><a href="${scenario.name}/recording.mp4">MP4を直接開く</a><br><a href="${scenario.name}/inputs.json">入力・期待値・描画値のJSON</a></p><p class="fine">R / LOWは転送先の画素も検証済み。独立計算した期待値とR・LOW・照度・輝度設定を全フレームで照合済みです。輝度は設定値（0〜255）で、SDL上の画素を暗くする加工はしていません。</p></div></div><details><summary>代表フレームを確認する</summary><img loading="lazy" src="${scenario.name}/contact-sheet.png" alt="代表フレーム"></details>`;
   card.querySelector('h2').textContent = scenario.title;
   card.querySelector('.description').textContent = scenario.description;
   const video = card.querySelector('video');
@@ -95,6 +95,10 @@ for (const scenario of scenarios) {
     card.querySelector('[data-value=time]').textContent = format(frame.time_ms / 1000);
     card.querySelector('[data-value=g]').textContent = `${frame.g.toFixed(2)} G`;
     card.querySelector('[data-value=pressure]').textContent = `${frame.pressure_bar.toFixed(2)} bar`;
+    card.querySelector('[data-value=lux]').textContent = `${frame.lux} / ${frame.actual.lux_sample} / ${frame.actual.lux_median} lux`;
+    card.querySelector('[data-value=brightness]').textContent = `${frame.expected.brightness_pwm} / ${frame.actual.brightness_pwm}（${['昼', '夕方', '夜'][frame.actual.brightness_mode]}）`;
+    card.querySelector('[data-value=expected-pressure]').textContent = `${frame.expected.pressure_bar.toFixed(2)} bar`;
+    card.querySelector('[data-value=expected-temperature]').textContent = `${frame.expected.oil_c.toFixed(2)} / ${frame.expected.water_c.toFixed(2)} ℃`;
     const mode = card.querySelector('[data-value=mode]');
     mode.textContent = `${frame.r_visible ? 'R 点灯' : 'R 消灯'} / ${frame.low_visible ? 'LOW 点灯' : 'LOW 消灯'}`;
     mode.classList.toggle('active', frame.r_visible || frame.low_visible);

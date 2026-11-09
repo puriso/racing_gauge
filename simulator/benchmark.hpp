@@ -21,13 +21,14 @@ class FrameBenchmark
   void recordInput(uint32_t nowMs, const Input& input)
   {
     // 計測区間の外で入力を記録し、変更前後で同じ60Hz入力を再生したことを確認する。
-    const std::array<uint32_t, 6> words{
+    const std::array<uint32_t, 7> words{
         nowMs,
         floatBits(input.oil),
         floatBits(input.water),
         floatBits(input.pressure),
         floatBits(input.acceleration),
         static_cast<uint32_t>(input.menu),
+        static_cast<uint32_t>(input.lux),
     };
     for (uint32_t word : words)
     {

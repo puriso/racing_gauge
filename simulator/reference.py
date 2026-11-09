@@ -1,0 +1,126 @@
+"""60Hzの模擬入力から、描画処理に依存せず期待する平滑化値と状態を求める。"""
+
+import csv
+import math
+import struct
+
+
+def float32(value):
+    return struct.unpack('f', struct.pack('f', value))[0]
+
+
+class Reference:
+    def __init__(self, settings, sensors):
+        self.settings = settings
+        self.sensors = sensors
+        self.filtered = {}
+        self.samples = [0] * settings['median_size']
+        self.sample_index = 0
+        self.lux_sample = self.lux_median = 0
+        self.last_als = 0
+        self.mode = self.previous_mode = 0
+        self.menu = self.racing = False
+        self.racing_until = self.g_since = self.low_since = None
+        self.low_until = 0
+        self.initialized = False
+
+    def read_light(self, lux):
+        if not self.sensors['ambient']:
+            self.mode = 0
+            return
+        self.lux_sample = lux
+        self.samples[self.sample_index] = lux
+        self.sample_index = (self.sample_index + 1) % len(self.samples)
+        # 偶数個の上側中央値。起動時の未取得スロットも0として扱う製品仕様。
+        self.lux_median = sorted(self.samples)[len(self.samples) // 2]
+        self.mode = (0 if self.lux_median >= self.settings['lux_day'] else
+                     1 if self.lux_median >= self.settings['lux_dusk'] else 2)
+
+    def step(self, sample):
+        now, menu = sample['time_ms'], sample['menu']
+        if not self.initialized:
+            self.read_light(sample['lux'])
+            self.initialized = True
+        if not self.menu and not self.racing and now - self.last_als >= self.settings['als_interval_ms']:
+            self.read_light(sample['lux'])
+            self.last_als = now
+        if menu and not self.menu:
+            self.racing = False
+            self.racing_until = self.g_since = None
+            self.mode = 0
+        if self.menu and not menu:
+            self.read_light(sample['lux'])
+        self.menu = menu
+
+        if self.racing:
+            if now >= self.racing_until:
+                self.racing = False
+                self.mode = self.previous_mode
+                self.g_since = None
+        elif sample['g'] >= self.settings['racing_g']:
+            if self.g_since is None:
+                self.g_since = now
+            elif now - self.g_since >= self.settings['racing_hold_ms']:
+                self.racing = True
+                self.racing_until = now + self.settings['racing_duration_ms']
+                self.previous_mode, self.mode = self.mode, 0
+                self.g_since = None
+        else:
+            self.g_since = None
+
+        low = False
+        if not menu:
+            for key, sensor, alpha in [('oil_c', 'oil_temp', 0.1), ('water_c', 'water_temp', 0.1),
+                                       ('pressure_bar', 'pressure', self.settings['pressure_alpha'])]:
+                target = float32(sample[key]) if self.sensors[sensor] else 0.0
+                previous = self.filtered.get(key, target)
+                self.filtered[key] = float32(previous + float32(float32(alpha) * float32(target - previous)))
+            if sample['g'] > 1 and self.filtered['pressure_bar'] <= 3:
+                if self.low_since is None:
+                    self.low_since = now
+                if now - self.low_since >= 500:
+                    self.low_until = now + 3000
+                    low = True
+            else:
+                self.low_since = None
+                low = now < self.low_until
+        return {**{key: round(value, 4) for key, value in self.filtered.items()},
+                'racing': self.racing, 'low': low, 'brightness_mode': self.mode,
+                'brightness_pwm': self.settings['brightness'][self.mode],
+                'lux_sample': self.lux_sample, 'lux_median': self.lux_median}
+
+
+def add_expectations(directory, metadata):
+    frames = metadata['frames']
+    reference = Reference(metadata['settings'], metadata['sensors'])
+    count = 0
+    tick = -1
+    with (directory / 'trace.csv').open(newline='') as source:
+        for tick, row in enumerate(csv.DictReader(source)):
+            sample = {key: float(row[key]) for key in ('oil_c', 'water_c', 'pressure_bar', 'g')}
+            sample.update(time_ms=int(row['time_ms']), menu=bool(int(row['menu'])), lux=int(row['lux']))
+            if sample['time_ms'] != tick * 1000 // 60 or not all(math.isfinite(value) for value in sample.values()):
+                raise ValueError('期待値の計算に使う60Hz入力が欠損・不正です')
+            expected = reference.step(sample)
+            if tick % 6 == 0:
+                frame = frames[tick // 6]
+                for key, value in sample.items():
+                    if not math.isclose(frame[key], value, abs_tol=0.0006):
+                        raise ValueError(f'録画と60Hz入力の時刻・値が一致しません: {key}, {frame}')
+                frame['expected'] = expected
+                count += 1
+    if count != len(frames) or tick != (len(frames) - 1) * 6:
+        raise ValueError('60Hz入力と録画の長さが一致しません')
+
+
+def check_expectations(frame):
+    expected, actual = frame['expected'], frame['actual']
+    for key in ('brightness_mode', 'brightness_pwm', 'lux_sample', 'lux_median'):
+        if actual[key] != expected[key]:
+            raise RuntimeError(f'期待する調光状態と実際の設定が一致しません: {key}, {frame}')
+    if frame['racing'] != expected['racing'] or frame['low_visible'] != expected['low']:
+        raise RuntimeError(f'期待するR・LOWと実際の判定・画素が一致しません: {frame}')
+    # 部分描画は油温0.1℃、水温0.05℃、油圧0.05bar未満の変化を保持する。
+    for key, tolerance in [('oil_c', 0.1006), ('water_c', 0.0506), ('pressure_bar', 0.0506)]:
+        if not math.isclose(expected[key], actual[key], abs_tol=tolerance):
+            raise RuntimeError(f'平滑化の期待値と描画値の差が更新幅を超えています: {key}, {frame}')

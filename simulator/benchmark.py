@@ -39,8 +39,10 @@ def build_baseline(directory, baseline_sha):
     current_source = (ROOT / 'simulator/main.cpp').read_text()
     before, after = render_function(baseline_source), render_function(current_source)
     baseline_path.write_text(current_source[:after.start()] + before.group() + current_source[after.end():])
-    for name in ('benchmark.hpp', 'platformio.ini', 'build.py'):
+    for name in ('benchmark.hpp', 'platformio.ini', 'build.py', 'telemetry.hpp', 'rendering.cpp'):
         shutil.copyfile(ROOT / 'simulator' / name, checkout / 'simulator' / name)
+    # 照度の注入・観測アダプターを共通化し、製品側モジュールは比較元を保つ。
+    shutil.copyfile(ROOT / 'simulator/include/M5CoreS3.h', checkout / 'simulator/include/M5CoreS3.h')
     dependencies = ROOT / 'simulator/.pio/libdeps/desktop'
     if dependencies.is_dir():
         shutil.copytree(dependencies, checkout / 'simulator/.pio/libdeps/desktop', symlinks=True)
@@ -110,9 +112,9 @@ def main():
         parser.error('繰り返し回数は1〜20、出力先は未作成のファイルを指定してください')
     baseline_sha = subprocess.check_output(['git', 'rev-parse', '--verify', f'{args.baseline_ref}^{{commit}}'], cwd=ROOT, text=True).strip()
     checkout_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    driver = (ROOT / 'simulator/main.cpp').read_bytes() + (ROOT / 'simulator/benchmark.hpp').read_bytes()
-    identical = subprocess.run(['git', 'diff', '--quiet', baseline_sha, '--', 'src', 'include',
-                               'simulator/rendering.cpp', 'simulator/compat.hpp', 'simulator/include'], cwd=ROOT).returncode == 0
+    driver = b''.join((ROOT / 'simulator' / name).read_bytes() for name in
+                      ('main.cpp', 'benchmark.hpp', 'rendering.cpp', 'telemetry.hpp', 'include/M5CoreS3.h'))
+    identical = subprocess.run(['git', 'diff', '--quiet', baseline_sha, '--', 'src', 'include'], cwd=ROOT).returncode == 0
     scenarios = list(SCENARIOS) if args.scenario == 'all' else [args.scenario]
     results = {name: {'before': [], 'after': []} for name in scenarios}
     build(ROOT)

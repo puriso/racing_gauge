@@ -19,7 +19,7 @@ on:
       scenario:
         description: '録画シナリオ'
         type: choice
-        options: [all, circuit, racing, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
+        options: [all, circuit, racing, ambient, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
         default: all
 
 permissions:
@@ -45,8 +45,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev pkg-config build-essential
       - name: Python 依存
         run: python -m pip install -r simulator/requirements.txt
-      - name: 平均FPS集計の回帰テスト
-        run: python -m unittest discover -s simulator -p test_benchmark.py
+      - name: 期待値と平均FPS集計の回帰テスト
+        run: python -m unittest discover -s simulator -p 'test_*.py'
       - name: 本番描画を SDL 向けにビルド
         run: pio run -d simulator -e desktop
       - name: 同一入力で平均処理FPSを比較
@@ -83,7 +83,8 @@ jobs:
           PRのコメントにある **等速の確認ページを開く** から、GitHub Pagesで直接確認できます。
           全PNGは **Artifacts → visual-simulator** からダウンロードできます。
           シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
-          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降など、9シナリオを等速で確認できます。
+          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさなど、10シナリオを等速で確認できます。
+          動画の画面外に生の模擬入力・平滑化の期待値・G・照度・輝度の期待／実際を表示します。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
           SUMMARY
 
@@ -153,11 +154,11 @@ jobs:
           number, sha = os.environ['PR_NUMBER'], os.environ['EXPECTED_SHA']
           assert re.fullmatch(r'[1-9][0-9]*', number)
           assert re.fullmatch(r'[0-9a-f]{40}', sha)
-          scenarios = 'circuit|racing|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
-          allowed = re.compile(rf'index\.html|benchmark\.json|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|frame-0000\.png|inputs\.json)')
+          scenarios = 'circuit|racing|ambient|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
+          allowed = re.compile(rf'index\.html|benchmark\.json|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|poster\.png|inputs\.json)')
           files, total = [], 0
           entries = list(source.rglob('*'))
-          if len(entries) > 50:
+          if len(entries) > 60:
               raise ValueError('公開ファイルが多すぎます')
           for entry in entries:
               info = entry.lstat()
@@ -191,7 +192,7 @@ jobs:
               output.write(f"fps_before={benchmark['overall']['before']['average_fps']:.1f}\n")
               output.write(f"fps_after={benchmark['overall']['after']['average_fps']:.1f}\n")
           for directory in {relative.split('/')[0] for relative in names if '/' in relative}:
-              required = {f'{directory}/{name}' for name in ('recording.mp4', 'contact-sheet.png', 'frame-0000.png', 'inputs.json')}
+              required = {f'{directory}/{name}' for name in ('recording.mp4', 'contact-sheet.png', 'poster.png', 'inputs.json')}
               if not required.issubset(names):
                   raise ValueError(f'シナリオのファイルが不足しています: {directory}')
           docs = Path('preview-store/docs')
@@ -272,7 +273,8 @@ jobs:
             const body = [marker, '### SDL 等速での動作確認', '',
               `[等速の確認ページを開く](${url})`, '',
               'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
-              '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面を確認できます。', '',
+              '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面、照度と調光を確認できます。',
+              '動画の画面外に、生の模擬入力・平滑化の期待値・G・受光照度・輝度の期待／実際を表示しています。', '',
               `**PC上のSDL平均処理FPS:** 変更前 ${process.env.FPS_BEFORE} → 変更後 ${process.env.FPS_AFTER}。同一入力で各5回比較。実機FPSは未測定です。`, '',
               `[全PNG・MP4をダウンロード](${process.env.ARTIFACT_URL})`, '',
               `対象: ${expectedSha.slice(0, 7)} · [CIの実行](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`,
