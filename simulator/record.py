@@ -232,7 +232,9 @@ def write_report(output, scenarios):
         data.append({"name": name, **config, "frames": metadata["frames"]})
     template = (ROOT / "report.html").read_text()
     payload = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
-    (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload), encoding="utf-8")
+    benchmark = json.loads((output / "benchmark.json").read_text()) if (output / "benchmark.json").is_file() else None
+    metrics = json.dumps(benchmark, ensure_ascii=False).replace("<", "\\u003c")
+    (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload).replace("@@BENCHMARK@@", metrics), encoding="utf-8")
 
 
 def export_preview(output, scenarios):
@@ -240,6 +242,8 @@ def export_preview(output, scenarios):
     preview = output / "public"
     preview.mkdir()
     shutil.copyfile(output / "index.html", preview / "index.html")
+    if (output / "benchmark.json").is_file():
+        shutil.copyfile(output / "benchmark.json", preview / "benchmark.json")
     for scenario in scenarios:
         destination = preview / scenario
         destination.mkdir()
@@ -252,6 +256,7 @@ def main():
     parser.add_argument("--scenario", choices=["all", *SCENARIOS], default="all")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--benchmark-json", type=Path, help="benchmark.pyの実時間によるFPS比較を確認ページへ含める")
     args = parser.parse_args()
     output = args.output or ROOT / "out" / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     output = output.resolve()
@@ -270,6 +275,8 @@ def main():
         )
         convert_and_check(directory)
         encode(directory)
+    if args.benchmark_json:
+        shutil.copyfile(args.benchmark_json, output / "benchmark.json")
     write_report(output, scenarios)
     export_preview(output, scenarios)
     print(f"録画とレポート: {output / 'index.html'}")

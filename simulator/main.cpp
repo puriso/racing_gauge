@@ -15,6 +15,7 @@
 #include <thread>
 #include <vector>
 
+#include "benchmark.hpp"
 #include "compat.hpp"
 #include "modules/backlight.h"
 #include "modules/display.h"
@@ -55,6 +56,7 @@ struct Options
 {
   std::string scenario = "ramp";
   std::filesystem::path capture;
+  std::filesystem::path benchmark;
   unsigned int seconds = 0;
 };
 
@@ -357,6 +359,49 @@ auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
   return menu;
 }
 
+auto processFrame(FrameBenchmark& benchmark, unsigned int tick, const Inputs& input, bool manualMenu, bool showingMenu)
+    -> bool
+{
+  if (options().benchmark.empty())
+  {
+    return renderFrame(input, manualMenu, showingMenu);
+  }
+  benchmark.recordInput(simulator::nowMs, input);
+  return benchmark.measure(tick, [&]() -> bool { return renderFrame(input, manualMenu, showingMenu); });
+}
+
+auto finishOfflineRun(std::ofstream& manifest, const FrameBenchmark& benchmark) -> int
+{
+  if (!options().capture.empty())
+  {
+    manifest << "\n]}\n";
+    manifest.close();
+  }
+  if (!options().benchmark.empty())
+  {
+    benchmark.write(options().benchmark, options().scenario);
+  }
+  exitStatus = 0;
+  quit();
+  return 0;
+}
+
+void prepareOfflineOutput()
+{
+  if (!options().capture.empty() && !options().benchmark.empty())
+  {
+    throw std::runtime_error("Capture and benchmark must run separately");
+  }
+  if (!options().benchmark.empty() && std::filesystem::exists(options().benchmark))
+  {
+    throw std::runtime_error("Benchmark output file must not already exist");
+  }
+  if (!options().capture.empty() && !std::filesystem::create_directory(options().capture))
+  {
+    throw std::runtime_error("Capture directory must not already exist");
+  }
+}
+
 // SDL コールバックのシグネチャに合わせる。
 auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
 {
@@ -366,6 +411,9 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
 
     std::ofstream manifest;
     const bool recording = !options().capture.empty();
+    const bool benchmarking = !options().benchmark.empty();
+    const bool offline = recording || benchmarking;
+    FrameBenchmark benchmark;
     if (recording)
     {
       manifest.open(options().capture / "inputs.json");
@@ -381,7 +429,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
     bool showingMenu = false;
     while (*running)
     {
-      if (!recording)
+      if (!offline)
       {
         controls.poll();
       }
@@ -390,7 +438,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       // 再生を戻しても時計は単調増加させ、警告の継続時間やピーク値を壊さない。
       if (!controls.paused)
       {
-        showingMenu = renderFrame(input, controls.manualMenu, showingMenu);
+        showingMenu = processFrame(benchmark, tick, input, controls.manualMenu, showingMenu);
       }
 
       if (recording && tick % CAPTURE_STRIDE == 0)
@@ -405,26 +453,22 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
                  << ",\"water_c\":" << input.water << ",\"pressure_bar\":" << input.pressure
                  << ",\"g\":" << input.acceleration << ",\"menu\":" << showingMenu << ",\"racing\":" << isRacingMode << '}';
       }
-      if (recording && tick == totalTicks)
+      if (offline && tick == totalTicks)
       {
-        manifest << "\n]}\n";
-        manifest.close();
-        exitStatus = 0;
-        quit();
-        return 0;
+        return finishOfflineRun(manifest, benchmark);
       }
       if (!controls.paused && tick < totalTicks)
       {
         ++controls.tick;
         simulator::nowMs += (controls.tick * MS_PER_SECOND / TICKS_PER_SECOND) - (tick * MS_PER_SECOND / TICKS_PER_SECOND);
       }
-      if (!recording)
+      if (!offline)
       {
         controls.deadline += std::chrono::microseconds(US_PER_SECOND / TICKS_PER_SECOND);
         std::this_thread::sleep_until(controls.deadline);
       }
     }
-    if (!recording)
+    if (!offline)
     {
       exitStatus = 0;
     }
@@ -449,7 +493,7 @@ auto main(int argc, char** argv) -> int
       {
         std::cout
             << "Usage: program [--scenario ramp|cooldown|pressure-sweep|warnings|circuit|racing|startup|warm-start|menu] "
-               "[--seconds N] [--capture "
+               "[--seconds N] [--benchmark NEW_FILE] [--capture "
                "NEW_DIRECTORY]\n";
         return 0;
       }
@@ -465,6 +509,10 @@ auto main(int argc, char** argv) -> int
       else if (argument == "--capture")
       {
         options().capture = value;
+      }
+      else if (argument == "--benchmark")
+      {
+        options().benchmark = value;
       }
       else if (argument == "--seconds" && value.find_first_not_of("0123456789") == std::string::npos)
       {
@@ -494,10 +542,7 @@ auto main(int argc, char** argv) -> int
     {
       throw std::runtime_error("Duration must be 5..240 seconds");
     }
-    if (!options().capture.empty() && !std::filesystem::create_directory(options().capture))
-    {
-      throw std::runtime_error("Capture directory must not already exist");
-    }
+    prepareOfflineOutput();
     lgfx::Panel_sdl::addKeyCodeMapping(SDLK_SPACE, PAUSE_PIN);
     lgfx::Panel_sdl::addKeyCodeMapping(SDLK_HOME, REPLAY_PIN);
     lgfx::Panel_sdl::addKeyCodeMapping(SDLK_m, MENU_PIN);

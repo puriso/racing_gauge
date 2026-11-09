@@ -34,6 +34,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -43,12 +45,20 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev pkg-config build-essential
       - name: Python 依存
         run: python -m pip install -r simulator/requirements.txt
+      - name: 平均FPS集計の回帰テスト
+        run: python -m unittest discover -s simulator -p test_benchmark.py
       - name: 本番描画を SDL 向けにビルド
         run: pio run -d simulator -e desktop
+      - name: 同一入力で平均処理FPSを比較
+        env:
+          BASELINE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+          SIM_BENCH_CURRENT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
+        run: python simulator/benchmark.py --baseline-ref "$BASELINE_REF" --scenario "$SIM_SCENARIO" --output simulator/out/fps.json
       - name: シナリオの録画と描画検証
         env:
           SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
-        run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --output simulator/out/ci
+        run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --benchmark-json simulator/out/fps.json --output simulator/out/ci
       - name: 公開用の確認ページを保存
         id: preview
         uses: actions/upload-artifact@v4
@@ -122,6 +132,7 @@ jobs:
           path: ${{ runner.temp }}/visual-report
           merge-multiple: true
       - name: 公開ファイルを検証してPR別に保存
+        id: report
         if: steps.current.outputs.publish == 'true'
         env:
           REPORT_DIR: ${{ runner.temp }}/visual-report
@@ -130,6 +141,8 @@ jobs:
         run: |
           python3 - <<'PY'
           import html
+          import json
+          import math
           import os
           from pathlib import Path
           import re
@@ -141,7 +154,7 @@ jobs:
           assert re.fullmatch(r'[1-9][0-9]*', number)
           assert re.fullmatch(r'[0-9a-f]{40}', sha)
           scenarios = 'circuit|racing|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
-          allowed = re.compile(rf'index\.html|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|frame-0000\.png|inputs\.json)')
+          allowed = re.compile(rf'index\.html|benchmark\.json|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|frame-0000\.png|inputs\.json)')
           files, total = [], 0
           entries = list(source.rglob('*'))
           if len(entries) > 50:
@@ -163,8 +176,20 @@ jobs:
               total += info.st_size
               files.append((entry, relative))
           names = {relative for _, relative in files}
-          if 'index.html' not in names or len(files) < 5 or total > 64 * 1024 * 1024:
+          if not {'index.html', 'benchmark.json'}.issubset(names) or len(files) < 6 or total > 64 * 1024 * 1024:
               raise ValueError('公開レポートが不完全、または大きすぎます')
+          benchmark = json.loads((source / 'benchmark.json').read_text())
+          if benchmark.get('schema_version') != 1 or benchmark.get('metric') != 'sdl_render_processing_fps':
+              raise ValueError('FPS計測の形式が不正です')
+          if benchmark.get('current_sha') != sha:
+              raise ValueError('FPS計測対象とPRのコミットが一致しません')
+          for variant in ('before', 'after'):
+              fps = benchmark['overall'][variant]['average_fps']
+              if not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
+                  raise ValueError('FPS計測値が不正です')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+              output.write(f"fps_before={benchmark['overall']['before']['average_fps']:.1f}\n")
+              output.write(f"fps_after={benchmark['overall']['after']['average_fps']:.1f}\n")
           for directory in {relative.split('/')[0] for relative in names if '/' in relative}:
               required = {f'{directory}/{name}' for name in ('recording.mp4', 'contact-sheet.png', 'frame-0000.png', 'inputs.json')}
               if not required.issubset(names):
@@ -231,6 +256,8 @@ jobs:
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
           ARTIFACT_URL: ${{ needs.record.outputs.artifact_url }}
+          FPS_BEFORE: ${{ steps.report.outputs.fps_before }}
+          FPS_AFTER: ${{ steps.report.outputs.fps_after }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -246,6 +273,7 @@ jobs:
               `[等速の確認ページを開く](${url})`, '',
               'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
               '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面を確認できます。', '',
+              `**PC上のSDL平均処理FPS:** 変更前 ${process.env.FPS_BEFORE} → 変更後 ${process.env.FPS_AFTER}。同一入力で各5回比較。実機FPSは未測定です。`, '',
               `[全PNG・MP4をダウンロード](${process.env.ARTIFACT_URL})`, '',
               `対象: ${expectedSha.slice(0, 7)} · [CIの実行](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`,
               'このURLは対象コミットの録画です。再検証時はこのコメントを更新します。',

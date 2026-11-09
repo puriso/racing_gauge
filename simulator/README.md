@@ -90,6 +90,28 @@ python simulator/record.py --output simulator/out/my-review
 さらに実際の転送先PNGでR表示との一致、LOWの点灯・保持・消灯、油温バーの枠内描画と赤色の解除を確認します。
 MP4も再デコードして破損を検出します。それ以外の外観は確認ページで目視してください。
 
+## 平均処理FPSを比較する
+
+```sh
+python simulator/benchmark.py --baseline-ref origin/main --output simulator/out/fps.json
+python simulator/record.py --benchmark-json simulator/out/fps.json --output simulator/out/fps-review
+```
+
+確認ページに全体とシナリオ別の**PC上のSDL平均処理FPS**を表示します。生の計測値・条件は`benchmark.json`から取得できます。
+CIではPRのbaseコミットと比較し、コミット・CPU・コンパイラー・SDLのバージョンも記録します。
+実機のFPS、動画の保存設定10fps、入力周期60Hzとは別の値です。
+
+- 同じ60Hz入力を変更前後で各5回再生し、実行順を交互にします。`--repetitions`で回数を変更できます。
+- 先頭120フレームをウォームアップとして除外し、単調増加する実時計で`renderFrame`の経過時間を計測します。
+- センサー値の注入・判定・描画・フレームバッファ転送を含み、入力の指紋記録・待機・画像保存・JSON出力・動画変換を除外します。
+- SDLの画面提示は別スレッドなので、この処理FPSはディスプレイへの表示FPSを示しません。CoreS3のSPI・DMA・ADCも対象外です。
+- 平均は全計測フレーム数÷全処理時間です。シナリオ別FPSの単純平均にはしません。各実行の最小・最大値も保存します。
+- 比較元の製品ソースと`renderFrame`を使い、入力・計測ドライバー・ビルド設定・ライブラリは現在版と共通化します。
+- 60Hz入力の時刻・温度・油圧・G・メニュー状態を指紋で照合し、不一致なら比較を中止します。
+
+今回のPRは製品側の描画コード・設定を変更していません。計測差にはPCの負荷やばらつき、シミュレーターの遷移処理が含まれます。
+実機の改善率として扱わず、同じ計測環境での比較に使ってください。
+
 ## GIFが必要な場合
 
 CIはGIFを自動生成せず、等速動画の確認ページを公開します。

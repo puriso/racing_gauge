@@ -14,6 +14,7 @@ h2{font-size:21px;margin:0 0 8px}video{width:640px;max-width:100%;display:block;
 .layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(230px,1fr);gap:24px}.readings{font-variant-numeric:tabular-nums;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
 .reading{background:#101820;border-radius:6px;padding:10px;color:#afbecd}.reading strong{display:block;font-size:21px;color:#f5f8fc;margin-top:4px}.active{color:#ff8e89!important}
 .badge{display:inline-block;color:#a7dfb4;font-size:12px;letter-spacing:.04em;margin-bottom:8px}.cues{display:flex;gap:7px;flex-wrap:wrap}.cues button{font-size:13px;padding:6px 9px}
+.performance{max-width:1100px;margin:0 auto;padding:12px 24px}.fps-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:16px 0}.fps-summary strong{display:block;font-size:25px;margin-top:6px;color:#f5f8fc}.table-scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:11px 10px;border-bottom:1px solid #354353;white-space:nowrap}th:first-child,td:first-child{text-align:left}.notice{color:#dfcc9d!important}.performance code{overflow-wrap:anywhere}
 details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-width:100%}.fine{font-size:13px;color:#8fa0b3}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.status{color:#a7dfb4;min-height:1.5em}
 @media(max-width:750px){.layout{grid-template-columns:1fr}header,main{padding:20px 14px}article{padding:15px}}
 </style>
@@ -27,10 +28,53 @@ details{margin-top:16px}summary{cursor:pointer;color:#9eb9d4}details img{max-wid
   </nav>
   <p class="fine">本番の描画・平滑化・Rモード・警告処理を実行しています。入力欄は模擬センサー値で、ゲージ表示には平滑化による遅れがあります。録画は10fps。実機FPS・ADC・電源を検証するものではありません。</p>
 </header>
+<section class="performance" aria-labelledby="performance-title">
+  <article>
+    <span class="badge">実時間で計測 / PC上の処理性能</span>
+    <h2 id="performance-title">平均処理FPSの比較</h2>
+    <p id="fps-missing">この録画にはFPS計測結果がありません。動画の10fps・入力の60Hzは設定値で、実測FPSではありません。</p>
+    <div id="fps-results" hidden>
+      <div class="fps-summary"><div class="reading">変更前<strong id="fps-before"></strong></div><div class="reading">変更後<strong id="fps-after"></strong></div><div class="reading">計測差<strong id="fps-change"></strong></div></div>
+      <p class="fine" id="fps-method"></p>
+      <p class="fine">描画・判定処理とフレームバッファへの転送にかかった実時間から算出しています。画像保存・動画変換・待機・SDLの画面提示は含みません。<strong>CoreS3実機のFPSは未測定</strong>です。</p>
+      <p class="fine notice" id="fps-source-note" hidden>製品側の描画コードと設定は比較元と同一です。計測差にはPCの負荷・ばらつきやシミュレーターの遷移処理が含まれ、実機の改善率を示すものではありません。</p>
+      <details><summary>シナリオごとの平均FPS・計測条件</summary>
+        <div class="table-scroll"><table><thead><tr><th>シナリオ</th><th>変更前（PC）</th><th>変更後（PC）</th><th>計測差</th></tr></thead><tbody id="fps-rows"></tbody></table></div>
+        <p class="fine" id="fps-host"></p><p class="fine" id="fps-commits"></p>
+        <p class="fine">各シナリオのFPSを単純平均せず、全計測フレーム数÷全描画処理時間で算出しています。入力の指紋を照合して変更前後の一致を確認済みです。PC・CIの負荷によって数値は変動します。</p>
+        <a href="benchmark.json">計測結果・条件・各実行のJSON</a>
+      </details>
+    </div>
+  </article>
+</section>
 <main id="scenarios"></main>
 <script type="application/json" id="scenario-data">@@SCENARIOS@@</script>
+<script type="application/json" id="benchmark-data">@@BENCHMARK@@</script>
 <script>
 'use strict';
+const benchmark = JSON.parse(document.getElementById('benchmark-data').textContent);
+if (benchmark) {
+  const fps = value => `${value.toLocaleString('ja-JP', {minimumFractionDigits: 1, maximumFractionDigits: 1})} fps`;
+  const change = value => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+  document.getElementById('fps-missing').hidden = true;
+  document.getElementById('fps-results').hidden = false;
+  document.getElementById('fps-before').textContent = fps(benchmark.overall.before.average_fps);
+  document.getElementById('fps-after').textContent = fps(benchmark.overall.after.average_fps);
+  document.getElementById('fps-change').textContent = change(benchmark.overall.change_percent);
+  document.getElementById('fps-method').textContent = `同一PC・同一60Hz入力で各${benchmark.repetitions}回、実行順を交互に比較。各実行の先頭${benchmark.warmup_frames}フレームを除外。${benchmark.scenarios.length}シナリオ、変更前後それぞれ${benchmark.overall.after.measured_frames.toLocaleString('ja-JP')}フレームを計測。`;
+  document.getElementById('fps-source-note').hidden = !benchmark.render_sources_identical;
+  for (const result of benchmark.scenarios) {
+    const row = document.createElement('tr');
+    for (const value of [result.title, fps(result.before.average_fps), fps(result.after.average_fps), change(result.change_percent)]) {
+      const cell = document.createElement('td'); cell.textContent = value; row.append(cell);
+    }
+    row.children[1].title = `各実行: ${fps(result.before.min_run_fps)}〜${fps(result.before.max_run_fps)}`;
+    row.children[2].title = `各実行: ${fps(result.after.min_run_fps)}〜${fps(result.after.max_run_fps)}`;
+    document.getElementById('fps-rows').append(row);
+  }
+  document.getElementById('fps-host').textContent = `${benchmark.host.system} / ${benchmark.host.machine} / ${benchmark.host.cpu} / ${benchmark.host.logical_cpus}論理CPU / ${benchmark.host.compiler} / SDL ${benchmark.host.sdl_version}`;
+  document.getElementById('fps-commits').textContent = `比較元 ${benchmark.baseline_sha.slice(0, 7)} → 対象 ${benchmark.current_sha.slice(0, 7)}。平均1フレーム: ${benchmark.overall.before.mean_frame_ms.toFixed(4)} → ${benchmark.overall.after.mean_frame_ms.toFixed(4)} ms。`;
+}
 const scenarios = JSON.parse(document.getElementById('scenario-data').textContent);
 const videos = [];
 let queue = false;
