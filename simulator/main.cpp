@@ -19,6 +19,7 @@
 
 #include "adc_steps.hpp"
 #include "compat.hpp"
+#include "fault_inputs.hpp"
 #include "modules/backlight.h"
 #include "modules/display.h"
 #include "modules/racing_indicator.h"
@@ -83,7 +84,7 @@ auto defaultSeconds() -> unsigned int
   {
     return 200;
   }
-  if (options().scenario == "warnings")
+  if (options().scenario == "warnings" || simulator::isFaultScenario(options().scenario))
   {
     return 40;
   }
@@ -209,6 +210,10 @@ auto sample(double ratio) -> Targets
     return {0.0F, 0.0F, 0.0F, 0.0F, false};
   }
   const float pressure = runningPressure(seconds);
+  if (simulator::isFaultScenario(options().scenario))
+  {
+    return {100.0F, 95.0F, pressure, 0.0F, false};
+  }
   if (options().scenario == "circuit")
   {
     return sampleCircuit(progress, seconds, pressure);
@@ -295,6 +300,7 @@ auto makeInputs(unsigned int frame, const Targets& target, float seconds) -> Inp
     };
   }
   auto input = simulator::sensorInputs(target);
+  simulator::applyFaultInputs(options().scenario, frame * MS_PER_SECOND / TICKS_PER_SECOND, input.adc);
   if (options().scenario == "circuit")
   {
     if (seconds >= 4.0F && seconds < 4.05F)
@@ -641,11 +647,11 @@ auto main(int argc, char** argv) -> int
       const std::string argument = argv[i];
       if (argument == "--help")
       {
-        std::cout
-            << "Usage: program [--scenario "
-               "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|adc-steps|startup|warm-start|menu] "
-               "[--seconds N] [--capture "
-               "NEW_DIRECTORY]\n";
+        std::cout << "Usage: program [--scenario "
+                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|adc-steps|sensor-disconnect|"
+                     "temperature-high|temperature-low|startup|warm-start|menu] "
+                     "[--seconds N] [--capture "
+                     "NEW_DIRECTORY]\n";
         return 0;
       }
       if (i + 1 >= argc)
@@ -678,7 +684,8 @@ auto main(int argc, char** argv) -> int
     if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
         options().scenario != "warm-start" && options().scenario != "menu" && options().scenario != "cooldown" &&
         options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing" &&
-        options().scenario != "ambient" && options().scenario != "raw-faults" && options().scenario != "adc-steps")
+        options().scenario != "ambient" && options().scenario != "raw-faults" && options().scenario != "adc-steps" &&
+        !simulator::isFaultScenario(options().scenario))
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

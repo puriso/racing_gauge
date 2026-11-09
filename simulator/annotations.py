@@ -41,8 +41,12 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         label(352, y, name, font=small)
         label(466, y, str(wanted), '#a7dfb4')
         label(552, y, str(observed), '#8fc5ff')
-    label(352, 285, 'MENU' if sample['menu'] else 'GAUGES', '#dfcc9d')
-    label(16, 297, 'Production screen 320 x 240 (original pixels)', font=small)
+    label(352, 285, sample.get('case', 'MENU' if sample['menu'] else 'GAUGES'), '#dfcc9d', font=small)
+    if 'input_temperature_c' in sample:
+        oil, water = sample['input_temperature_c']
+        label(16, 297, f'INPUT C (pre-avg): {oil:.2f} / {water:.2f}', font=small)
+    else:
+        label(16, 297, 'Production screen 320 x 240 (original pixels)', font=small)
     draw.line((16, 322, 624, 322), fill='#354353')
     label(16, 329, 'SIGNAL')
     label(188, 329, 'RAW SENSOR / VOLTAGE', '#8fc5ff')
