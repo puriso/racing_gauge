@@ -15,8 +15,6 @@ bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool
 // LOW成立の履歴。画面再描画では保持し、明示的なリセットで消去する。
 auto hasLowWarningHistory() -> bool;
 void resetLowWarningHistory();
-// Wのタップを処理した場合はtrue。詳細画面への通常タップとは区別する。
-auto handleLowWarningHistoryTap(int touchX, int touchY) -> bool;
 auto drawLowWarningHistory(M5Canvas& canvas) -> bool;
 void invalidateLowWarningHistoryIndicator();
 

@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
     "warning-history": {
         "title": "LOW発生履歴W・保持・画面復帰・リセット・再発", "group": "pressure",
-        "description": "LOW成立で左下Wが点灯。LOW消灯後と詳細画面からの復帰後も残り、12秒の明示リセットで消去。再発で再点灯する",
+        "description": "LOW成立で左下Wが点灯。LOW消灯後もWを保持。8秒の詳細画面で履歴を確認し、10秒にゲージへ戻るとWを消去。再発で再点灯する",
         "seconds": 20, "snapshots": [0, 2.625, 7, 8, 10, 12, 14.625, 19],
     },
     "warning-repeat": {
@@ -279,6 +279,13 @@ def convert_and_check(directory):
                 sheet.paste(image, (x, y))
                 labels.text((x + 6, y + 243), f'{frames[index]["time_ms"] / 1000:.3f}s', fill="white")
         source.unlink()
+    if metadata["scenario"] == "warning-history":
+        for seconds, menu, history, visible in [(7, False, True, True), (8, True, True, False),
+                                                (10, False, False, False), (12, False, False, False),
+                                                (19, False, True, True)]:
+            frame = frames[seconds * FRAME_RATE]
+            if (frame['menu'], frame['actual']['warning_history'], frame['w_visible']) != (menu, history, visible):
+                raise RuntimeError(f'詳細画面から戻る際のWリセットが不正です: {frame}')
     validate_review(metadata["scenario"], frames)
     if len(seen) < 20:
         raise RuntimeError("描画がほとんど変化していません")

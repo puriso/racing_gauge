@@ -356,7 +356,6 @@ auto makeInputs(const Targets& target, float seconds) -> Inputs
       input.adc = {0, 0, 0, 0};
     }
   }
-  input.resetWarning = options().scenario == "warning-history" && seconds == 12.0F;
   return input;
 }
 // NOLINTEND(readability-magic-numbers)
@@ -382,7 +381,7 @@ void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& ta
     trace << ',' << axis;
   }
   trace << ',' << static_cast<int>(showingMenu) << ',' << input.lux << ',' << target.oil << ',' << target.water << ','
-        << target.pressure << ',' << target.acceleration << ',' << input.resetWarning << '\n';
+        << target.pressure << ',' << target.acceleration << '\n';
 }
 
 void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs& input, const Targets& target,
@@ -398,10 +397,10 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
     manifest << input.adc[channel];
   }
   manifest << R"(],"imu":[)" << input.imu[0] << ',' << input.imu[1] << ',' << input.imu[2] << R"(],"als":)" << input.lux
-           << R"(,"reset_warning":)" << input.resetWarning << R"(},"target":{"oil_c":)" << target.oil << R"(,"water_c":)"
-           << target.water << R"(,"pressure_bar":)" << target.pressure << R"(,"g":)" << target.acceleration << R"(},"g":)"
-           << currentGForce << R"(,"lux":)" << input.lux << R"(,"menu":)" << showingMenu << R"(,"g_direction":")"
-           << currentGDirection << R"(","racing":)" << isRacingMode << R"(,"sensor":)";
+           << R"(},"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
+           << target.pressure << R"(,"g":)" << target.acceleration << R"(},"g":)" << currentGForce << R"(,"lux":)"
+           << input.lux << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)"
+           << isRacingMode << R"(,"sensor":)";
   writeSensorTelemetry(manifest);
   manifest << R"(,"actual":)";
   writeDisplayTelemetry(manifest);
@@ -509,12 +508,6 @@ void initializeDisplay()
 auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
 {
   inject(input);
-  if (input.resetWarning)
-  {
-    constexpr int HISTORY_TOUCH_X = 20;
-    constexpr int HISTORY_TOUCH_Y = LCD_HEIGHT - 12;
-    handleLowWarningHistoryTap(HISTORY_TOUCH_X, HISTORY_TOUCH_Y);
-  }
   static unsigned long lastAlsMeasurementTime = 0;
   // 実機loopと同じ順序で測定し、R・詳細画面の間は自動調光を止める。
   if (!showingMenu && !isRacingMode && simulator::nowMs - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
@@ -531,6 +524,7 @@ auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
   }
   if (showingMenu && !menu)
   {
+    resetLowWarningHistory();
     resetGaugeState();
     updateBacklightLevel();
   }
@@ -582,8 +576,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       trace.open(options().capture / "trace.csv");
       trace.exceptions(std::ios::failbit | std::ios::badbit);
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
-      trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g,"
-               "reset_warning\n";
+      trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g\n";
       manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
                << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)"
                << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)"

@@ -13,27 +13,13 @@ const char* lastLowEventDir = "Right";  // Gの向き
 float lastLowEventDuration = 0.0F;      // 継続時間[s]
 float lastLowEventPressure = 0.0F;      // そのときの油圧[bar]
 
-// LOW成立の履歴は表示保持期限や画面の切り替えでは消さない。
+// LOW成立の履歴は保持期限では消さず、詳細画面から戻るときに消す。
 static bool lowWarningHistory = false;
 static bool historyIndicatorDrawn = false;
 
 auto hasLowWarningHistory() -> bool { return lowWarningHistory; }
 
 void resetLowWarningHistory() { lowWarningHistory = false; }
-
-auto handleLowWarningHistoryTap(int touchX, int touchY) -> bool
-{
-  // 小さなWの周囲を含む左下44×28pxをタッチ領域にする。
-  constexpr int TOUCH_WIDTH = 44;
-  constexpr int TOUCH_HEIGHT = 28;
-  if (!lowWarningHistory || touchX < 0 || touchX >= TOUCH_WIDTH || touchY < LCD_HEIGHT - TOUCH_HEIGHT ||
-      touchY >= LCD_HEIGHT)
-  {
-    return false;
-  }
-  resetLowWarningHistory();
-  return true;
-}
 
 void invalidateLowWarningHistoryIndicator() { historyIndicatorDrawn = false; }
 

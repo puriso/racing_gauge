@@ -48,6 +48,7 @@ class Reference:
             self.racing_until = self.g_since = None
             self.mode = 0
         if self.menu and not menu:
+            self.warning.history = False
             self.read_light(sample['lux'])
         self.menu = menu
 
@@ -106,8 +107,6 @@ def add_expectations(directory, metadata):
                 raise ValueError('期待値の計算に使う24FPS入力が欠損・不正です')
             acquired = sensor.step(now, raw)
             sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als']}
-            if bool(int(row["reset_warning"])):
-                reference.warning.history = False
             expected = reference.step(sample)
             expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
                                   for key, value in acquired.items()}
@@ -115,7 +114,6 @@ def add_expectations(directory, metadata):
             frame = frames[tick]
             if (frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
                     or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
-                    or frame['raw']['reset_warning'] != bool(int(row['reset_warning']))
                     or any(not math.isclose(before, after, abs_tol=0.000001)
                            for before, after in zip(frame['raw']['imu'], raw['imu']))):
                 raise ValueError(f'録画と24FPSの生入力が一致しません: {frame}')

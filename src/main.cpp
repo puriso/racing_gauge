@@ -133,34 +133,31 @@ void loop()
   bool touched = M5.Touch.getCount() > 0;
   if (touched && !wasTouched)
   {
-    const auto touch = M5.Touch.getDetail();
-    if (isMenuVisible || !handleLowWarningHistoryTap(touch.x, touch.y))
+    isMenuVisible = !isMenuVisible;
+    if (isMenuVisible)
     {
-      isMenuVisible = !isMenuVisible;
-      if (isMenuVisible)
+      forceStopRacingMode();  // 詳細画面ではレーシングモードを解除
+      drawMenuScreen();
+      // メニュー表示中は輝度を最大にする
+      applyBrightnessMode(BrightnessMode::Day);
+    }
+    else
+    {
+      resetLowWarningHistory();
+      resetGaugeState();
+      // メニュー終了後は元の輝度に戻す
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+      if (isRacingMode)
       {
-        forceStopRacingMode();  // 詳細画面ではレーシングモードを解除
-        drawMenuScreen();
-        // メニュー表示中は輝度を最大にする
         applyBrightnessMode(BrightnessMode::Day);
       }
       else
       {
-        resetGaugeState();
-        // メニュー終了後は元の輝度に戻す
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-        if (isRacingMode)
-        {
-          applyBrightnessMode(BrightnessMode::Day);
-        }
-        else
-        {
-          updateBacklightLevel();
-        }
-#else
-        applyBrightnessMode(getRacingPrevBrightnessMode());
-#endif
+        updateBacklightLevel();
       }
+#else
+      applyBrightnessMode(getRacingPrevBrightnessMode());
+#endif
     }
   }
   wasTouched = touched;

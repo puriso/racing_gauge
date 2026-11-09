@@ -45,12 +45,7 @@ static void briefDoesNotLatch()
 static void resetAndRecur()
 {
   historyPersists();
-  expect(!handleLowWarningHistoryTap(44, 228), "領域の右端の外では消さない");
-  expect(!handleLowWarningHistoryTap(20, 211), "領域の上端の外では消さない");
-  expect(!handleLowWarningHistoryTap(-1, 228), "負の座標では消さない");
-  expect(!handleLowWarningHistoryTap(20, 240), "画面の外では消さない");
-  expect(hasLowWarningHistory(), "範囲外のタップでは履歴を残す");
-  expect(handleLowWarningHistoryTap(20, 228), "W付近のタップで履歴を消す");
+  resetLowWarningHistory();
   expect(!hasLowWarningHistory(), "明示的なリセットで履歴を消す");
   update(10100, 0.0F, 5.0F);
   expect(!hasLowWarningHistory(), "LOW保持期限から履歴が復活しない");
@@ -67,7 +62,7 @@ static void redrawPreservesHistory()
   expect(!drawLowWarningHistory(canvas), "変化がなければ転送しない");
   invalidateLowWarningHistoryIndicator();
   expect(hasLowWarningHistory(), "画面の初期化では履歴を消さない");
-  expect(drawLowWarningHistory(canvas), "詳細画面から戻る際はWを描き直す");
+  expect(drawLowWarningHistory(canvas), "履歴を保持した再描画ではWを描き直す");
   resetLowWarningHistory();
   expect(drawLowWarningHistory(canvas), "リセット時はWの消去を転送する");
   expect(!drawLowWarningHistory(canvas), "消去済みなら転送しない");
