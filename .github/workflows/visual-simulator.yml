@@ -3,6 +3,8 @@ name: SDL Visual Recording
 on:
   pull_request:
     paths:
+      # README更新でも最新HEADの確認ページを生成し、PRへ通知する。
+      - 'README.md'
       - 'src/**'
       - 'include/**'
       - 'simulator/**'
