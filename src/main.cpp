@@ -5,6 +5,7 @@
 #include "config.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/low_warning.h"
 #include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
 #include "modules/sensor.h"
@@ -132,30 +133,34 @@ void loop()
   bool touched = M5.Touch.getCount() > 0;
   if (touched && !wasTouched)
   {
-    isMenuVisible = !isMenuVisible;
-    if (isMenuVisible)
+    const auto touch = M5.Touch.getDetail();
+    if (isMenuVisible || !handleLowWarningHistoryTap(touch.x, touch.y))
     {
-      forceStopRacingMode();  // 詳細画面ではレーシングモードを解除
-      drawMenuScreen();
-      // メニュー表示中は輝度を最大にする
-      applyBrightnessMode(BrightnessMode::Day);
-    }
-    else
-    {
-      resetGaugeState();
-      // メニュー終了後は元の輝度に戻す
-#if SENSOR_AMBIENT_LIGHT_PRESENT
-      if (isRacingMode)
+      isMenuVisible = !isMenuVisible;
+      if (isMenuVisible)
       {
+        forceStopRacingMode();  // 詳細画面ではレーシングモードを解除
+        drawMenuScreen();
+        // メニュー表示中は輝度を最大にする
         applyBrightnessMode(BrightnessMode::Day);
       }
       else
       {
-        updateBacklightLevel();
-      }
+        resetGaugeState();
+        // メニュー終了後は元の輝度に戻す
+#if SENSOR_AMBIENT_LIGHT_PRESENT
+        if (isRacingMode)
+        {
+          applyBrightnessMode(BrightnessMode::Day);
+        }
+        else
+        {
+          updateBacklightLevel();
+        }
 #else
-      applyBrightnessMode(getRacingPrevBrightnessMode());
+        applyBrightnessMode(getRacingPrevBrightnessMode());
 #endif
+      }
     }
   }
   wasTouched = touched;

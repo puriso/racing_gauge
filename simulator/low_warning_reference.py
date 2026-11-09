@@ -12,6 +12,7 @@ class LowWarningReference:
         self.direction = 'Right'
         self.event = dict(g=0.0, pressure_bar=0.0, duration_s=0.0, direction='Right')
         self.state = 'idle'
+        self.history = False
 
     def step(self, now, g, pressure, direction):
         if g > 1 and pressure <= 3:
@@ -23,6 +24,7 @@ class LowWarningReference:
             self.minimum = min(self.minimum, pressure)
             if ((now - self.start) & 0xffffffff) >= 500:
                 self.qualified = True
+                self.history = True
                 self.last_warning = now
         else:
             if self.start is not None and self.qualified:

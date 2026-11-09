@@ -20,6 +20,7 @@
 #include "compat.hpp"
 #include "modules/backlight.h"
 #include "modules/display.h"
+#include "modules/low_warning.h"
 #include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
 #include "modules/sensor.h"
@@ -80,6 +81,10 @@ auto isWarningReview() -> bool
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
+  if (options().scenario == "warning-history")
+  {
+    return 20;
+  }
   if (isWarningReview())
   {
     return 12;
@@ -210,7 +215,8 @@ auto sampleWarningReview(float seconds) -> Targets
   const bool repeat = options().scenario == "warning-repeat" && seconds >= 4.0F && seconds < 5.5F;
   const bool pending = options().scenario == "warning-pending" && seconds >= 6.0F && seconds < 7.5F;
   const bool brief = options().scenario == "warning-brief" && seconds >= 4.0F && seconds < 4.25F;
-  const bool second = repeat || pending || brief;
+  const bool history = options().scenario == "warning-history" && seconds >= 14.0F && seconds < 15.5F;
+  const bool second = repeat || pending || brief || history;
   float acceleration = 0.0F;
   if (first)
   {
@@ -221,7 +227,8 @@ auto sampleWarningReview(float seconds) -> Targets
     acceleration = 1.5F;
   }
   const float pressure = first || second ? 1.0F : runningPressure(seconds);
-  return {100.0F, 95.0F, pressure, acceleration, false};
+  return {100.0F, 95.0F, pressure, acceleration,
+          options().scenario == "warning-history" && seconds >= 8.0F && seconds < 10.0F};
 }
 
 auto sample(double ratio) -> Targets
@@ -230,7 +237,7 @@ auto sample(double ratio) -> Targets
   const auto progress = static_cast<float>(ratio);
   const auto seconds = static_cast<float>(ratio * defaultSeconds());
   const float pressure = runningPressure(seconds);
-  if (isWarningReview())
+  if (isWarningReview() || options().scenario == "warning-history")
   {
     return sampleWarningReview(seconds);
   }
@@ -349,6 +356,7 @@ auto makeInputs(const Targets& target, float seconds) -> Inputs
       input.adc = {0, 0, 0, 0};
     }
   }
+  input.resetWarning = options().scenario == "warning-history" && seconds == 12.0F;
   return input;
 }
 // NOLINTEND(readability-magic-numbers)
@@ -374,7 +382,7 @@ void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& ta
     trace << ',' << axis;
   }
   trace << ',' << static_cast<int>(showingMenu) << ',' << input.lux << ',' << target.oil << ',' << target.water << ','
-        << target.pressure << ',' << target.acceleration << '\n';
+        << target.pressure << ',' << target.acceleration << ',' << input.resetWarning << '\n';
 }
 
 void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs& input, const Targets& target,
@@ -390,10 +398,10 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
     manifest << input.adc[channel];
   }
   manifest << R"(],"imu":[)" << input.imu[0] << ',' << input.imu[1] << ',' << input.imu[2] << R"(],"als":)" << input.lux
-           << R"(},"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
-           << target.pressure << R"(,"g":)" << target.acceleration << R"(},"g":)" << currentGForce << R"(,"lux":)"
-           << input.lux << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)"
-           << isRacingMode << R"(,"sensor":)";
+           << R"(,"reset_warning":)" << input.resetWarning << R"(},"target":{"oil_c":)" << target.oil << R"(,"water_c":)"
+           << target.water << R"(,"pressure_bar":)" << target.pressure << R"(,"g":)" << target.acceleration << R"(},"g":)"
+           << currentGForce << R"(,"lux":)" << input.lux << R"(,"menu":)" << showingMenu << R"(,"g_direction":")"
+           << currentGDirection << R"(","racing":)" << isRacingMode << R"(,"sensor":)";
   writeSensorTelemetry(manifest);
   manifest << R"(,"actual":)";
   writeDisplayTelemetry(manifest);
@@ -501,6 +509,12 @@ void initializeDisplay()
 auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
 {
   inject(input);
+  if (input.resetWarning)
+  {
+    constexpr int HISTORY_TOUCH_X = 20;
+    constexpr int HISTORY_TOUCH_Y = LCD_HEIGHT - 12;
+    handleLowWarningHistoryTap(HISTORY_TOUCH_X, HISTORY_TOUCH_Y);
+  }
   static unsigned long lastAlsMeasurementTime = 0;
   // 実機loopと同じ順序で測定し、R・詳細画面の間は自動調光を止める。
   if (!showingMenu && !isRacingMode && simulator::nowMs - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
@@ -568,7 +582,8 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       trace.open(options().capture / "trace.csv");
       trace.exceptions(std::ios::failbit | std::ios::badbit);
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
-      trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g\n";
+      trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g,"
+               "reset_warning\n";
       manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
                << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)"
                << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)"
@@ -654,7 +669,7 @@ auto main(int argc, char** argv) -> int
       {
         std::cout << "Usage: program [--scenario "
                      "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|warning-repeat|warning-"
-                     "pending|warning-brief|startup|warm-start|menu] "
+                     "pending|warning-brief|warning-history|startup|warm-start|menu] "
                      "[--seconds N] [--capture "
                      "NEW_DIRECTORY]\n";
         return 0;
@@ -689,7 +704,8 @@ auto main(int argc, char** argv) -> int
     if (options().scenario != "ramp" && options().scenario != "warnings" && options().scenario != "startup" &&
         options().scenario != "warm-start" && options().scenario != "menu" && options().scenario != "cooldown" &&
         options().scenario != "pressure-sweep" && options().scenario != "circuit" && options().scenario != "racing" &&
-        options().scenario != "ambient" && options().scenario != "raw-faults" && !isWarningReview())
+        options().scenario != "ambient" && options().scenario != "raw-faults" && !isWarningReview() &&
+        options().scenario != "warning-history")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

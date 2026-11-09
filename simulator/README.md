@@ -218,3 +218,14 @@ Trusted same-repository PRs publish a commit-specific GitHub Pages URL; full PNG
 Optional GIF generation is also real-time. Electrical behavior, bus timing and hardware performance are outside this simulator's scope.
 Simulation and MP4 output run at 24 FPS and normal speed. GIF delays use 40/50ms intervals to average 24 FPS.
 FPS benchmarking, comparison CLI options and performance reports are removed.
+
+### LOWの発生履歴W
+
+LOWが500msの継続条件を満たすと、左下のRの右に赤いWを表示します。LOWが消えても、詳細画面を開閉しても保持します。W付近（左下44×28px）をタップすると消え、詳細画面は開きません。警告条件が継続していれば再点灯し、再起動時には履歴は初期化されます。直近イベントの数値記録はWの消去では消しません。
+
+`warning-history`は20秒・24FPS等速で、LOW成立→LOW消灯後のW保持→8〜10秒の詳細画面→12秒のWタップ→14秒からの再発を再現します。生ADC/IMU入力とタップ操作を記録し、独立モデル・転送先のWの画素まで照合します。
+
+```sh
+python test/low_warning/run_tests.py --history
+python simulator/record.py --scenario warning-history
+```

@@ -19,7 +19,7 @@ on:
       scenario:
         description: '録画シナリオ'
         type: choice
-        options: [all, warning-repeat, warning-pending, warning-brief, circuit, racing, ambient, raw-faults, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
+        options: [all, warning-history, warning-repeat, warning-pending, warning-brief, circuit, racing, ambient, raw-faults, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
         default: all
 
 permissions:
@@ -47,6 +47,8 @@ jobs:
         run: python -m pip install -r simulator/requirements.txt
       - name: 期待値と24FPS時刻の回帰テスト
         run: python -m unittest discover -s simulator -p 'test_*.py'
+      - name: W履歴の保持・リセット・再描画の回帰テスト
+        run: python test/low_warning/run_tests.py --history
       - name: 本番描画を SDL 向けにビルド
         run: pio run -d simulator -e desktop
       - name: シナリオの録画と描画検証
@@ -77,7 +79,7 @@ jobs:
           PRのコメントにある **等速の確認ページを開く** から、GitHub Pagesで直接確認できます。
           全PNGは **Artifacts → visual-simulator** からダウンロードできます。
           シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
-          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさなど、14シナリオを等速で確認できます。
+          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさなど、15シナリオを等速で確認できます。
           動画の画面外に生ADCカウント・電圧・IMU各軸・変換と平滑化の期待値・照度・輝度の期待／実際を表示します。
           更新・録画は24FPS、全区間1.0倍速です。FPS計測・比較機能は含めません。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
@@ -147,7 +149,7 @@ jobs:
           number, sha = os.environ['PR_NUMBER'], os.environ['EXPECTED_SHA']
           assert re.fullmatch(r'[1-9][0-9]*', number)
           assert re.fullmatch(r'[0-9a-f]{40}', sha)
-          scenarios = 'warning-repeat|warning-pending|warning-brief|circuit|racing|ambient|raw-faults|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
+          scenarios = 'warning-history|warning-repeat|warning-pending|warning-brief|circuit|racing|ambient|raw-faults|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
           allowed = re.compile(rf'index\.html|spot-checks\.json|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|poster\.png|inputs\.json)')
           files, total = [], 0
           entries = list(source.rglob('*'))
@@ -255,6 +257,7 @@ jobs:
               `[等速の確認ページを開く](${url})`, '',
               'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
               '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面、照度と調光を確認できます。',
+              'LOW成立の履歴Wは左下へ残り、明示リセットまで保持される流れを確認できます。',
               'PR #380の再発・期限・短い低下は3本の再現動画で、499/500msや時刻折り返しは数値テストの新旧比較で確認できます。',
               '動画の画面外に生ADC・電圧・IMU各軸・取得と平滑化の期待値を表示し、本番センサー処理を通しています。', '',
               '**24FPS・1.0倍速**で全シナリオを確認できます。FPS計測・比較機能は削除しています。', '',

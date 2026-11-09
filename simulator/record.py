@@ -22,6 +22,11 @@ from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "warning-history": {
+        "title": "LOW発生履歴W・保持・画面復帰・リセット・再発", "group": "pressure",
+        "description": "LOW成立で左下Wが点灯。LOW消灯後と詳細画面からの復帰後も残り、12秒の明示リセットで消去。再発で再点灯する",
+        "seconds": 20, "snapshots": [0, 2.625, 7, 8, 10, 12, 14.625, 19],
+    },
     "warning-repeat": {
         "title": "PR #380・保持中の再発", "group": "reproduction",
         "description": "最初のLOW点灯→復帰・保持→再発。再発を判定する500msの間もLOWが消えず、次の履歴が別イベントとして残ることを等速で追う修正後の再現動画",
@@ -113,7 +118,7 @@ def validate_inputs(metadata):
         if not 0 <= frame["lux"] <= 100:
             raise RuntimeError(f"照度入力が0〜100luxの範囲外です: {frame}")
         seconds = index / FRAME_RATE
-        ordinary = scenario not in ("pressure-sweep", "warnings", "circuit", *REVIEWS) and seconds >= 1
+        ordinary = scenario not in ("pressure-sweep", "warnings", "circuit", "warning-history", *REVIEWS) and seconds >= 1
         if ordinary and not math.isclose(frame["pressure_bar"], running_pressure(seconds), abs_tol=0.0001):
             raise RuntimeError(f"油圧が3〜6barで連続変動していません: {frame}")
     if scenario == "ramp":
@@ -134,6 +139,8 @@ def validate_inputs(metadata):
                 or values[:10 * FRAME_RATE + 1] != sorted(values[:10 * FRAME_RATE + 1])
                 or values[10 * FRAME_RATE:] != sorted(values[10 * FRAME_RATE:], reverse=True)):
             raise RuntimeError("油圧の上昇・下降入力が不正です")
+    if scenario == "warning-history":
+        return
     if scenario == "warnings":
         at = lambda time_ms: frames[frame_at_or_after(time_ms)]
         for time, pressure in ((8100, 3.1), (12100, 3.0), (16200, 2.9), (23000, 2.9), (30000, 6.0)):
@@ -198,6 +205,11 @@ def warning_visible(image):
                for red, green, blue in image.crop((40, 130, 103, 159)).getdata()) > 100
 
 
+def history_visible(image):
+    return any(red > 180 and green < 80 and blue < 80
+               for red, green, blue in image.crop((14, 224, 22, 232)).getdata())
+
+
 def racing_visible(image):
     return any(red > 180 and green < 80 and blue < 80
                for red, green, blue in image.crop((0, 224, 12, 237)).getdata())
@@ -230,6 +242,7 @@ def convert_and_check(directory):
             frame = frames[index]
             frame["low_visible"] = warning_visible(image)
             frame["r_visible"] = racing_visible(image)
+            frame["w_visible"] = history_visible(image)
             check_expectations(frame)
             if not frame["menu"] and frame["r_visible"] != frame["racing"]:
                 raise RuntimeError(f"Rモードと実際のR表示が一致しません: {frame}")
@@ -302,7 +315,7 @@ def encode(directory):
 
 
 def write_report(output, scenarios):
-    columns = ['time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'adc', 'imu', 'pressure_bar',
+    columns = ['time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible', 'adc', 'imu', 'pressure_bar',
                'low_event', 'expected_low_event', 'warning_state', 'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
                'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm']
     data = []
@@ -312,7 +325,7 @@ def write_report(output, scenarios):
         # 列名を共有して数値行にし、24FPSの全区間でもHTMLを直開きできる量に収める。
         frames = []
         for frame in metadata['frames']:
-            values = {key: frame[key] for key in ('time_ms', 'g', 'lux', 'low_visible', 'r_visible')}
+            values = {key: frame[key] for key in ('time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
             values.update(adc=frame['raw']['adc'], imu=frame['raw']['imu'],
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))
             values.update({f'expected_{key}': frame['expected'][key] for key in ('oil_c', 'water_c', 'pressure_bar')})

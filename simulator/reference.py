@@ -82,7 +82,7 @@ class Reference:
                 self.filtered[key] = float32(previous + float32(float32(alpha) * float32(target - previous)))
             low = self.warning.step(now, sample['g'], self.filtered['pressure_bar'], sample.get('g_direction', 'Right'))
         return {**{key: round(value, 4) for key, value in self.filtered.items()},
-                'racing': self.racing, 'low': low, 'low_event': self.warning.event.copy(),
+                'racing': self.racing, 'low': low, 'warning_history': self.warning.history, 'low_event': self.warning.event.copy(),
                 'warning_state': self.warning.state, 'brightness_mode': self.mode,
                 'brightness_pwm': self.settings['brightness'][self.mode],
                 'lux_sample': self.lux_sample, 'lux_median': self.lux_median}
@@ -106,6 +106,8 @@ def add_expectations(directory, metadata):
                 raise ValueError('期待値の計算に使う24FPS入力が欠損・不正です')
             acquired = sensor.step(now, raw)
             sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als']}
+            if bool(int(row["reset_warning"])):
+                reference.warning.history = False
             expected = reference.step(sample)
             expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
                                   for key, value in acquired.items()}
@@ -113,6 +115,7 @@ def add_expectations(directory, metadata):
             frame = frames[tick]
             if (frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
                     or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
+                    or frame['raw']['reset_warning'] != bool(int(row['reset_warning']))
                     or any(not math.isclose(before, after, abs_tol=0.000001)
                            for before, after in zip(frame['raw']['imu'], raw['imu']))):
                 raise ValueError(f'録画と24FPSの生入力が一致しません: {frame}')
@@ -129,6 +132,8 @@ def check_expectations(frame):
             raise RuntimeError(f'期待する調光状態と実際の設定が一致しません: {key}, {frame}')
     if frame['racing'] != expected['racing'] or frame['low_visible'] != expected['low']:
         raise RuntimeError(f'期待するR・LOWと実際の判定・画素が一致しません: {frame}')
+    if actual['warning_history'] != expected['warning_history'] or frame['w_visible'] != (expected['warning_history'] and not frame['menu']):
+        raise RuntimeError(f'W履歴の保持・消去・画素が一致しません: {frame}')
     for key, tolerance in [('oil_c', 0.002), ('water_c', 0.002), ('pressure_bar', 0.0001)]:
         if not math.isclose(frame['sensor'][key], expected['sensor'][key], abs_tol=tolerance):
             raise RuntimeError(f'ADC変換・取得周期・平均化の期待値が一致しません: {key}, {frame}')

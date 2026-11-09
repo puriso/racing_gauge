@@ -15,6 +15,7 @@ struct RawInputs
   std::array<float, 3> imu;
   bool menu;
   int lux;
+  bool resetWarning = false;
 };
 
 // 目標波形からADC刺激を作るだけの逆変換。表示・判定にはこの物理量を渡さない。

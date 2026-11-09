@@ -7,7 +7,8 @@ unsigned long millis();
 namespace fonts
 {
 inline constexpr int FreeSansBold12pt7b = 0;
-}
+inline constexpr int Font0 = 1;
+}  // namespace fonts
 
 namespace m5gfx
 {
@@ -23,6 +24,7 @@ class M5Canvas
 {
  public:
   void setFont(const int*) {}
+  void setTextSize(int) {}
   int textWidth(const char*) { return 54; }
   int fontHeight() { return 24; }
   void fillRect(int, int, int, int, uint16_t) {}

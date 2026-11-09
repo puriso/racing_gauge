@@ -29,6 +29,7 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     rows = [
         ('R mode', 'ON' if expected['racing'] else 'OFF', 'ON' if sample['racing'] else 'OFF'),
         ('LOW', 'ON' if expected['low'] else 'OFF', 'ON' if sample['low_visible'] else 'OFF'),
+        ('W history', 'ON' if expected['warning_history'] else 'OFF', 'ON' if sample['w_visible'] else 'OFF'),
         ('Light mode', MODES[expected['brightness_mode']], MODES[actual['brightness_mode']]),
         ('PWM / 255', expected['brightness_pwm'], actual['brightness_pwm']),
         ('ALS sample', expected['lux_sample'], actual['lux_sample']),
@@ -37,7 +38,7 @@ def annotated_frame(source, sample, scenario, sensor_settings):
          'YES' if sample['sensor']['pressure_fault'] else 'NO'),
     ]
     for index, (name, wanted, observed) in enumerate(rows):
-        y = 78 + index * 28
+        y = 78 + index * 25
         label(352, y, name, font=small)
         label(466, y, str(wanted), '#a7dfb4')
         label(552, y, str(observed), '#8fc5ff')

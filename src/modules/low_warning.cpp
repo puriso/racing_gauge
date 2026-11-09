@@ -13,6 +13,53 @@ const char* lastLowEventDir = "Right";  // Gの向き
 float lastLowEventDuration = 0.0F;      // 継続時間[s]
 float lastLowEventPressure = 0.0F;      // そのときの油圧[bar]
 
+// LOW成立の履歴は表示保持期限や画面の切り替えでは消さない。
+static bool lowWarningHistory = false;
+static bool historyIndicatorDrawn = false;
+
+auto hasLowWarningHistory() -> bool { return lowWarningHistory; }
+
+void resetLowWarningHistory() { lowWarningHistory = false; }
+
+auto handleLowWarningHistoryTap(int touchX, int touchY) -> bool
+{
+  // 小さなWの周囲を含む左下44×28pxをタッチ領域にする。
+  constexpr int TOUCH_WIDTH = 44;
+  constexpr int TOUCH_HEIGHT = 28;
+  if (!lowWarningHistory || touchX < 0 || touchX >= TOUCH_WIDTH || touchY < LCD_HEIGHT - TOUCH_HEIGHT ||
+      touchY >= LCD_HEIGHT)
+  {
+    return false;
+  }
+  resetLowWarningHistory();
+  return true;
+}
+
+void invalidateLowWarningHistoryIndicator() { historyIndicatorDrawn = false; }
+
+auto drawLowWarningHistory(M5Canvas& canvas) -> bool
+{
+  constexpr int HISTORY_X = 14;
+  constexpr int HISTORY_Y = LCD_HEIGHT - 16;
+  if (lowWarningHistory == historyIndicatorDrawn)
+  {
+    return false;
+  }
+
+  constexpr int GLYPH_SIZE = 8;
+  canvas.fillRect(HISTORY_X, HISTORY_Y, GLYPH_SIZE, GLYPH_SIZE, COLOR_BLACK);
+  if (lowWarningHistory)
+  {
+    canvas.setFont(&fonts::Font0);
+    canvas.setTextSize(1);
+    canvas.setTextColor(COLOR_RED, COLOR_BLACK);
+    canvas.setTextDatum(m5gfx::textdatum_t::top_left);
+    canvas.drawString("W", HISTORY_X, HISTORY_Y);
+  }
+  historyIndicatorDrawn = lowWarningHistory;
+  return true;
+}
+
 // 警告表示の状態をまとめた構造体
 struct LowWarningState
 {
@@ -100,6 +147,7 @@ bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool
       state.lastWarningMs = now;
       state.warningHeld = true;
       state.eventQualified = true;
+      lowWarningHistory = true;
     }
   }
   else
