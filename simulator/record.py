@@ -16,6 +16,7 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw
 
 from adc_steps import validate_adc_steps
+from adc_bus_reference import validate_communication
 from annotations import SIZE, annotated_frame
 from fault_cases import CASES, validate_fault_inputs
 from reference import add_expectations, check_expectations
@@ -23,6 +24,16 @@ from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "adc-startup": {
+        "title": "ADC起動時未接続・1秒間隔の再接続と復帰", "group": "raw",
+        "description": "開始時から5秒までADS1015が応答しない条件。ADC未接続でも描画とIMU・照度を更新し、装置の復帰後に正常取得を再開する",
+        "seconds": 16, "snapshots": [0, 1.1, 4, 5, 5.1, 6, 8, 16],
+    },
+    "adc-communication": {
+        "title": "ADC通信異常・タイムアウト・再接続と復帰", "group": "raw",
+        "description": "動作中の切断、変換完了しない状態、設定書込・状態読取・結果読取・本取得の失敗を順に注入。本番adc_readerの5ms期限・1秒再接続と、温度バッファ初期化・正常復帰を確認",
+        "seconds": 56, "snapshots": [0, 3, 4, 7, 8, 11, 12, 15, 16, 19, 20, 23, 27, 28, 31, 35, 36, 39, 43, 44, 47, 48, 51, 55, 56],
+    },
     "sensor-disconnect": {
         "title": "油温・水温・油圧の信号断線と復帰", "group": "raw",
         "description": "油温・水温の断線相当（5V入力）、油圧信号なし相当（0V）、3本同時、復帰を確認。油圧の断線電圧は配線次第のため、0Vに落ちた条件を模擬",
@@ -107,6 +118,9 @@ def running_pressure(seconds):
 
 
 def validate_inputs(metadata):
+    validate_communication(metadata)
+    if metadata['scenario'] in ('adc-startup', 'adc-communication'):
+        return
     if metadata["scenario"] in CASES:
         validate_fault_inputs(metadata)
         return
@@ -314,6 +328,7 @@ def encode(directory):
 
 def write_report(output, scenarios):
     columns = ['time_ms', 'g', 'lux', 'low_visible', 'r_visible', 'adc', 'imu', 'pressure_bar',
+               'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
                'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
                'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm']
@@ -325,6 +340,8 @@ def write_report(output, scenarios):
         frames = []
         for frame in metadata['frames']:
             values = {key: frame[key] for key in ('time_ms', 'g', 'lux', 'low_visible', 'r_visible')}
+            values.update(adc_fault=frame['raw']['adc_fault'])
+            values.update({key: frame['sensor'][key] for key in ('adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last')})
             values.update(adc=frame['raw']['adc'], imu=frame['raw']['imu'],
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))
             values.update({f'expected_{key}': frame['expected'][key] for key in ('oil_c', 'water_c', 'pressure_bar')})

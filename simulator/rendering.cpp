@@ -3,6 +3,7 @@
 
 // 実機と同じ描画・平滑化・警告処理をリンクする。時刻アダプターはこの翻訳単位に限定する。
 // NOLINTBEGIN(bugprone-suspicious-include)
+#include "../src/modules/adc_reader.cpp"
 #include "../src/modules/backlight.cpp"
 #include "../src/modules/display.cpp"
 #include "../src/modules/low_warning.cpp"
@@ -56,5 +57,6 @@ void writeSensorTelemetry(std::ostream& output)
     }
     output << simulator::adcLastRead[channel];
   }
-  output << "]}";
+  output << R"(],"adc_connected":)" << adcInitialized << R"(,"adc_begin_calls":)" << simulator::adcBeginCalls
+         << R"(,"adc_wait_ms":)" << simulator::adcWaitMs << '}';
 }

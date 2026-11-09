@@ -30,7 +30,7 @@ flowchart LR
     Sample --> Display["平滑化・R/LOW・調光・描画"]
 ```
 
-- ADCは`readADC_SingleEnded()`の戻り値を置き換えます。12bitカウント→電圧→電圧降下補正→温度・油圧の変換を省略しません。
+- ADCは外部I²C装置のレジスター応答を置き換え、本番`adc_reader.cpp`の初期化・ダミー変換・本取得・5ms期限・1秒再接続を実行します。12bitカウント→電圧→電圧降下補正→温度・油圧の変換を省略しません。
 - 配線はCH0=油温、CH1=水温、CH2=油圧。油圧は5点移動平均、温度は500msごとに取得して2点平均します。
 - IMUは`getAccelData()`が返すX/Y/Z（g）を置き換えます。200msの安定待ち・20サンプルのオフセット補正・水平G・方向判定・縦軸除外を本番処理で行います。
 - ALSは`getAlsValue()`の戻り値を置き換え、8秒周期の測定・6点中央値・輝度判定を本番処理で行います。
@@ -50,6 +50,8 @@ flowchart LR
 
 | シナリオ | 長さ | 確認する内容 |
 | --- | --- | --- |
+| `adc-startup` | 16秒 | 起動時未接続→1秒間隔の再試行→5秒に装置復帰→正常取得 |
+| `adc-communication` | 56秒 | 動作中の装置切断・変換未完了・設定書込/状態読取/結果読取/本取得失敗と各復帰 |
 | `sensor-disconnect` | 40秒 | 油温・水温の断線相当（5V入力）、油圧信号0V、同時発生と復帰 |
 | `temperature-high` | 40秒 | 200℃直前→200℃以上、油温・水温それぞれと両方約583℃、復帰 |
 | `temperature-low` | 40秒 | PDF00903Sの動作下限-20℃の前後、油温・水温それぞれと両方が下限未満、復帰 |
@@ -72,7 +74,7 @@ flowchart LR
 
 - `sensor-disconnect`: 4〜8秒は油温断線、12〜16秒は水温断線、20〜24秒は油圧0V、28〜32秒は同時発生。
   NTCがGND側にある回路の断線を、ADC=1666（約5V）で模擬します。油圧の断線電圧は配線次第なので、ここでは入力が0Vへ落ちた条件を模擬します。
-  ADC基板やI²Cバス自体の通信断は再現していません。
+  この信号断線シナリオはADC通信異常とは別です。通信異常は`adc-startup`と`adc-communication`で確認します。
 - `temperature-high`: 4〜8秒は油温ADC25（約197.57℃）、8〜12秒は24（約200.30℃）。
   16〜24秒は同じ順で水温、28〜32秒は両方ADC1（約583.29℃）。
 - `temperature-low`: 4〜8秒は油温ADC1429（約-19.93℃）、8〜12秒は1430（約-20.04℃）。
@@ -224,3 +226,20 @@ Trusted same-repository PRs publish a commit-specific GitHub Pages URL; full PNG
 Optional GIF generation is also real-time. Electrical behavior, bus timing and hardware performance are outside this simulator's scope.
 Simulation and MP4 output run at 24 FPS and normal speed. GIF delays use 40/50ms intervals to average 24 FPS.
 FPS benchmarking, comparison CLI options and performance reports are removed.
+
+## ADC通信異常の動画と数値テスト
+
+`adc-communication`は4〜8秒に装置未接続、12〜16秒に変換完了ビットが戻らない状態、20〜24秒に設定書込失敗、28〜32秒に状態読取失敗、36〜40秒に結果読取失敗、44〜48秒にダミー取得後の本取得失敗を注入します。間の区間と最後の48〜56秒は正常です。
+`adc-startup`は開始から5秒まで未接続、以降は正常です。IMUの起動時補正後もADCが応答しない場合、温度は200℃の異常値としてバッファを初期化し、表示側では0℃へ向けて平滑化します。油圧の取得バッファは0へ初期化します。復帰後は最初の正常温度から平均化を再開します。
+
+画面外とHTMLには外部応答・ADCの接続状態・初期化試行回数・最後に成功した取得値・変換結果の取得回数を表示します。RAW ADCは模擬装置へ与えた入力であり、通信失敗時に取得できた値ではありません。ダミー取得は成功回数に含みますが、本取得失敗時の値はセンサー平均へ反映しません。
+
+仮想ポーリング待ち時間の5msは、本番処理が`delay(1)`を5回通る期限判定の値です。実機のI²C転送時間やFPSの推定ではなく、24FPSの入力時刻も変えません。SDLの内部時計は変更しません。電気特性・バスの物理的な状態・実機応答時間は検証対象外です。
+
+24FPS動画は約41.7ms刻みです。5msの期限、999/1000msの再試行境界、符号拡張・ダミー取得・復帰時のバッファ初期化は、次の本番C++テストでも検証します。
+
+```sh
+python test/adc_reader/run_tests.py --check-legacy
+python simulator/record.py --scenario adc-communication
+python simulator/record.py --scenario adc-startup
+```
