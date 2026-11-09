@@ -13,6 +13,14 @@ A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [
 PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 生ADCカウント・IMU各軸・照度を本番のセンサー処理へ渡し、変換・補正・取得周期・平均化から表示まで確認します。
 シミュレーションと動画は24FPS・1.0倍速です。
+mainの確認ページは15シナリオを収録し、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
+
+現在レビュー中の変更には、専用の確認ページがあります。mainへ取り込まれた機能とは区別してください。
+
+| PR | 追加内容と確認ページ |
+| --- | --- |
+| [#380](https://github.com/puriso/racing_gauge/pull/380) | LOWの再発・保持を修正し、発生履歴Wを左下に保持。詳細画面から戻るとWを消去。[W履歴の動画](https://puriso.github.io/racing_gauge/previews/pr-380/5139c7b3f342fad1ef6a116c73d7f90c1f6d7ccf/#warning-history) |
+| [#381](https://github.com/puriso/racing_gauge/pull/381) | ADC通信の5ms変換期限・1秒再接続と正常復帰。[通信異常の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-communication)・[起動時未接続の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-startup) |
 
 [Real-time visual review](https://puriso.github.io/racing_gauge/): continuous pressure changes, circuit pressure drops,
 racing-mode transitions, and heating/cooling scenarios. All videos play at normal speed.
@@ -87,9 +95,9 @@ Windowsでは`COM11`、Linuxでは`/dev/ttyACM0`など、環境に合ったポ�
 | --- | --- | --- |
 | 本体 | M5Stack CoreS3 / ESP32-S3 | 320 × 240画素の内蔵ディスプレイ |
 | ADC | ADS1015 / 12bit・4チャンネル | I²Cアドレス`0x48` |
-| 油温 | Defi PDF00903Sを想定したNTC抵抗式 | ADS1015 A0 / CH0 |
-| 水温 | Defi PDF00903Sを想定したNTC抵抗式 | ADS1015 A1 / CH1 |
-| 油圧 | Defi PDF00703Sを想定した電圧出力式 | ADS1015 A2 / CH2 |
+| 油温 | Defi PDF00903S / NTC抵抗式 | ADS1015 A0 / CH0 |
+| 水温 | Defi PDF00903S / NTC抵抗式 | ADS1015 A1 / CH1 |
+| 油圧 | Defi PDF00703S / 電圧出力式 | ADS1015 A2 / CH2 |
 | 外部I²C SDA | CoreS3 GPIO9 | ADS1015 SDAとのレベル整合が必要 |
 | 外部I²C SCL | CoreS3 GPIO8 | ADS1015 SCLとのレベル整合が必要 |
 
@@ -145,29 +153,17 @@ CoreS3〜ADS1015のI²C配線は、実機では3cm未満です。
 
 **DC入力給電では、CoreS3から外部へ5Vを出す設定と給電方向を合わせる必要があります。**
 [公式の電源サンプル](https://github.com/m5stack/M5CoreS3/blob/main/examples/Basic/power/power.ino)は、DC入力・Groveからの給電時に`cfg.output_power = false`を指定しています。
-外部出力を強制ONにする処理の修正は[#382](https://github.com/puriso/racing_gauge/pull/382)で管理しています。
-同PRでは`EXTERNAL_5V_OUTPUT_ENABLED`を共通設定にし、初期値を`false`にしています。取り込み状況を確認してください。
+現行mainの`setup()`は、次のように外部5V出力を有効化しています。
 
 ```cpp
-// 修正前の外部出力指定
 M5.Power.setExtOutput(true);
 ```
 
-```cpp
-// #382適用後のconfig.h：DinBaseのDC給電向けの既定値
-constexpr bool EXTERNAL_5V_OUTPUT_ENABLED = false;
+DinBaseのDC給電と合わせた出力設定の変更は、現行mainには未適用です。
+`EXTERNAL_5V_OUTPUT_ENABLED`という切替設定も現在の`config.h`にはありません。
+初期化と後段の外部出力指定を給電方向に合わせて確認してください。
+旧[#382](https://github.com/puriso/racing_gauge/pull/382)は未マージで終了しており、適用済みの設定例としては扱いません。
 
-// setupの設定の要点
-auto cfg = M5.config();
-cfg.output_power = EXTERNAL_5V_OUTPUT_ENABLED;
-CoreS3.begin(cfg);
-
-// 後段の外部出力指定も、初期化設定と揃える
-M5.Power.setExtOutput(EXTERNAL_5V_OUTPUT_ENABLED);
-```
-
-変更後はADC・センサー側の5V供給も実機で確認してください。
-USB・バッテリーからCoreS3経由でセンサーへ5Vを出す構成では、同定数を`true`に変更して再ビルドします。
 5Vピンへ直接外部給電する場合も、外部出力を有効にした状態で別電源を同時接続しないでください。
 
 コードの`setBatteryCharge(false)`はPMU側への充電停止設定です。
@@ -244,7 +240,8 @@ ADC入力で4.9V以上の過電圧を検出した場合などは、油圧を0扱
 </details>
 
 入力電圧が換算可能な範囲を外れる場合は、内部で200°Cを異常値として使用します。
-表示側には199°C以上を0扱いにする処理があります。異常サンプルの平均・最高値の扱いの修正は[#378](https://github.com/puriso/racing_gauge/pull/378)を参照してください。
+表示側には199°C以上を0扱いにする処理があります。動作範囲外という入力の分類と、製品側の異常判定は別です。
+通信失敗時の温度平均の初期化・正常値からの復帰は、レビュー中の[#381](https://github.com/puriso/racing_gauge/pull/381)で扱います。
 
 センサーの型番だけで測定精度が決まるわけではありません。
 使用するセンサーの特性、基準抵抗、実際の電源電圧・配線の電圧降下に合わせて、換算係数と`VOLTAGE_DROP`を確認してください。
@@ -269,16 +266,15 @@ ADC入力で4.9V以上の過電圧を検出した場合などは、油圧を0扱
 [GitHub Actions](.github/workflows/pio-build.yml)では、CoreS3向けファームウェアをビルドし、`firmware`アーティファクトとして保存します。
 Markdownだけの変更は、現在のワークフローでは実行対象外です。
 
-次の改善は関連PRで管理しています。**このREADMEの基準であるmainへの取り込み状況と、各PRの検証範囲を確認してください。**
-追加テストの実行手順は各PR本文に記載しています。
+現在レビュー中なのは、低油圧警告とADC通信異常の改善です。内容と動画は冒頭のPR一覧から確認できます。
 
-| PR | 内容 |
+| PR | 検証する内容 |
 | --- | --- |
-| [#378](https://github.com/puriso/racing_gauge/pull/378) | 温度異常・最高値・油温バーの修正、nativeテストの整備 |
-| [#379](https://github.com/puriso/racing_gauge/pull/379) | 更新範囲に限定した画面転送 |
-| [#380](https://github.com/puriso/racing_gauge/pull/380) | 低油圧警告の再発・表示保持・時刻折り返しの修正 |
-| [#381](https://github.com/puriso/racing_gauge/pull/381) | ADC通信異常時の無期限待機防止・再接続 |
-| [#382](https://github.com/puriso/racing_gauge/pull/382) | DinBaseのDC給電に合わせた外部5V出力設定の統一 |
+| [#380](https://github.com/puriso/racing_gauge/pull/380) | 再発・500ms判定・3秒保持・32ビット時刻折り返し、W履歴と詳細画面からの復帰時リセット |
+| [#381](https://github.com/puriso/racing_gauge/pull/381) | 起動時未接続・通信失敗・5ms変換期限・1秒再接続、温度平均の復帰 |
+
+旧#378・#382は未マージで終了しています。#379は#378のブランチへ取り込まれた変更で、mainへの適用済み機能とは扱いません。
+各PRに固有のテストコマンドは、そのPRの本文とブランチ上のガイドを参照してください。
 
 描画は最大60FPSとなるよう制御していますが、実際のフレームレートはADC取得・描画・画面転送の時間に依存します。
 ビルドやホストテストの成功は、実機でのセンサー精度・電源変動・ノイズ耐性の確認とは別です。
@@ -286,7 +282,10 @@ Markdownだけの変更は、現在のワークフローでは実行対象外で
 ### SDLシミュレーターとCI録画
 
 実機なしで本番の描画を動かし、温度・油圧の変化と警告表示を確認できます。
-CIではMP4・PNG・HTMLのレポートを保存します。セットアップと録画の見方は[シミュレーターのガイド](simulator/README.md)を参照してください。
+CIではMP4・PNG・HTMLのレポートを保存します。確認ページの公開成功ごとに新しいPRコメントを追加します。
+シミュレーターの24FPSは設定値であり、実機FPSの計測結果ではありません。実機FPSの推定・比較機能は含みません。
+動画の製品画面外に生ADC・電圧・IMU・G・照度・期待値を表示し、HTMLの確認時刻ボタンから各場面へ移動できます。
+セットアップと録画の見方は[シミュレーターのガイド](simulator/README.md)を参照してください。
 
 ## English quick start
 
@@ -319,13 +318,16 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **ADC inputs:** A0/CH0 oil temperature, A1/CH1 water temperature, A2/CH2 oil pressure; default address `0x48`.
 - **I²C pins:** GPIO9 SDA and GPIO8 SCL. Match the 3.3V GPIO and 5V ADC logic levels; see the [wiring section](#ハードウェアと配線) and the linked device datasheets.
 - **Temperature inputs:** NTC dividers with a 10kΩ resistor on the supply side and the NTC on the GND side. They are not 0.5–4.5V voltage-output sensors.
-- **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. [#382](https://github.com/puriso/racing_gauge/pull/382) aligns initialization and the later external-output setting using `EXTERNAL_5V_OUTPUT_ENABLED`, defaulting to `false`. For USB/battery-powered sensor output, set it to `true` and rebuild. Check the PR's merge status and verify sensor-side 5V after the change. See the [power section](#電源設定). Do not feed the 5V pin from another source while its output is enabled.
+- **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. Current main enables external 5V output with `M5.Power.setExtOutput(true)` and has no `EXTERNAL_5V_OUTPUT_ENABLED` switch. Align initialization and output settings with the power direction; see the [power section](#電源設定). The former #382 was closed without merging. Do not feed the 5V pin from another source while its output is enabled.
 - **Sampling:** Pressure uses five samples plus smoothing. Each temperature is sampled every 500ms and averaged over the latest two samples, then smoothed; the average changes every 500ms.
 - **Defaults:** Ambient-light dimming is enabled; demo mode, debug logging, and the FPS overlay are disabled. Edit [config.h](include/config.h) and rebuild to change them.
 - **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. A zero reading can also represent a detected fault.
 
 The sensor table above describes the firmware's conversion model, not manufacturer calibration data.
-See [related improvements](#ciと関連する改善) for the temperature, rendering, warning, and ADC fixes; check each PR's merge status before relying on its behavior or test commands.
+Main includes fifteen 24 FPS real-time preview scenarios, including raw ADC sweeps, disconnected signals, and temperature boundaries.
+Pending [#380](https://github.com/puriso/racing_gauge/pull/380) adds a latched W cleared when leaving the detail screen;
+[#381](https://github.com/puriso/racing_gauge/pull/381) adds bounded ADC waits and reconnection, with dedicated communication-failure videos.
+These pending behaviors are separate from main. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
 Hardware accuracy and vehicle behavior require separate verification.
 
 ## ライセンス / License
