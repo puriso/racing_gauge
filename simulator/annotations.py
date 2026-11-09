@@ -46,7 +46,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         observed, wanted = actual['low_event'], expected['low_event']
         label(16, 306, f"LAST EVENT act/exp: G {observed['g']:.2f}/{wanted['g']:.2f} | "
               f"min {observed['pressure_bar']:.2f}/{wanted['pressure_bar']:.2f}bar | "
-              f"time {observed['duration_s']:.2f}/{wanted['duration_s']:.2f}s", font=small)
+              f"time {observed['duration_s']:.2f}/{wanted['duration_s']:.2f}s | "
+              f"dir {observed['direction']}/{wanted['direction']}", font=small)
     else:
         label(352, 285, 'MENU' if sample['menu'] else 'GAUGES', '#dfcc9d')
         label(16, 297, 'Production screen 320 x 240 (original pixels)', font=small)
