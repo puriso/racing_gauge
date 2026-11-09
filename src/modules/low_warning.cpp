@@ -64,49 +64,20 @@ struct LowWarningState
   int boxH = 0;
 };
 
-// 油圧警告表示。現在の表示状態とその変更の有無を返す
-bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool& stateChanged)
+static LowWarningState state;
+
+void invalidateLowPressureWarning() { state.isShowing = false; }
+
+// 詳細画面でも判定を継続し、描画の有無で監視を止めない。
+void updateLowPressureWarning(float gForce, float pressure, bool pressureValid)
 {
-  constexpr int GAUGE_X = 0;    // 油圧ゲージの左上X
-  constexpr int GAUGE_Y = 60;   // 油圧ゲージの左上Y
-  constexpr int GAUGE_W = 160;  // ゲージ幅
-  constexpr int GAUGE_H = 170;  // ゲージ高さ
-
-  canvas.setFont(&fonts::FreeSansBold12pt7b);
-  constexpr char WARN_TEXT[] = "LOW";  // 警告文字列
-  constexpr int PADDING = 4;           // ボックス余白
-
-  // テキスト幅などを初回だけ計算し、以降はキャッシュした値を再利用して描画処理を軽量化する
-  struct WarningLayout
-  {
-    bool initialized = false;
-    int boxX = 0;
-    int boxY = 0;
-    int boxW = 0;
-    int boxH = 0;
-  };
-  static WarningLayout layout;
-
-  if (!layout.initialized)
-  {
-    int textW = canvas.textWidth(WARN_TEXT);
-    int textH = canvas.fontHeight();
-    layout.boxW = textW + (PADDING * 2) - 1;
-    layout.boxH = textH + (PADDING * 2) - 2;
-    layout.boxX = GAUGE_X + ((GAUGE_W - layout.boxW) / 2 - 8);
-    layout.boxY = GAUGE_Y + ((GAUGE_H - layout.boxH) / 2);
-    layout.initialized = true;
-  }
-
-  static LowWarningState state;  // 表示状態
-
   constexpr float G_FORCE_THRESHOLD = 1.0F;   // G判定値
   constexpr float PRESSURE_THRESHOLD = 3.0F;  // 油圧閾値
   constexpr uint32_t WARNING_DELAY_MS = 500;  // 継続時間
   constexpr uint32_t WARNING_HOLD_MS = 3000;  // 表示継続時間
-  bool conditionMet = (gForce > G_FORCE_THRESHOLD && pressure <= PRESSURE_THRESHOLD);
+  bool conditionMet =
+      (pressureValid && std::isfinite(pressure) && gForce > G_FORCE_THRESHOLD && pressure <= PRESSURE_THRESHOLD);
   uint32_t now = millis();
-  bool prevShowing = state.isShowing;  // 前回表示中だったか
 
   if (conditionMet)
   {
@@ -159,10 +130,46 @@ bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool
   {
     state.warningHeld = false;
   }
+}
 
-  if (shouldShow)
+bool drawLowPressureWarning(M5Canvas& canvas, bool& stateChanged, bool backgroundChanged)
+{
+  constexpr int GAUGE_X = 0;    // 油圧ゲージの左上X
+  constexpr int GAUGE_Y = 60;   // 油圧ゲージの左上Y
+  constexpr int GAUGE_W = 160;  // ゲージ幅
+  constexpr int GAUGE_H = 170;  // ゲージ高さ
+
+  canvas.setFont(&fonts::FreeSansBold12pt7b);
+  constexpr char WARN_TEXT[] = "LOW";  // 警告文字列
+  constexpr int PADDING = 4;           // ボックス余白
+
+  // テキスト幅などを初回だけ計算し、以降はキャッシュした値を再利用して描画処理を軽量化する
+  struct WarningLayout
   {
-    // 警告表示を毎フレーム再描画
+    bool initialized = false;
+    int boxX = 0;
+    int boxY = 0;
+    int boxW = 0;
+    int boxH = 0;
+  };
+  static WarningLayout layout;
+
+  if (!layout.initialized)
+  {
+    int textW = canvas.textWidth(WARN_TEXT);
+    int textH = canvas.fontHeight();
+    layout.boxW = textW + (PADDING * 2) - 1;
+    layout.boxH = textH + (PADDING * 2) - 2;
+    layout.boxX = GAUGE_X + ((GAUGE_W - layout.boxW) / 2 - 8);
+    layout.boxY = GAUGE_Y + ((GAUGE_H - layout.boxH) / 2);
+    layout.initialized = true;
+  }
+
+  bool prevShowing = state.isShowing;
+  bool shouldShow = state.warningHeld;
+  if (shouldShow && (!prevShowing || backgroundChanged))
+  {
+    // 背景が変わった場合だけ警告を重ね直す。
     canvas.fillRect(layout.boxX, layout.boxY, layout.boxW, layout.boxH, COLOR_RED);
     canvas.setTextColor(COLOR_WHITE, COLOR_RED);
     canvas.setTextDatum(m5gfx::textdatum_t::middle_center);
@@ -173,7 +180,7 @@ bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool
     state.boxW = layout.boxW;
     state.boxH = layout.boxH;
   }
-  else if (prevShowing)
+  else if (!shouldShow && prevShowing)
   {
     // 表示継続時間が過ぎたので警告を消去
     canvas.fillRect(state.boxX, state.boxY, state.boxW, state.boxH, COLOR_BLACK);
@@ -183,4 +190,11 @@ bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool
   stateChanged = (shouldShow != prevShowing);
   state.isShowing = shouldShow;
   return shouldShow;
+}
+
+// 従来の呼び出し元・回帰テストも同じ判定処理を通す。
+bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool& stateChanged)
+{
+  updateLowPressureWarning(gForce, pressure);
+  return drawLowPressureWarning(canvas, stateChanged);
 }

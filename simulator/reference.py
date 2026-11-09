@@ -13,6 +13,8 @@ class Reference:
         self.settings = settings
         self.sensors = sensors
         self.filtered = {}
+        self.monitored = {}
+        self.maxima = [0, 0.0, 0.0]
         self.samples = [0] * settings['median_size']
         self.sample_index = 0
         self.lux_sample = self.lux_median = 0
@@ -54,7 +56,10 @@ class Reference:
             self.read_light(sample['lux'])
         self.menu = menu
 
-        if self.racing:
+        if menu:
+            self.racing = False
+            self.g_since = None
+        elif self.racing:
             if now >= self.racing_until:
                 self.racing = False
                 self.mode = self.previous_mode
@@ -70,26 +75,33 @@ class Reference:
         else:
             self.g_since = None
 
-        low = False
-        if not menu:
-            for key, sensor, alpha in [('oil_c', 'oil_temp', 0.1), ('water_c', 'water_temp', 0.1),
-                                       ('pressure_bar', 'pressure', self.settings['pressure_alpha'])]:
-                target = float32(sample[key]) if self.sensors[sensor] else 0.0
-                if key == 'pressure_bar':
-                    target = min(target, 15.0)
-                    if target >= 11 or sample.get('pressure_fault', False):
-                        target = 0.0
-                elif target >= 199:
-                    target = 0.0
+        for index, (key, sensor, alpha) in enumerate([
+                ('oil_c', 'oil_temp', 0.1), ('water_c', 'water_temp', 0.1),
+                ('pressure_bar', 'pressure', self.settings['pressure_alpha'])]):
+            target = float32(sample[key]) if self.sensors[sensor] else 0.0
+            valid = bool(self.sensors[sensor]) and sample.get('status', [1, 1, 1])[index] == 1
+            if key == 'pressure_bar':
+                target = min(target, 15.0)
+                valid = valid and target < 11 and not sample.get('pressure_fault', False)
+            else:
+                valid = valid and math.isfinite(target) and target < 199
+            if valid:
+                self.maxima[index] = max(self.maxima[index], int(target) if index == 0 else target)
                 previous = self.filtered.get(key, target)
                 self.filtered[key] = float32(previous + float32(float32(alpha) * float32(target - previous)))
-            low = self.warning.step(now, sample['g'], self.filtered['pressure_bar'], sample.get('g_direction', 'Right'))
-        return self.snapshot(low)
+                self.monitored[key] = self.filtered[key]
+            else:
+                self.filtered.pop(key, None)
+                self.monitored[key] = 0.0
+        pressure_valid = sample.get('status', [1, 1, 1])[2] == 1 and sample['pressure_bar'] < 11 and not sample.get('pressure_fault', False)
+        low = self.warning.step(now, sample['g'] if pressure_valid else 0, self.monitored['pressure_bar'], sample.get('g_direction', 'Right'))
+        return self.snapshot(low and not menu)
 
     def snapshot(self, low):
-        return {**{key: round(self.filtered[key], 4) if key in self.filtered else None
+        return {**{key: round(self.monitored[key], 4) if key in self.monitored else None
                    for key in ('oil_c', 'water_c', 'pressure_bar')},
-                'racing': self.racing, 'low': low, 'warning_history': self.warning.history, 'low_event': self.warning.event.copy(),
+                'monitor': [round(self.monitored.get(key, 0), 4) for key in ('oil_c', 'water_c', 'pressure_bar')],
+                'maxima': self.maxima.copy(), 'racing': self.racing, 'low': low, 'warning_history': self.warning.history, 'low_event': self.warning.event.copy(),
                 'warning_state': self.warning.state, 'brightness_mode': self.mode,
                 'brightness_pwm': self.settings['brightness'][self.mode],
                 'lux_sample': self.lux_sample, 'lux_median': self.lux_median}
@@ -149,7 +161,7 @@ def check_expectations(frame):
     for key, tolerance in [('oil_c', 0.002), ('water_c', 0.002), ('pressure_bar', 0.0001)]:
         if not math.isclose(frame['sensor'][key], expected['sensor'][key], abs_tol=tolerance):
             raise RuntimeError(f'ADC変換・取得周期・平均化の期待値が一致しません: {key}, {frame}')
-    for key in ('pressure_fault', 'adc_reads', 'adc_last', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms'):
+    for key in ('status', 'pressure_fault', 'adc_reads', 'adc_last', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms'):
         if frame['sensor'][key] != expected['sensor'][key]:
             raise RuntimeError(f'取得・異常判定の期待値が一致しません: {key}, {frame}')
     if (not math.isclose(frame['g'], expected['sensor']['g'], abs_tol=0.00001)
@@ -165,5 +177,10 @@ def check_expectations(frame):
         if frame['setup_error']:
             if expected[key] is not None or actual[key] is not None:
                 raise RuntimeError('初回loop前のゲージ値は未描画です')
-        elif not math.isclose(expected[key], actual[key], abs_tol=tolerance):
+        elif not frame['menu'] and not math.isclose(expected[key], actual[key], abs_tol=tolerance):
             raise RuntimeError(f'平滑化の期待値と描画値の差が更新幅を超えています: {key}, {frame}')
+
+    for key, tolerance in [('monitor', 0.002), ('maxima', 0.002)]:
+        for wanted, observed in zip(expected[key], actual[key]):
+            if not math.isclose(wanted, observed, abs_tol=tolerance):
+                raise RuntimeError(f'監視値・最高値が一致しません: {key}, {frame}')

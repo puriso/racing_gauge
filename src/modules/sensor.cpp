@@ -14,6 +14,9 @@ float oilPressureSamples[PRESSURE_SAMPLE_SIZE] = {};
 float waterTemperatureSamples[WATER_TEMP_SAMPLE_SIZE] = {};
 float oilTemperatureSamples[OIL_TEMP_SAMPLE_SIZE] = {};
 bool oilPressureOverVoltage = false;
+SensorStatus oilPressureStatus = SENSOR_OIL_PRESSURE_PRESENT ? SensorStatus::Pending : SensorStatus::Disabled;
+SensorStatus waterTemperatureStatus = SENSOR_WATER_TEMP_PRESENT ? SensorStatus::Pending : SensorStatus::Disabled;
+SensorStatus oilTemperatureStatus = SENSOR_OIL_TEMP_PRESENT ? SensorStatus::Pending : SensorStatus::Disabled;
 float currentGForce = 0.0F;
 const char* currentGDirection = "Right";
 static int oilPressureIndex = 0;
@@ -34,6 +37,24 @@ constexpr float THERMISTOR_R25 = 10000.0f;
 constexpr float THERMISTOR_B_CONSTANT = 3380.0f;
 constexpr float ABSOLUTE_TEMPERATURE_25 = 298.16f;  // 273.16 + 25
 constexpr float SERIES_REFERENCE_RES = 10000.0f;
+
+void markAdcInitializationFailure()
+{
+  if (SENSOR_OIL_PRESSURE_PRESENT) oilPressureStatus = SensorStatus::CommunicationError;
+  if (SENSOR_WATER_TEMP_PRESENT) waterTemperatureStatus = SensorStatus::CommunicationError;
+  if (SENSOR_OIL_TEMP_PRESENT) oilTemperatureStatus = SensorStatus::CommunicationError;
+}
+
+static void markAdcCommunicationFailure()
+{
+  markAdcInitializationFailure();
+  // 別チャンネルの次回取得を待たず、古い測定値を異常として無効化する。
+  if (SENSOR_OIL_PRESSURE_PRESENT) std::fill_n(oilPressureSamples, PRESSURE_SAMPLE_SIZE, 0.0F);
+  if (SENSOR_WATER_TEMP_PRESENT) std::fill_n(waterTemperatureSamples, WATER_TEMP_SAMPLE_SIZE, 200.0F);
+  if (SENSOR_OIL_TEMP_PRESENT) std::fill_n(oilTemperatureSamples, OIL_TEMP_SAMPLE_SIZE, 200.0F);
+  waterTempIndex = oilTempIndex = 0;
+  isFirstWaterTempSample = isFirstOilTempSample = true;
+}
 
 // ────────────────────── ユーティリティ ──────────────────────
 static auto convertAdcToVoltage(int16_t rawAdc) -> float { return (rawAdc * 6.144F) / 2047.0F; }
@@ -76,14 +97,17 @@ static auto convertVoltageToTemp(float voltage) -> float
 
 // ────────────────────── 温度読み取り ──────────────────────
 // 指定チャンネルから温度を取得して摂氏に変換
-static auto readTemperatureChannel(uint8_t ch) -> float
+static auto readTemperatureChannel(uint8_t ch, SensorStatus& status) -> float
 {
   int16_t raw = 0;
   if (!readAdcChannel(ch, raw))
   {
+    markAdcCommunicationFailure();
     return 200.0F;
   }
-  return convertVoltageToTemp(convertAdcToVoltage(raw));
+  float value = convertVoltageToTemp(convertAdcToVoltage(raw));
+  status = std::isfinite(value) && value < 199.0F ? SensorStatus::Valid : SensorStatus::InvalidValue;
+  return value;
 }
 
 // ────────────────────── サンプルバッファ更新 ──────────────────────
@@ -127,9 +151,16 @@ static void acquireOilPressure()
   oilPressureOverVoltage = pressureReadSucceeded && voltage >= 4.9F;
   if (!pressureReadSucceeded)
   {
-    std::fill_n(oilPressureSamples, PRESSURE_SAMPLE_SIZE, 0.0F);
+    markAdcCommunicationFailure();
   }
-  float pressureValue = !pressureReadSucceeded || oilPressureOverVoltage ? 0.0F : convertVoltageToOilPressure(voltage);
+  else
+  {
+    // 0Vの信号断線と、正常な0bar（約0.5V）を区別する。
+    oilPressureStatus = oilPressureOverVoltage || rawAdc <= 0 || convertVoltageToOilPressure(voltage) >= 11.0F
+                            ? SensorStatus::InvalidValue
+                            : SensorStatus::Valid;
+  }
+  float pressureValue = oilPressureStatus == SensorStatus::Valid ? convertVoltageToOilPressure(voltage) : 0.0F;
   oilPressureSamples[oilPressureIndex] = pressureValue;
 #else
   oilPressureSamples[oilPressureIndex] = 0.0F;
@@ -299,6 +330,8 @@ void acquireSensorData()
   // 温度センサは電圧変化と逆の振る舞いにする
   float demoTemp = convertVoltageToTemp(SUPPLY_VOLTAGE - demoVoltage);
 
+  oilPressureStatus = demoVoltage >= 4.9F ? SensorStatus::InvalidValue : SensorStatus::Valid;
+  waterTemperatureStatus = oilTemperatureStatus = demoTemp >= 199.0F ? SensorStatus::InvalidValue : SensorStatus::Valid;
   oilPressureSamples[oilPressureIndex] = demoPressure;
   updateSampleBuffer(demoTemp, waterTemperatureSamples, waterTempIndex, isFirstWaterTempSample);
   updateSampleBuffer(demoTemp, oilTemperatureSamples, oilTempIndex, isFirstOilTempSample);
@@ -317,7 +350,7 @@ void acquireSensorData()
   {
     float value;
 #if SENSOR_WATER_TEMP_PRESENT
-    value = readTemperatureChannel(ADC_CH_WATER_TEMP);
+    value = readTemperatureChannel(ADC_CH_WATER_TEMP, waterTemperatureStatus);
 #else
     value = 0.0f;
 #endif
@@ -330,7 +363,7 @@ void acquireSensorData()
   {
     float value;
 #if SENSOR_OIL_TEMP_PRESENT
-    value = readTemperatureChannel(ADC_CH_OIL_TEMP);
+    value = readTemperatureChannel(ADC_CH_OIL_TEMP, oilTemperatureStatus);
 #else
     value = 0.0f;
 #endif

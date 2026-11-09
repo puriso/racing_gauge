@@ -152,8 +152,12 @@ static void sensorFaultAndRecovery()
   expect(normalTemp < 199.0F, "正常な温度を取得する");
   expect(calculateAverage(oilPressureSamples) > 0.0F, "正常な油圧を取得する");
   fake::resultFailure = true;
-  clockMs = 1500;
+  clockMs = 1100;
   acquireSensorData();
+  expect(oilPressureStatus == SensorStatus::CommunicationError &&
+             waterTemperatureStatus == SensorStatus::CommunicationError &&
+             oilTemperatureStatus == SensorStatus::CommunicationError,
+         "次回の温度取得を待たず全チャンネルを無効化する");
   expect(calculateAverage(oilPressureSamples) == 0.0F, "通信失敗後に古い油圧サンプルを残さない");
   expect(calculateAverage(waterTemperatureSamples) == 200.0F, "水温異常を正常値と平均しない");
   expect(calculateAverage(oilTemperatureSamples) == 200.0F, "油温異常を正常値と平均しない");

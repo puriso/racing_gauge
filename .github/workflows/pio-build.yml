@@ -53,6 +53,12 @@ jobs:
       - name: 低油圧警告の回帰テスト
         run: python3 test/low_warning/run_tests.py
 
+      - name: 描画から独立したLOW監視の回帰テスト
+        run: python3 test/low_warning/run_tests.py --monitoring
+
+      - name: Rモード境界と解除の回帰テスト
+        run: pio test -e native
+
       - name: ファームウェアをアーティファクトで保存
         uses: actions/upload-artifact@v4
         with:

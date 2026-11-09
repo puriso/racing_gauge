@@ -92,6 +92,8 @@ auto isAdcOrSensorFaultScenario() -> bool
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
+  if (options().scenario == "menu-monitoring") return 28;
+  if (options().scenario == "fault-monitoring") return 20;
   if (options().scenario == "warning-history")
   {
     return 20;
@@ -273,6 +275,24 @@ auto sample(double ratio) -> Targets
   {
     return {100.0F, 95.0F, pressure, 0.0F, false};
   }
+  if (options().scenario == "menu-monitoring")
+  {
+    const bool peak = seconds >= 8.0F && seconds < 11.0F;
+    const bool low = seconds >= 6.0F && seconds < 9.0F;
+    return {peak ? 145.0F : 100.0F,
+            peak ? 120.0F : 95.0F,
+            low                                  ? 0.8F
+            : seconds >= 9.0F && seconds < 10.0F ? 8.0F
+                                                 : pressure,
+            seconds >= 3.0F && seconds < 15.0F ? 2.0F : 0.0F,
+            seconds >= 4.0F && seconds < 12.0F,
+            2};
+  }
+  if (options().scenario == "fault-monitoring")
+  {
+    return {100.0F, 95.0F, seconds >= 12.0F && seconds < 15.0F ? 0.0F : pressure,
+            (seconds >= 3.0F && seconds < 9.0F) || (seconds >= 11.0F && seconds < 16.0F) ? 2.0F : 0.0F, false};
+  }
   if (options().scenario == "circuit")
   {
     return sampleCircuit(progress, seconds, pressure);
@@ -399,6 +419,11 @@ auto makeInputs(unsigned int frame, const Targets& target, float seconds) -> Inp
       input.adc = {0, 0, 0, 0};
     }
   }
+  if (options().scenario == "fault-monitoring")
+  {
+    if (seconds >= 15.0F && seconds < 18.0F) input.adc[0] = input.adc[1] = 24;
+    if (seconds >= 16.0F && seconds < 18.0F) input.adc[2] = 0;
+  }
   return input;
 }
 // NOLINTEND(readability-magic-numbers)
@@ -409,6 +434,11 @@ void inject(const Inputs& input)
   simulator::adcFault = (options().scenario == "adc-communication" || options().scenario == "adc-startup")
                             ? simulator::communicationFault(simulator::nowMs, options().scenario == "adc-startup")
                             : simulator::AdcFault::Healthy;
+  // 温度の500ms取得間隔より短い切断でも、全チャンネルを直ちに無効化する。
+  const uint32_t failureStart = options().scenario == "menu-monitoring" ? 17000 : 4000;
+  if ((options().scenario == "menu-monitoring" || options().scenario == "fault-monitoring") &&
+      simulator::nowMs >= failureStart && simulator::nowMs < failureStart + 200)
+    simulator::adcFault = simulator::AdcFault::Missing;
   simulator::adcChannels = input.adc;
   simulator::acceleration = input.imu;
   simulator::ambientLux = input.lux;
@@ -465,6 +495,17 @@ void captureFrame(unsigned int frame)
   // 転送先のフレームバッファを読み、本番の pushSprite の結果を録画する。
   std::vector<lgfx::rgb888_t> pixels(static_cast<size_t>(LCD_WIDTH) * LCD_HEIGHT);
   display.readRect(0, 0, LCD_WIDTH, LCD_HEIGHT, pixels.data());
+  // 部分転送の漏れを全画素で検出する。setupの直接描画だけは比較対象外。
+  if (!(frame == 0 && adcInitializationFailed))
+  {
+    std::vector<lgfx::rgb888_t> expected(pixels.size());
+    mainCanvas.readRect(0, 0, LCD_WIDTH, LCD_HEIGHT, expected.data());
+    for (size_t index = 0; index < pixels.size(); ++index)
+      if (pixels[index].r != expected[index].r || pixels[index].g != expected[index].g ||
+          pixels[index].b != expected[index].b)
+        throw std::runtime_error("Partial display transfer missed a pixel: " + std::to_string(index) + " frame " +
+                                 std::to_string(frame));
+  }
   std::ostringstream name;
   name << "frame-" << std::setw(4) << std::setfill('0') << frame << ".ppm";
   std::ofstream output(options().capture / name.str(), std::ios::binary);
@@ -559,6 +600,7 @@ void initializeDisplay()
   adcInitializationFailed = !initializeAdc();
   if (adcInitializationFailed)
   {
+    markAdcInitializationFailure();
     drawAdcInitializationError(display);
   }
   updateBacklightLevel();
@@ -587,10 +629,11 @@ auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
     resetGaugeState();
     updateBacklightLevel();
   }
-  updateRacingMode(simulator::nowMs, currentGForce);
+  updateGaugeMonitoring();
+  if (!menu) updateRacingMode(simulator::nowMs, currentGForce);
   if (menu)
   {
-    drawMenuScreen();
+    refreshMenuScreen(!showingMenu);
   }
   else
   {
@@ -764,7 +807,8 @@ auto main(int argc, char** argv) -> int
         options().scenario != "ambient" && options().scenario != "raw-faults" &&
         options().scenario != "adc-communication" && options().scenario != "adc-startup" &&
         options().scenario != "adc-steps" && !simulator::isFaultScenario(options().scenario) && !isWarningReview() &&
-        options().scenario != "warning-history")
+        options().scenario != "warning-history" && options().scenario != "menu-monitoring" &&
+        options().scenario != "fault-monitoring")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

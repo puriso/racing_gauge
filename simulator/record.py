@@ -25,6 +25,16 @@ from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "menu-monitoring": {
+        "title": "詳細画面中のLOW・最高値とR復帰", "group": "reproduction",
+        "description": "3秒にR開始、4〜12秒は詳細画面。6〜9秒のLOWと8〜11秒の温度・油圧ピークを表示中も記録。高Gのまま戻ってR再表示、17秒の200ms切断後も最高値を保持する",
+        "seconds": 28, "snapshots": [3.2, 4, 6, 7, 9.8, 11, 12, 12.2, 17, 17.25, 18.2, 28],
+    },
+    "fault-monitoring": {
+        "title": "通信エラー・信号断線と正常な0barの区別", "group": "reproduction",
+        "description": "2G中に200msのADC切断を注入し、ERRと全チャンネル無効化・最高値保持・LOW誤検知なしを確認。12〜15秒は正常な0barでLOW、15秒に200℃超、16秒に油圧0Vを入力し、ERRからの復帰を比較",
+        "seconds": 20, "snapshots": [3, 4, 4.2, 5.2, 8, 12, 13, 15.6, 16, 18.6, 20],
+    },
     "warning-history": {
         "title": "LOW発生履歴W・保持・画面復帰・リセット・再発", "group": "pressure",
         "description": "LOW成立で左下Wが点灯。LOW消灯後もWを保持。8秒の詳細画面で履歴を確認し、10秒にゲージへ戻るとWを消去。再発で再点灯する",
@@ -140,7 +150,7 @@ def running_pressure(seconds):
 
 def validate_inputs(metadata):
     validate_communication(metadata)
-    if metadata['scenario'] in ('adc-startup', 'adc-communication'):
+    if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring'):
         return
     if metadata["scenario"] in CASES:
         validate_fault_inputs(metadata)
@@ -241,6 +251,31 @@ def validate_inputs(metadata):
                 raise RuntimeError(f"温度が急変しています: {scenario}, {after}")
 
 
+def validate_monitoring(metadata):
+    name, frames = metadata['scenario'], metadata['frames']
+    at = lambda seconds: frames[round(seconds * FRAME_RATE)]
+    if name == 'menu-monitoring':
+        if not all(frame['menu'] and not frame['racing'] for frame in frames[4 * FRAME_RATE:12 * FRAME_RATE]):
+            raise RuntimeError('詳細画面中にRモードが再開しています')
+        if not at(7)['actual']['warning_history'] or at(11)['actual']['low_event']['duration_s'] < 2.5:
+            raise RuntimeError('詳細画面中のLOWを履歴へ記録できていません')
+        if not all(value > minimum for value, minimum in zip(at(11)['actual']['maxima'], [140, 118, 7.9])):
+            raise RuntimeError('詳細画面中の温度・油圧ピークを記録できていません')
+        if not at(12.25)['r_visible'] or at(12)['actual']['warning_history']:
+            raise RuntimeError('高Gからの画面復帰でR再表示・W消去が不正です')
+        if at(17)['sensor']['status'] != [2, 2, 2] or at(17)['actual']['maxima'] != at(16)['actual']['maxima']:
+            raise RuntimeError('短い通信異常の即時反映・最高値保持が不正です')
+        if at(19)['sensor']['status'] != [1, 1, 1]:
+            raise RuntimeError('通信復帰後の正常取得が不足しています')
+    if name == 'fault-monitoring':
+        if at(4)['sensor']['status'] != [2, 2, 2] or any(frame['actual']['warning_history'] for frame in frames[:11 * FRAME_RATE]):
+            raise RuntimeError('通信異常を0barとしてLOWを誤検知しています')
+        if at(14)['sensor']['status'][2] != 1 or not at(14)['low_visible']:
+            raise RuntimeError('正常な0barのLOWが成立していません')
+        if at(16)['sensor']['status'] != [3, 3, 3] or at(19)['sensor']['status'] != [1, 1, 1]:
+            raise RuntimeError('信号異常・復帰の区別が不正です')
+
+
 def warning_visible(image):
     # 通常の赤い目盛りを避け、LOW ボックス中央の赤背景を検出する。
     return sum(red > 180 and green < 80 and blue < 80
@@ -338,6 +373,7 @@ def convert_and_check(directory):
             frame = frames[seconds * FRAME_RATE]
             if (frame['menu'], frame['actual']['warning_history'], frame['w_visible']) != (menu, history, visible):
                 raise RuntimeError(f'詳細画面から戻る際のWリセットが不正です: {frame}')
+    validate_monitoring(metadata)
     validate_review(metadata["scenario"], frames)
     if len(seen) < 20:
         raise RuntimeError("描画がほとんど変化していません")
@@ -378,7 +414,7 @@ def write_report(output, scenarios):
                'low_event', 'expected_low_event', 'warning_state', 'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
                'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
-               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm']
+               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima']
     data = []
     for name in scenarios:
         config = SCENARIOS[name]
@@ -399,6 +435,7 @@ def write_report(output, scenarios):
             values.update(case_label=frame.get('case_label', ''), input_temperature_c=frame.get('input_temperature_c'),
                           input_temperature_abnormal=frame.get('input_temperature_abnormal'),
                           actual_oil_c=frame['actual']['oil_c'], actual_water_c=frame['actual']['water_c'])
+            values.update(sensor_status=frame['sensor']['status'], maxima=frame['actual']['maxima'], expected_maxima=frame['expected']['maxima'])
             values['expected_brightness_pwm'] = frame['expected']['brightness_pwm']
             frames.append([values[key] for key in columns])
         cues = [frame_at_or_after(round(second * 1000)) for second in config['snapshots']]

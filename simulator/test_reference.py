@@ -23,12 +23,15 @@ class ReferenceTest(unittest.TestCase):
         self.assertEqual((first['pressure_bar'], second['pressure_bar']), (3.0, 5.1))
         self.assertEqual((first['oil_c'], second['oil_c']), (10.0, 19.0))
 
-    def test_sensor_faults_are_zeroed_before_display_smoothing(self):
+    def test_sensor_faults_do_not_erase_peaks_or_mix_into_smoothing(self):
         self.sample(0)
         result = self.sample(16, oil_c=200, water_c=200, pressure_fault=True)
-        self.assertEqual(result['oil_c'], 90)
-        self.assertEqual(result['water_c'], 85.5)
-        self.assertEqual(result['pressure_bar'], 3.5)
+        self.assertEqual(result['oil_c'], 0)
+        self.assertEqual(result['water_c'], 0)
+        self.assertEqual(result['pressure_bar'], 0)
+        self.assertEqual(result['maxima'], [100, 95, 5])
+        recovered = self.sample(33)
+        self.assertEqual(recovered['monitor'], [100, 95, 5])
 
     def test_racing_hold_and_expiry_boundaries(self):
         self.assertFalse(self.sample(0, g=1)['racing'])
@@ -63,6 +66,26 @@ class ReferenceTest(unittest.TestCase):
         self.sample(3000, lux=2, g=1)
         self.assertEqual(self.sample(3100, lux=2, g=1)['brightness_pwm'], 255)
         self.assertEqual(self.sample(183100, lux=2)['brightness_pwm'], 60)
+
+    def test_monitoring_continues_in_menu_without_racing(self):
+        self.sample(1000, menu=True, g=2, pressure_bar=1)
+        pending = self.sample(1499, menu=True, g=2, pressure_bar=1)
+        qualified = self.sample(1500, menu=True, g=2, pressure_bar=1, oil_c=140, water_c=120)
+        self.assertFalse(pending['racing'])
+        self.assertFalse(qualified['low'])
+        self.assertTrue(qualified['warning_history'])
+        self.assertEqual(qualified['maxima'], [140, 120, 1])
+        ended = self.sample(2000, menu=True)
+        self.assertEqual(ended['low_event']['duration_s'], 1)
+        self.assertEqual(ended['maxima'], [140, 120, 5])
+
+    def test_communication_failure_does_not_qualify_low(self):
+        self.sample(1000, g=2, pressure_bar=0, status=[2, 2, 2])
+        failed = self.sample(2000, g=2, pressure_bar=0, status=[2, 2, 2])
+        self.assertFalse(failed['low'])
+        self.assertFalse(failed['warning_history'])
+        self.sample(3000, g=2, pressure_bar=0, status=[1, 1, 1])
+        self.assertTrue(self.sample(3500, g=2, pressure_bar=0, status=[1, 1, 1])['low'])
 
     def test_setup_error_does_not_render_or_start_warning_timers(self):
         initial = self.sample(0, setup_error=True, g=2, pressure_bar=1, oil_c=200)

@@ -93,6 +93,10 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         label(16, y, name)
         label(188, y, raw, '#8fc5ff')
         label(386, y, target, '#a7dfb4')
-    label(16, 482, 'RAW ADC -> calibration -> timed sampling / averages -> filter. IMU axes in g.', font=small)
+    names = ('WAIT', 'OK', 'COMM ERR', 'INVALID', 'OFF')
+    statuses = '/'.join(names[value] for value in sample['sensor']['status'])
+    label(16, 482, f'Sensor O/W/P: {statuses}', font=small)
+    observed, wanted = actual['maxima'], expected['maxima']
+    label(16, 506, f'MAX act/exp: oil {observed[0]:g}/{wanted[0]:g}C | water {observed[1]:.1f}/{wanted[1]:.1f}C | P {observed[2]:.2f}/{wanted[2]:.2f}bar', font=small)
     # 最下部は動画の操作バー用。R表示や比較値に重ならないよう余白を残す。
     return frame

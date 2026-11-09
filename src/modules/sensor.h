@@ -15,6 +15,20 @@ extern bool oilPressureOverVoltage;
 extern float currentGForce;            // 起動時からの水平加速度変化 [G]
 extern const char* currentGDirection;  // 現在の加速度の向き (FR/RR/FL/RL, Front, Rear など)
 
+enum class SensorStatus : uint8_t
+{
+  Pending,
+  Valid,
+  CommunicationError,
+  InvalidValue,
+  Disabled
+};
+
+extern SensorStatus oilPressureStatus;
+extern SensorStatus waterTemperatureStatus;
+extern SensorStatus oilTemperatureStatus;
+void markAdcInitializationFailure();
+
 void acquireSensorData();
 
 // 平均計算テンプレート

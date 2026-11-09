@@ -6,8 +6,10 @@ bool isRacingMode = false;
 // Rマークが描画済みかどうか
 static bool indicatorDrawn = false;
 
+void invalidateRacingIndicator() { indicatorDrawn = false; }
+
 // ────────────────────── レーシング中表示 ──────────────────────
-bool drawRacingIndicator(M5Canvas &canvas)
+bool drawRacingIndicator(M5Canvas& canvas)
 {
   constexpr int INDICATOR_X = 2;
   constexpr int INDICATOR_Y = LCD_HEIGHT - 16;
