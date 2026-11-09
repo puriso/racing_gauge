@@ -69,7 +69,7 @@ for (const scenario of scenarios) {
     const second = index / scenario.fps;
     const button = document.createElement('button');
     button.textContent = format(scenario.frames[index][0] / 1000);
-    button.addEventListener('click', () => { video.currentTime = second; update(); });
+    button.addEventListener('click', () => { video.currentTime = (index + 0.5) / scenario.fps; update(); });
     card.querySelector('.cues').append(button);
   }
   video.addEventListener('timeupdate', update);
