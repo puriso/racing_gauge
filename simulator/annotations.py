@@ -2,6 +2,7 @@
 
 from PIL import Image, ImageDraw, ImageFont
 from timing import FRAME_RATE
+from fault_cases import TEMPERATURE_SENSOR_SPEC
 
 SIZE = (640, 540)
 SCREEN_ORIGIN = (16, 44)
@@ -22,14 +23,18 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     def label(x, y, text, color='#e9edf3', font=normal):
         draw.text((x, y), text, fill=color, font=font)
 
-    label(16, 12, f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x')
+    heading = f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x'
+    if 'input_temperature_c' in sample:
+        spec = TEMPERATURE_SENSOR_SPEC
+        heading += f" | PDF00903S op {spec['minimum_c']:g}..{spec['maximum_c']:g}C"
+    label(16, 12, heading)
     label(352, 48, 'STATE', '#a7dfb4')
     label(466, 48, 'EXPECT', '#a7dfb4')
     label(552, 48, 'ACTUAL', '#8fc5ff')
     rows = [
         ('R mode', 'ON' if expected['racing'] else 'OFF', 'ON' if sample['racing'] else 'OFF'),
         ('LOW', 'ON' if expected['low'] else 'OFF', 'ON' if sample['low_visible'] else 'OFF'),
-        ('W history', 'ON' if expected['warning_history'] else 'OFF', 'ON' if sample['w_visible'] else 'OFF'),
+        ('W history', 'ON' if expected['warning_history'] else 'OFF', 'ON' if actual['warning_history'] else 'OFF'),
         ('Light mode', MODES[expected['brightness_mode']], MODES[actual['brightness_mode']]),
         ('PWM / 255', expected['brightness_pwm'], actual['brightness_pwm']),
         ('ALS sample', expected['lux_sample'], actual['lux_sample']),
@@ -37,11 +42,15 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         ('Pressure OV', 'YES' if expected['sensor']['pressure_fault'] else 'NO',
          'YES' if sample['sensor']['pressure_fault'] else 'NO'),
     ]
+    if scenario in ("adc-startup", "adc-communication"):
+        rows.append(("ADC link", "UP" if expected["sensor"]["adc_connected"] else "DOWN", "UP" if sample["sensor"]["adc_connected"] else "DOWN"))
     for index, (name, wanted, observed) in enumerate(rows):
-        y = 78 + index * 25
+        y = 78 + index * 22
         label(352, y, name, font=small)
         label(466, y, str(wanted), '#a7dfb4')
         label(552, y, str(observed), '#8fc5ff')
+    if not scenario.startswith('warning-'):
+        label(352, 285, sample.get('case', 'MENU' if sample['menu'] else 'GAUGES'), '#dfcc9d', font=small)
     if scenario.startswith('warning-'):
         label(352, 285, 'PR380: ' + expected['warning_state'], '#dfcc9d', font=small)
         observed, wanted = actual['low_event'], expected['low_event']
@@ -49,8 +58,15 @@ def annotated_frame(source, sample, scenario, sensor_settings):
               f"min {observed['pressure_bar']:.2f}/{wanted['pressure_bar']:.2f}bar | "
               f"time {observed['duration_s']:.2f}/{wanted['duration_s']:.2f}s | "
               f"dir {observed['direction']}/{wanted['direction']}", font=small)
+    elif scenario in ('adc-startup', 'adc-communication'):
+        modes = ('OK', 'NO DEVICE', 'BUSY', 'CONFIG WRITE FAIL', 'STATUS READ FAIL', 'RESULT READ FAIL', 'SECOND RESULT FAIL')
+        state = sample['sensor']
+        label(16, 297, f"I2C {modes[sample['raw']['adc_fault']]} | begin attempts {state['adc_begin_calls']} | virtual poll wait {state['adc_wait_ms']}ms", font=small)
+        label(16, 309, f"LAST ADC {state['adc_last'][:3]} | successful conversion reads {state['adc_reads'][:3]}", font=small)
+    elif 'input_temperature_c' in sample:
+        oil, water = sample['input_temperature_c']
+        label(16, 297, f'INPUT C (pre-avg): {oil:.2f} / {water:.2f}', font=small)
     else:
-        label(352, 285, 'MENU' if sample['menu'] else 'GAUGES', '#dfcc9d')
         label(16, 297, 'Production screen 320 x 240 (original pixels)', font=small)
     draw.line((16, 322, 624, 322), fill='#354353')
     label(16, 329, 'SIGNAL')

@@ -3,6 +3,7 @@
 #include <Wire.h>
 
 #include "config.h"
+#include "modules/adc_reader.h"
 #include "modules/backlight.h"
 #include "modules/display.h"
 #include "modules/low_warning.h"
@@ -80,7 +81,7 @@ void setup()
 
 #if !DEMO_MODE_ENABLED
   // デモモードでなければADS1015を初期化し、失敗時は画面にエラーを表示
-  if (!adsConverter.begin())
+  if (!initializeAdc())
   {
     Serial.println("[ADS1015] init failed… all analog values will be 0");
     M5.Lcd.setTextSize(2);
@@ -88,10 +89,6 @@ void setup()
     M5.Lcd.setCursor(0, 0);
     M5.Lcd.println("ADS1015 init failed");
     M5.Lcd.println("Check wiring");
-  }
-  else
-  {
-    adsConverter.setDataRate(RATE_ADS1015_1600SPS);
   }
 #endif
 
