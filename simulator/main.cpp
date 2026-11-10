@@ -92,6 +92,7 @@ auto isAdcOrSensorFaultScenario() -> bool
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
+  if (options().scenario == "negative-maxima") return 24;
   if (options().scenario == "menu-monitoring") return 28;
   if (options().scenario == "fault-monitoring") return 20;
   if (options().scenario == "warning-history")
@@ -275,6 +276,22 @@ auto sample(double ratio) -> Targets
   {
     return {100.0F, 95.0F, pressure, 0.0F, false};
   }
+  if (options().scenario == "negative-maxima")
+  {
+    const bool warmNegative = seconds >= 6.0F && seconds < 9.0F;
+    const bool colder = seconds >= 9.0F;
+    const bool positive = seconds >= 19.0F;
+    return {positive       ? 5.0F
+            : warmNegative ? -8.0F
+            : colder       ? -18.0F
+                           : -15.0F,
+            positive       ? 10.0F
+            : warmNegative ? -12.0F
+            : colder       ? -19.0F
+                           : -18.0F,
+            pressure, 0.0F,
+            (seconds >= 8.0F && seconds < 10.0F) || (seconds >= 13.0F && seconds < 14.5F) || seconds >= 22.0F};
+  }
   if (options().scenario == "menu-monitoring")
   {
     const bool peak = seconds >= 8.0F && seconds < 11.0F;
@@ -423,6 +440,16 @@ auto makeInputs(unsigned int frame, const Targets& target, float seconds) -> Inp
   {
     if (seconds >= 15.0F && seconds < 18.0F) input.adc[0] = input.adc[1] = 24;
     if (seconds >= 16.0F && seconds < 18.0F) input.adc[2] = 0;
+  }
+  if (options().scenario == "negative-maxima")
+  {
+    // 初回正常値の前後に異常を挟み、負の最高値と未取得を区別する。
+    if (seconds < 2.0F) input.adc[0] = input.adc[1] = 0;
+    if (seconds >= 12.0F && seconds < 15.0F)
+    {
+      input.adc[0] = 24;
+      input.adc[1] = 2047;
+    }
   }
   return input;
 }
@@ -808,7 +835,7 @@ auto main(int argc, char** argv) -> int
         options().scenario != "adc-communication" && options().scenario != "adc-startup" &&
         options().scenario != "adc-steps" && !simulator::isFaultScenario(options().scenario) && !isWarningReview() &&
         options().scenario != "warning-history" && options().scenario != "menu-monitoring" &&
-        options().scenario != "fault-monitoring")
+        options().scenario != "fault-monitoring" && options().scenario != "negative-maxima")
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

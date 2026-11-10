@@ -33,6 +33,27 @@ class ReferenceTest(unittest.TestCase):
         recovered = self.sample(33)
         self.assertEqual(recovered['monitor'], [100, 95, 5])
 
+    def test_initial_invalid_values_leave_maxima_unmeasured(self):
+        pending = self.sample(0, status=[0, 0, 0])
+        self.assertEqual(pending['maxima'], [None, None, None])
+        invalid = self.sample(1000, oil_c=200, water_c=200, status=[3, 3, 2])
+        self.assertEqual(invalid['maxima'], [None, None, None])
+        first = self.sample(1500, oil_c=-15, water_c=-18, status=[1, 1, 1])
+        self.assertEqual(first['maxima'], [-15, -18, 5])
+
+    def test_negative_maxima_survive_faults_and_cross_zero(self):
+        self.sample(0, oil_c=-15, water_c=-18)
+        warmer = self.sample(1000, oil_c=-8, water_c=-12)
+        self.assertEqual(warmer['maxima'][:2], [-8, -12])
+        colder = self.sample(1500, oil_c=-19, water_c=-20)
+        self.assertEqual(colder['maxima'][:2], [-8, -12])
+        failed = self.sample(2000, oil_c=200, water_c=200, status=[3, 3, 1])
+        self.assertEqual(failed['maxima'][:2], [-8, -12])
+        zero = self.sample(2500, oil_c=0, water_c=0)
+        self.assertEqual(zero['maxima'][:2], [0, 0])
+        positive = self.sample(3000, oil_c=5, water_c=10)
+        self.assertEqual(positive['maxima'][:2], [5, 10])
+
     def test_racing_hold_and_expiry_boundaries(self):
         self.assertFalse(self.sample(0, g=1)['racing'])
         self.assertFalse(self.sample(99, g=1)['racing'])

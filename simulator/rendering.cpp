@@ -30,6 +30,15 @@ static void writeRenderedValue(std::ostream& output, float value)
   }
 }
 
+template <typename T>
+static void writeMaximum(std::ostream& output, const RecordedMaximum<T>& maximum)
+{
+  if (maximum.hasValue())
+    output << maximum.value();
+  else
+    output << "null";
+}
+
 void writeDisplayTelemetry(std::ostream& output)
 {
   output << R"({"oil_c":)";
@@ -39,8 +48,13 @@ void writeDisplayTelemetry(std::ostream& output)
   output << R"(,"pressure_bar":)";
   writeRenderedValue(output, displayCache.pressureAvg);
   output << R"(,"monitor":[)" << monitoredOilTemp << ',' << monitoredWaterTemp << ',' << monitoredPressure
-         << R"(],"maxima":[)" << recordedMaxOilTempTop << ',' << recordedMaxWaterTemp << ',' << recordedMaxOilPressure
-         << ']';
+         << R"(],"maxima":[)";
+  writeMaximum(output, recordedMaxOilTempTop);
+  output << ',';
+  writeMaximum(output, recordedMaxWaterTemp);
+  output << ',';
+  writeMaximum(output, recordedMaxOilPressure);
+  output << ']';
   output << R"(,"brightness_mode":)" << static_cast<int>(currentBrightnessMode) << R"(,"brightness_pwm":)"
          << static_cast<int>(display.getBrightness()) << R"(,"lux_sample":)" << latestLux << R"(,"lux_median":)"
          << medianLuxValue << R"(,"warning_history":)" << hasLowWarningHistory() << R"(,"low_event":{"g":)" << lastLowEventG

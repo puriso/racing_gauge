@@ -13,7 +13,7 @@ A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [
 PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 生ADCカウント・IMU各軸・照度を本番のセンサー処理へ渡し、変換・補正・取得周期・平均化から表示まで確認します。
 シミュレーションと動画は24FPS・1.0倍速です。
-確認ページは23シナリオを収録し、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
+確認ページは24シナリオを収録し、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
 
 ADC通信異常への対応（[#381](https://github.com/puriso/racing_gauge/pull/381)）はmainへ取り込み済みです。
 [通信異常の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-communication)と[起動時未接続の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-startup)で、5msの変換期限・1秒間隔の再接続・正常復帰を確認できます。
@@ -47,7 +47,7 @@ racing-mode transitions, and heating/cooling scenarios. All videos play at norma
 - **デモモード**：外付けADC・センサーを接続せずに表示を確認できます。初期設定では無効です。
 
 油圧の画面上の単位`x100kPa`はbarと同じ大きさです（1 bar = 100 kPa）。
-最高値・イベント履歴はメモリ上に保持し、再起動するとリセットされます。最高値は正常な取得・平均値から更新し、通信・信号異常では消去しません。詳細画面中もLOW判定・最高値更新を継続し、Rへの移行は停止します。
+最高値・イベント履歴はメモリ上に保持し、再起動するとリセットされます。最高値は正常な取得・平均値から更新し、通信・信号異常では消去しません。初回正常値が負温度でもその値から記録し、正常値を一度も取得していない最高値は`---`で表示します。詳細画面中もLOW判定・最高値更新を継続し、Rへの移行は停止します。
 
 ## セットアップ
 
@@ -327,12 +327,12 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. Current main enables external 5V output with `M5.Power.setExtOutput(true)` and has no `EXTERNAL_5V_OUTPUT_ENABLED` switch. Align initialization and output settings with the power direction; see the [power section](#電源設定). The former #382 was closed without merging. Do not feed the 5V pin from another source while its output is enabled.
 - **Sampling:** Pressure uses five samples plus smoothing. Each temperature is sampled every 500ms and averaged over the latest two samples, then smoothed; the average changes every 500ms.
 - **Defaults:** Ambient-light dimming is enabled; demo mode, debug logging, and the FPS overlay are disabled. Edit [config.h](include/config.h) and rebuild to change them.
-- **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. A zero reading can also represent a detected fault.
+- **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. Sensor faults display `ERR`; unmeasured readings and maxima display `---`.
 
 The sensor table above describes the firmware's conversion model, not manufacturer calibration data.
-Main includes seventeen 24 FPS real-time preview scenarios, including raw ADC sweeps, disconnected signals, temperature boundaries, and ADC communication failures.
+Main includes twenty-four 24 FPS real-time preview scenarios, including raw ADC sweeps, disconnected signals, temperature boundaries, negative-temperature maxima, and ADC communication failures.
 ADC waits are bounded to 5ms and reconnection is attempted at one-second intervals; temperature recovery starts from the first valid sample.
-Pending [#380](https://github.com/puriso/racing_gauge/pull/380) adds a latched W cleared when leaving the detail screen. W history is separate from the behavior on main. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
+Main includes a latched W cleared when leaving the detail screen. Maxima start from the first valid sample, including negative temperatures; unmeasured maxima display `---`. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
 Hardware accuracy and vehicle behavior require separate verification.
 
 ## ライセンス / License

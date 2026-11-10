@@ -14,7 +14,7 @@ class Reference:
         self.sensors = sensors
         self.filtered = {}
         self.monitored = {}
-        self.maxima = [0, 0.0, 0.0]
+        self.maxima = [None, None, None]
         self.samples = [0] * settings['median_size']
         self.sample_index = 0
         self.lux_sample = self.lux_median = 0
@@ -86,7 +86,8 @@ class Reference:
             else:
                 valid = valid and math.isfinite(target) and target < 199
             if valid:
-                self.maxima[index] = max(self.maxima[index], int(target) if index == 0 else target)
+                candidate = int(target) if index == 0 else target
+                self.maxima[index] = candidate if self.maxima[index] is None else max(self.maxima[index], candidate)
                 previous = self.filtered.get(key, target)
                 self.filtered[key] = float32(previous + float32(float32(alpha) * float32(target - previous)))
                 self.monitored[key] = self.filtered[key]
@@ -182,5 +183,8 @@ def check_expectations(frame):
 
     for key, tolerance in [('monitor', 0.002), ('maxima', 0.002)]:
         for wanted, observed in zip(expected[key], actual[key]):
-            if not math.isclose(wanted, observed, abs_tol=tolerance):
+            if (wanted is None or observed is None):
+                if wanted is not observed:
+                    raise RuntimeError(f'最高値の未取得状態が一致しません: {key}, {frame}')
+            elif not math.isclose(wanted, observed, abs_tol=tolerance):
                 raise RuntimeError(f'監視値・最高値が一致しません: {key}, {frame}')
