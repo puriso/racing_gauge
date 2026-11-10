@@ -156,3 +156,11 @@ void loop()
 {
   // ループ処理は不要
 }
+
+#ifndef ARDUINO
+int main()
+{
+  setup();
+  return Unity.TestFailures;
+}
+#endif

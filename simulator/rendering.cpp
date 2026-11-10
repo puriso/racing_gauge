@@ -38,6 +38,9 @@ void writeDisplayTelemetry(std::ostream& output)
   writeRenderedValue(output, displayCache.waterTempAvg);
   output << R"(,"pressure_bar":)";
   writeRenderedValue(output, displayCache.pressureAvg);
+  output << R"(,"monitor":[)" << monitoredOilTemp << ',' << monitoredWaterTemp << ',' << monitoredPressure
+         << R"(],"maxima":[)" << recordedMaxOilTempTop << ',' << recordedMaxWaterTemp << ',' << recordedMaxOilPressure
+         << ']';
   output << R"(,"brightness_mode":)" << static_cast<int>(currentBrightnessMode) << R"(,"brightness_pwm":)"
          << static_cast<int>(display.getBrightness()) << R"(,"lux_sample":)" << latestLux << R"(,"lux_median":)"
          << medianLuxValue << R"(,"warning_history":)" << hasLowWarningHistory() << R"(,"low_event":{"g":)" << lastLowEventG
@@ -61,7 +64,9 @@ void writeSensorTelemetry(std::ostream& output)
 {
   output << R"({"oil_c":)" << calculateAverage(oilTemperatureSamples) << R"(,"water_c":)"
          << calculateAverage(waterTemperatureSamples) << R"(,"pressure_bar":)" << calculateAverage(oilPressureSamples)
-         << R"(,"pressure_fault":)" << oilPressureOverVoltage << R"(,"adc_reads":[)";
+         << R"(,"status":[)" << static_cast<int>(oilTemperatureStatus) << ',' << static_cast<int>(waterTemperatureStatus)
+         << ',' << static_cast<int>(oilPressureStatus) << ']' << R"(,"pressure_fault":)" << oilPressureOverVoltage
+         << R"(,"adc_reads":[)";
   for (size_t channel = 0; channel < simulator::ADC_CHANNEL_COUNT; ++channel)
   {
     if (channel != 0)

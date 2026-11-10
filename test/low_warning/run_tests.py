@@ -12,6 +12,7 @@ suite = root / "test" / "low_warning"
 parser = argparse.ArgumentParser()
 parser.add_argument("--baseline-ref")
 parser.add_argument("--history", action="store_true")
+parser.add_argument("--monitoring", action="store_true")
 parser.add_argument("--report", type=Path)
 args = parser.parse_args()
 
@@ -39,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix="low-warning-") as directory:
             f"-I{suite / 'stubs'}",
             f"-I{root / 'include'}",
             f"-I{root / 'src' / 'modules'}",
-            str(suite / ("test_warning_history.cpp" if args.history else "test_low_warning.cpp")),
+            str(suite / ("test_monitoring.cpp" if args.monitoring else "test_warning_history.cpp" if args.history else "test_low_warning.cpp")),
             str(source),
             "-o",
             str(binary),

@@ -9,5 +9,6 @@
 extern bool isRacingMode;
 
 // レーシング中表示を描画。描画の更新があれば true を返す
-bool drawRacingIndicator(M5Canvas &canvas);
+bool drawRacingIndicator(M5Canvas& canvas);
+void invalidateRacingIndicator();
 #endif  // RACING_INDICATOR_H

@@ -84,7 +84,8 @@ void setup()
   // デモモードでなければADS1015を初期化し、失敗時は画面にエラーを表示
   if (!initializeAdc())
   {
-    Serial.println("[ADS1015] init failed… all analog values will be 0");
+    markAdcInitializationFailure();
+    Serial.println("[ADS1015] init failed");
     drawAdcInitializationError(M5.Lcd);
   }
 #endif
@@ -125,13 +126,13 @@ void loop()
   }
 
   bool touched = M5.Touch.getCount() > 0;
-  if (touched && !wasTouched)
+  bool menuChanged = touched && !wasTouched;
+  if (menuChanged)
   {
     isMenuVisible = !isMenuVisible;
     if (isMenuVisible)
     {
       forceStopRacingMode();  // 詳細画面ではレーシングモードを解除
-      drawMenuScreen();
       // メニュー表示中は輝度を最大にする
       applyBrightnessMode(BrightnessMode::Day);
     }
@@ -158,11 +159,16 @@ void loop()
 
   acquireSensorData();
 
-  updateRacingMode(now, currentGForce);
+  updateGaugeMonitoring();
+  if (!isMenuVisible) updateRacingMode(now, currentGForce);
 
   if (!isMenuVisible)
   {
     updateGauges();
+  }
+  else
+  {
+    refreshMenuScreen(menuChanged);
   }
 
   fpsFrameCounter++;

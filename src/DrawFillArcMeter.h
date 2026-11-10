@@ -17,14 +17,20 @@ static inline T clampValue(T val, T low, T high)
   return val;
 }
 
-void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxValue, float threshold,
-                      uint16_t overThresholdColor, const char *unit, const char *label,
-                      float &previousValue,  // 前回描画した値
+struct MeterValueCache
+{
+  char text[16] = {};
+};
+
+void drawFillArcMeter(M5Canvas& canvas, float value, float minValue, float maxValue, float threshold,
+                      uint16_t overThresholdColor, const char* unit, const char* label,
+                      float& previousValue,  // 前回描画した値
                       float tickStep,        // 目盛の間隔（細かい目盛り）
                       bool isUseDecimal,     // 小数点を表示するかどうか
                       int x, int y, bool drawStatic,
                       float majorTickStep = -1.0f,  // 数字を表示する目盛間隔（負なら旧仕様）
-                      float labelStart = 0.0f)      // ラベル描画を開始する値
+                      float labelStart = 0.0f,      // ラベル描画を開始する値
+                      MeterValueCache* valueCache = nullptr, const char* statusText = nullptr)
 {
   // 左端を 1px 固定しつつ数値表示位置は従来通りに保つ
   const int GAUGE_LEFT = x + 1;                    // 円メーターの左端
@@ -77,7 +83,6 @@ void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxVa
   float prevValue = std::isnan(previousValue) ? minValue : clampValue(previousValue, minValue, maxValue);
   float prevAngle = -270 + ((prevValue - minValue) / (maxValue - minValue) * 270.0);
   float currAngle = -270 + ((clampedValue - minValue) / (maxValue - minValue) * 270.0);
-  float thresholdAngle = -270 + ((threshold - minValue) / (maxValue - minValue) * 270.0);
 
   bool prevOver = prevValue >= threshold;
   bool currOver = clampedValue >= threshold;
@@ -136,7 +141,7 @@ void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxVa
   {
     // 目盛ラベルと目盛り線を描画
     int tickCount = static_cast<int>((maxValue - minValue) / tickStep) + 1;
-    for (float i = 0; i <= tickCount - 1; i += 1)
+    for (int i = 0; i < tickCount; ++i)
     {
       float scaledValue = minValue + (tickStep * i);
       float angle = 270 - ((270.0 / (tickCount - 1)) * i);  // 開始位置のロジックを維持
@@ -195,7 +200,11 @@ void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxVa
 
   // 値を右下に表示
   char valueText[10];
-  if (isUseDecimal)
+  if (statusText != nullptr)
+  {
+    snprintf(valueText, sizeof(valueText), "%s", statusText);
+  }
+  else if (isUseDecimal)
   {
     snprintf(valueText, sizeof(valueText), "%.1f", value);
   }
@@ -207,9 +216,14 @@ void drawFillArcMeter(M5Canvas &canvas, float value, float minValue, float maxVa
   int valueX = VALUE_BASE_X;  // 数字は固定位置に表示
   int valueY = CENTER_Y_CORRECTED + RADIUS - 20;
 
+  // 同じ表示文字列なら、大きなフォントの消去と再描画を省く。
+  if (!drawStatic && valueCache != nullptr && strcmp(valueCache->text, valueText) == 0) return;
+  if (valueCache != nullptr) snprintf(valueCache->text, sizeof(valueCache->text), "%s", valueText);
   canvas.setFont(&FreeSansBold24pt7b);
-  // 数字描画領域のみを毎回黒で塗りつぶす
-  canvas.fillRect(valueX - 75, valueY - canvas.fontHeight() / 2 - 2, 75, canvas.fontHeight() + 4, BACKGROUND_COLOR);
+  int clearHeight = canvas.fontHeight();
+  canvas.fillRect(valueX - 75, valueY - clearHeight / 2 - 2, 75, clearHeight + 4, BACKGROUND_COLOR);
+  if (statusText != nullptr || canvas.textWidth(valueText) > 75) canvas.setFont(&fonts::FreeSansBold12pt7b);
+  canvas.setTextColor(TEXT_COLOR, BACKGROUND_COLOR);
   canvas.setCursor(valueX - canvas.textWidth(valueText), valueY - (canvas.fontHeight() / 2));
   canvas.print(valueText);
 }

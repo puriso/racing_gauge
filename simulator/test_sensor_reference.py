@@ -75,6 +75,26 @@ class SensorReferenceTest(unittest.TestCase):
         recovered = self.sensor.step(2041, self.raw)
         self.assertAlmostEqual(recovered['oil_c'], 95.05905, places=4)
 
+    def test_brief_communication_failure_invalidates_all_channels_immediately(self):
+        self.settle()
+        failed = self.sensor.step(1100, self.raw | {'adc_fault': 1})
+        self.assertEqual(failed['status'], [2, 2, 2])
+        self.assertEqual((failed['oil_c'], failed['water_c'], failed['pressure_bar']), (200, 200, 0))
+        self.assertEqual(failed['adc_reads'][:2], [2, 2])
+        waiting = self.sensor.step(1300, self.raw)
+        self.assertEqual(waiting['status'], [2, 2, 2])
+        recovered = self.sensor.step(2300, self.raw)
+        self.assertEqual(recovered['status'], [1, 1, 1])
+        self.assertLess(recovered['oil_c'], 100)
+
+    def test_pressure_zero_voltage_is_invalid_but_half_volt_is_valid(self):
+        self.settle()
+        missing = self.sensor.step(1100, self.raw | {'adc': [333, 333, 0, 0]})
+        self.assertEqual(missing['status'][2], 3)
+        zero = self.sensor.step(1200, self.raw | {'adc': [333, 333, 162, 0]})
+        self.assertEqual(zero['status'][2], 1)
+        self.assertEqual(self.sensor.pressure(self.sensor.voltage(162)), 0)
+
     def test_axis_bias_direction_and_vertical_exclusion(self):
         self.settle()
         for axes, direction in [([2.125, -0.0625, 1], 'Front'), ([-1.875, -0.0625, 1], 'Rear'),
