@@ -25,6 +25,11 @@ from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "negative-maxima": {
+        "title": "負温度の最高値・未取得・異常保持・0℃越え", "group": "reproduction",
+        "description": "最初の2秒は温度異常でMAX未取得。負温度の初回取得、より高い負温度への更新、再冷却・異常時の保持を詳細画面でも確認。19秒から正温度へ移り、0℃を越えた最高値更新も追う",
+        "seconds": 24, "snapshots": [0, 1.5, 3, 5, 7.8, 8.5, 11, 13.5, 16.5, 18, 20, 22.5, 24],
+    },
     "menu-monitoring": {
         "title": "詳細画面中のLOW・最高値とR復帰", "group": "reproduction",
         "description": "3秒にR開始、4〜12秒は詳細画面。6〜9秒のLOWと8〜11秒の温度・油圧ピークを表示中も記録。高Gのまま戻ってR再表示、17秒の200ms切断後も最高値を保持する",
@@ -150,7 +155,7 @@ def running_pressure(seconds):
 
 def validate_inputs(metadata):
     validate_communication(metadata)
-    if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring'):
+    if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring', 'negative-maxima'):
         return
     if metadata["scenario"] in CASES:
         validate_fault_inputs(metadata)
@@ -254,6 +259,20 @@ def validate_inputs(metadata):
 def validate_monitoring(metadata):
     name, frames = metadata['scenario'], metadata['frames']
     at = lambda seconds: frames[round(seconds * FRAME_RATE)]
+    if name == 'negative-maxima':
+        if at(0)['actual']['maxima'] != [None, None, None] or at(1.5)['actual']['maxima'][:2] != [None, None]:
+            raise RuntimeError('温度の未取得・起動時異常を0度として記録しています')
+        if not all(value < 0 for value in at(3)['actual']['maxima'][:2]):
+            raise RuntimeError('初回の負温度を最高値へ記録できていません')
+        first, warmer = at(5)['actual']['maxima'][:2], at(8.5)['actual']['maxima'][:2]
+        if not all(before < after < 0 for before, after in zip(first, warmer)):
+            raise RuntimeError('負温度同士の最高値更新が不正です')
+        if at(13.5)['sensor']['status'][:2] != [3, 3]:
+            raise RuntimeError('正常取得後の温度異常を再現できていません')
+        if not all(at(second)['actual']['maxima'][:2] == warmer for second in (11, 13.5, 18)):
+            raise RuntimeError('再冷却・温度異常で負の最高値を失っています')
+        if not all(value > 0 for value in at(23)['actual']['maxima'][:2]):
+            raise RuntimeError('0度越えの最高値更新が不正です')
     if name == 'menu-monitoring':
         if not all(frame['menu'] and not frame['racing'] for frame in frames[4 * FRAME_RATE:12 * FRAME_RATE]):
             raise RuntimeError('詳細画面中にRモードが再開しています')

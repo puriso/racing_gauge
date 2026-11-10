@@ -92,7 +92,8 @@ for (const scenario of scenarios) {
       card.querySelector('[data-value=actual-temperature]').textContent = `${frame.actual_oil_c.toFixed(2)} / ${frame.actual_water_c.toFixed(2)} ℃`;
     }
     card.querySelector('[data-value=sensor-status]').textContent = frame.sensor_status.map(value => ['未取得', '正常', '通信異常', '信号異常', '無効'][value]).join(' / ');
-    card.querySelector('[data-value=maxima]').textContent = frame.maxima.map((value, index) => `${value.toFixed(index === 0 ? 0 : 2)} / ${frame.expected_maxima[index].toFixed(index === 0 ? 0 : 2)}`).join(' ・ ');
+    const peakText = (value, index) => value === null ? '---' : value.toFixed(index === 0 ? 0 : 2);
+    card.querySelector('[data-value=maxima]').textContent = frame.maxima.map((value, index) => `${peakText(value, index)} / ${peakText(frame.expected_maxima[index], index)}`).join(' ・ ');
     card.querySelector('[data-value=time]').textContent = format(frame.time_ms / 1000);
     card.querySelector('[data-value=g]').textContent = `${frame.g.toFixed(2)} G`;
     card.querySelector('[data-value=pressure]').textContent = `${frame.pressure_bar.toFixed(2)} bar`;

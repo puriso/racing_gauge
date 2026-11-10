@@ -59,6 +59,9 @@ jobs:
       - name: Rモード境界と解除の回帰テスト
         run: pio test -e native
 
+      - name: 負温度の最高値・未取得・異常保持の回帰テスト
+        run: python3 test/recorded_maximum/run_tests.py
+
       - name: ファームウェアをアーティファクトで保存
         uses: actions/upload-artifact@v4
         with:

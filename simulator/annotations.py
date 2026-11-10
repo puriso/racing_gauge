@@ -97,6 +97,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     statuses = '/'.join(names[value] for value in sample['sensor']['status'])
     label(16, 482, f'Sensor O/W/P: {statuses}', font=small)
     observed, wanted = actual['maxima'], expected['maxima']
-    label(16, 506, f'MAX act/exp: oil {observed[0]:g}/{wanted[0]:g}C | water {observed[1]:.1f}/{wanted[1]:.1f}C | P {observed[2]:.2f}/{wanted[2]:.2f}bar', font=small)
+    def peak(value, digits):
+        return '---' if value is None else f'{value:.{digits}f}'
+    label(16, 506, f'MAX act/exp: oil {peak(observed[0], 0)}/{peak(wanted[0], 0)}C | water {peak(observed[1], 1)}/{peak(wanted[1], 1)}C | P {peak(observed[2], 2)}/{peak(wanted[2], 2)}bar', font=small)
     # 最下部は動画の操作バー用。R表示や比較値に重ならないよう余白を残す。
     return frame
