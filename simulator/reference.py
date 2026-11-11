@@ -6,6 +6,7 @@ from numeric import float32
 from low_warning_reference import LowWarningReference
 from sensor_reference import SensorReference
 from timing import FRAME_RATE, frame_time_ms
+from risk_reference import RiskReference
 
 
 class Reference:
@@ -23,6 +24,7 @@ class Reference:
         self.menu = self.racing = False
         self.racing_until = self.g_since = None
         self.warning = LowWarningReference()
+        self.risk = RiskReference()
         self.initialized = False
 
     def read_light(self, lux):
@@ -95,8 +97,14 @@ class Reference:
                 self.filtered.pop(key, None)
                 self.monitored[key] = 0.0
         pressure_valid = sample.get('status', [1, 1, 1])[2] == 1 and sample['pressure_bar'] < 11 and not sample.get('pressure_fault', False)
-        low = self.warning.step(now, sample['g'] if pressure_valid else 0, self.monitored['pressure_bar'], sample.get('g_direction', 'Right'))
-        return self.snapshot(low and not menu)
+        low = self.warning.step(now + sample.get('adc_wait_ms', 0), sample['g'] if pressure_valid else 0, self.monitored['pressure_bar'], sample.get('g_direction', 'Right'))
+        result = self.snapshot(low and not menu)
+        if sample.get('risk_scenario'):
+            status = sample['status']
+            result['risk'] = self.risk.step(now + sample.get('adc_wait_ms', 0), self.monitored['pressure_bar'], sample['g'], self.monitored['oil_c'],
+                                           pressure_valid, status[0] == 1 and math.isfinite(sample['oil_c']) and sample['oil_c'] < 199,
+                                           self.warning.qualified)
+        return result
 
     def snapshot(self, low):
         return {**{key: round(self.monitored[key], 4) if key in self.monitored else None
@@ -130,13 +138,13 @@ def add_expectations(directory, metadata):
                 acquired = sensor.snapshot()
             else:
                 acquired = sensor.step(now, raw)
-            sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als'], 'setup_error': setup_error}
+            sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als'], 'setup_error': setup_error, 'risk_scenario': metadata['scenario'].startswith('risk-')}
             expected = reference.step(sample)
             expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
                                   for key, value in acquired.items()}
             expected['voltage'] = [round(sensor.voltage(value), 6) for value in raw['adc']]
             frame = frames[tick]
-            if (frame['setup_error'] != setup_error or frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
+            if (frame['screen'] != int(row['screen']) or frame['setup_error'] != setup_error or frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
                     or frame['raw']['adc_fault'] != raw['adc_fault']
                     or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
                     or any(not math.isclose(before, after, abs_tol=0.000001)
@@ -144,6 +152,8 @@ def add_expectations(directory, metadata):
                 raise ValueError(f'録画と24FPSの生入力が一致しません: {frame}')
             frame['expected'] = expected
             count += 1
+    if 'risk_window' in metadata and metadata['risk_window'] != reference.risk.window:
+        raise ValueError('危険点の前後1分データが独立モデルと一致しません')
     if count != len(frames) or tick != len(frames) - 1:
         raise ValueError('24FPS入力と録画の長さが一致しません')
 
@@ -188,3 +198,15 @@ def check_expectations(frame):
                     raise RuntimeError(f'最高値の未取得状態が一致しません: {key}, {frame}')
             elif not math.isclose(wanted, observed, abs_tol=tolerance):
                 raise RuntimeError(f'監視値・最高値が一致しません: {key}, {frame}')
+
+    if 'risk' in frame:
+        for key, observed in frame['risk'].items():
+            wanted = expected['risk'][key]
+            if wanted is None or observed is None:
+                correct = wanted is observed
+            elif isinstance(wanted, float):
+                correct = math.isclose(wanted, observed, abs_tol=0.002)
+            else:
+                correct = wanted == observed
+            if not correct:
+                raise RuntimeError(f'危険場面の選択・経過時間が一致しません: {key}, {frame}')

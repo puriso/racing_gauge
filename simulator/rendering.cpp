@@ -11,6 +11,8 @@
 #include "../src/modules/low_warning.cpp"
 #include "../src/modules/racing_indicator.cpp"
 #include "../src/modules/racing_mode.cpp"
+#include "../src/modules/risk_graph.cpp"
+#include "../src/modules/risk_history.cpp"
 #include "../src/modules/sensor.cpp"
 #include "../src/modules/startup_error.cpp"
 // NOLINTEND(bugprone-suspicious-include)
@@ -100,4 +102,32 @@ void writeSensorTelemetry(std::ostream& output)
   }
   output << R"(],"adc_connected":)" << adcInitialized << R"(,"adc_begin_calls":)" << simulator::adcBeginCalls
          << R"(,"adc_wait_ms":)" << simulator::adcWaitMs << '}';
+}
+
+void writeRiskTelemetry(std::ostream& output)
+{
+  const auto& history = risk::history;
+  const auto& event = history.event();
+  output << R"({"kind":)" << static_cast<int>(event.kind) << R"(,"at_ms":)" << event.occurredMs << R"(,"age_ms":)"
+         << (history.hasEvent() ? history.ageMs() : 0) << R"(,"pressure_bar":)" << event.pressure << R"(,"g":)" << event.g
+         << R"(,"oil_c":)";
+  if (event.oilValid)
+    output << event.oil;
+  else
+    output << "null";
+  output << R"(,"pre_ms":)" << (history.hasEvent() ? history.preMs() : 0) << R"(,"post_ms":)"
+         << (history.hasEvent() ? history.postMs() : 0) << '}';
+}
+
+void writeRiskWindow(std::ostream& output)
+{
+  output << '[';
+  for (size_t index = 0; index < risk::WINDOW_SAMPLES; ++index)
+  {
+    if (index != 0) output << ',';
+    const auto& sample = risk::history.sample(index);
+    output << '[' << sample.pressureMin << ',' << sample.pressureMax << ',' << sample.gMax << ',' << sample.oilLast << ','
+           << static_cast<int>(sample.flags) << ']';
+  }
+  output << ']';
 }

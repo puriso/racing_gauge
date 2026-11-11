@@ -10,11 +10,13 @@
 #include "fps_display.h"
 #include "low_warning.h"
 #include "racing_indicator.h"
+#include "risk_history.h"
 #include "sensor.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 M5GFX display;
 M5Canvas mainCanvas(&display);
+ReviewNavigation reviewNavigation;
 
 static bool pressureGaugeInitialized = false;
 static bool waterGaugeInitialized = false;
@@ -283,6 +285,8 @@ void updateGaugeMonitoring()
   monitoredWaterTemp = smooth(water, waterValid, 0.1F, smoothWaterTemp);
   monitoredOilTemp = smooth(oil, oilValid, 0.1F, smoothOilTemp);
   updateLowPressureWarning(currentGForce, monitoredPressure, pressureValid);
+  risk::history.update(static_cast<uint32_t>(millis()), {monitoredPressure, currentGForce, monitoredOilTemp, pressureValid,
+                                                         oilValid, isLowPressureQualified()});
 }
 
 void updateGauges() { renderDisplayAndLog(monitoredPressure, monitoredWaterTemp, monitoredOilTemp, recordedMaxOilTempTop); }

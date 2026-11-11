@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "recorded_maximum.h"
+#include "review_screen.h"
 #include "sensor.h"
 
 extern M5GFX display;

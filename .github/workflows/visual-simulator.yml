@@ -11,6 +11,7 @@ on:
       - 'platformio.ini'
       - 'test/low_warning/**'
       - 'test/recorded_maximum/**'
+      - 'test/risk_history/**'
       - '.github/workflows/visual-simulator.yml'
   push:
     branches: [main]
@@ -21,13 +22,14 @@ on:
       - 'platformio.ini'
       - 'test/low_warning/**'
       - 'test/recorded_maximum/**'
+      - 'test/risk_history/**'
       - '.github/workflows/visual-simulator.yml'
   workflow_dispatch:
     inputs:
       scenario:
         description: '録画シナリオ'
         type: choice
-        options: [all, negative-maxima, menu-monitoring, fault-monitoring, warning-history, warning-repeat, warning-pending, warning-brief, adc-startup, adc-communication, sensor-disconnect, temperature-high, temperature-low, adc-steps, circuit, racing, ambient, raw-faults, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
+        options: [all, risk-window, risk-predictive, negative-maxima, menu-monitoring, fault-monitoring, warning-history, warning-repeat, warning-pending, warning-brief, adc-startup, adc-communication, sensor-disconnect, temperature-high, temperature-low, adc-steps, circuit, racing, ambient, raw-faults, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
         default: all
 
 permissions:
@@ -59,6 +61,8 @@ jobs:
         run: python test/low_warning/run_tests.py --history
       - name: 負温度の最高値・未取得・異常保持の回帰テスト
         run: python test/recorded_maximum/run_tests.py
+      - name: 危険点選択・前後1分・画面遷移の回帰テスト
+        run: python test/risk_history/run_tests.py
       - name: 本番描画を SDL 向けにビルド
         run: pio run -d simulator -e desktop
       - name: シナリオの録画と描画検証
@@ -89,7 +93,7 @@ jobs:
           PRのコメントにある **等速の確認ページを開く** から、GitHub Pagesで直接確認できます。
           全PNGは **Artifacts → visual-simulator** からダウンロードできます。
           シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
-          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさ・生ADCの1カウント往復など、24シナリオを等速で確認できます。
+          油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさ・生ADCの1カウント往復など、26シナリオを等速で確認できます。
           動画の画面外に生ADCカウント・電圧・IMU各軸・変換と平滑化の期待値・照度・輝度の期待／実際を表示します。
           更新・録画は24FPS、全区間1.0倍速です。FPS計測・比較機能は含めません。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
@@ -159,7 +163,7 @@ jobs:
           number, sha = os.environ['PR_NUMBER'], os.environ['EXPECTED_SHA']
           assert re.fullmatch(r'[1-9][0-9]*', number)
           assert re.fullmatch(r'[0-9a-f]{40}', sha)
-          scenarios = 'negative-maxima|menu-monitoring|fault-monitoring|warning-history|warning-repeat|warning-pending|warning-brief|adc-startup|adc-communication|sensor-disconnect|temperature-high|temperature-low|adc-steps|circuit|racing|ambient|raw-faults|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
+          scenarios = 'risk-window|risk-predictive|negative-maxima|menu-monitoring|fault-monitoring|warning-history|warning-repeat|warning-pending|warning-brief|adc-startup|adc-communication|sensor-disconnect|temperature-high|temperature-low|adc-steps|circuit|racing|ambient|raw-faults|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
           allowed = re.compile(rf'index\.html|spot-checks\.json|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|poster\.png|inputs\.json)')
           files, total = [], 0
           entries = list(source.rglob('*'))
@@ -177,14 +181,14 @@ jobs:
                   continue
               if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not allowed.fullmatch(relative):
                   raise ValueError(f'不正なファイル: {relative}')
-              limit = (16 if entry.suffix == '.mp4' else 12 if entry.suffix == '.html' else 8) * 1024 * 1024
+              limit = 16 * 1024 * 1024
               if info.st_size > limit:
                   raise ValueError(f'ファイルが大きすぎます: {relative}')
               total += info.st_size
               files.append((entry, relative))
           names = {relative for _, relative in files}
-          # 全24動画と履歴・通信状態・最高値付きJSONを収める公開容量の上限。
-          if 'index.html' not in names or len(files) < 5 or total > 128 * 1024 * 1024:
+          # 全26動画と履歴・通信状態・最高値付きJSONを収める公開容量の上限。
+          if 'index.html' not in names or len(files) < 5 or total > 192 * 1024 * 1024:
               raise ValueError('公開レポートが不完全、または大きすぎます')
           for directory in {relative.split('/')[0] for relative in names if '/' in relative}:
               required = {f'{directory}/{name}' for name in ('recording.mp4', 'contact-sheet.png', 'poster.png', 'inputs.json')}
@@ -269,6 +273,7 @@ jobs:
               `[等速の確認ページを開く](${url})`, '',
               'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
               '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面、照度と調光を確認できます。',
+              '最悪のLOW・予兆を中心に前後1分の油圧/G/油温を記録する新グラフ、発生から何分前か、詳細ボタンの動作も確認できます。',
               '負温度での初回最高値・未取得表示・異常後の保持・0℃越えも専用動画で確認できます。',
               'LOW成立の履歴Wは左下へ残り、詳細画面から戻るまで保持される流れを確認できます。',
               'PR #380の再発・期限・短い低下は3本の再現動画で、499/500msや時刻折り返しは数値テストの新旧比較で確認できます。',

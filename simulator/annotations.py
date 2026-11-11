@@ -60,6 +60,11 @@ def annotated_frame(source, sample, scenario, sensor_settings):
               f"min {observed['pressure_bar']:.2f}/{wanted['pressure_bar']:.2f}bar | "
               f"time {observed['duration_s']:.2f}/{wanted['duration_s']:.2f}s | "
               f"dir {observed['direction']}/{wanted['direction']}", font=small)
+    elif 'risk' in sample:
+        event = sample['risk']
+        name = ('NONE', 'DROP(est)', 'NEAR(est)', 'LOW')[event['kind']]
+        label(16, 297, f"RISK {name} | age {event['age_ms']/1000:.1f}s | pre/post {event['pre_ms']/1000:g}/{event['post_ms']/1000:g}s", font=small)
+        label(16, 309, 'Worst point at center. 100ms pressure range / G MAX / latest oil.', font=small)
     elif scenario in ('adc-startup', 'adc-communication'):
         modes = ('OK', 'NO DEVICE', 'BUSY', 'CONFIG WRITE FAIL', 'STATUS READ FAIL', 'RESULT READ FAIL', 'SECOND RESULT FAIL')
         state = sample['sensor']

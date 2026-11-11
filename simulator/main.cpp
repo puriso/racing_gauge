@@ -26,6 +26,7 @@
 #include "modules/low_warning.h"
 #include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
+#include "modules/risk_graph.h"
 #include "modules/sensor.h"
 #include "modules/startup_error.h"
 #include "sensor_inputs.hpp"
@@ -76,6 +77,8 @@ struct Targets
   int lux = simulator::DEFAULT_AMBIENT_LUX;
 };
 
+auto isRiskScenario() -> bool { return options().scenario == "risk-window" || options().scenario == "risk-predictive"; }
+
 auto isWarningReview() -> bool
 {
   return options().scenario == "warning-repeat" || options().scenario == "warning-pending" ||
@@ -92,6 +95,7 @@ auto isAdcOrSensorFaultScenario() -> bool
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
+  if (isRiskScenario()) return 160;
   if (options().scenario == "negative-maxima") return 24;
   if (options().scenario == "menu-monitoring") return 28;
   if (options().scenario == "fault-monitoring") return 20;
@@ -275,6 +279,29 @@ auto sample(double ratio) -> Targets
   if (isAdcOrSensorFaultScenario())
   {
     return {100.0F, 95.0F, pressure, 0.0F, false};
+  }
+  if (isRiskScenario())
+  {
+    if (options().scenario == "risk-window")
+    {
+      const bool corner = seconds >= 75.0F && seconds < 78.0F;
+      return {95.0F + progress * 30.0F, 95.0F, corner ? 0.8F : pressure, corner ? 2.0F : 0.0F, false};
+    }
+    const bool baseline = seconds >= 63.0F && seconds < 65.0F;
+    const bool drop = seconds >= 65.0F && seconds < 65.9F;
+    const bool near = seconds >= 75.0F && seconds < 76.2F;
+    const bool brief = seconds >= 90.0F && seconds < 90.1F;
+    return {90.0F + progress * 20.0F, 95.0F,
+            baseline ? 6.0F
+            : drop   ? 3.8F
+            : near   ? 3.2F
+            : brief  ? 1.0F
+                     : pressure,
+            drop                                                                                          ? 0.9F
+            : near                                                                                        ? 1.5F
+            : brief || ((seconds >= 95.0F && seconds < 96.0F) || (seconds >= 105.0F && seconds < 106.0F)) ? 2.0F
+                                                                                                          : 0.0F,
+            false};
   }
   if (options().scenario == "negative-maxima")
   {
@@ -466,6 +493,10 @@ void inject(const Inputs& input)
   if ((options().scenario == "menu-monitoring" || options().scenario == "fault-monitoring") &&
       simulator::nowMs >= failureStart && simulator::nowMs < failureStart + 200)
     simulator::adcFault = simulator::AdcFault::Missing;
+  if (options().scenario == "risk-predictive" && simulator::nowMs >= 95000 && simulator::nowMs < 96000)
+    simulator::adcFault = simulator::AdcFault::Missing;
+  if (options().scenario == "risk-predictive" && simulator::nowMs >= 105000 && simulator::nowMs < 106000)
+    simulator::adcFault = simulator::AdcFault::Busy;
   simulator::adcChannels = input.adc;
   simulator::acceleration = input.imu;
   simulator::ambientLux = input.lux;
@@ -486,7 +517,7 @@ void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& ta
   }
   trace << ',' << static_cast<int>(showingMenu) << ',' << input.lux << ',' << target.oil << ',' << target.water << ','
         << target.pressure << ',' << target.acceleration << ',' << static_cast<int>(simulator::adcFault) << ','
-        << setupError << '\n';
+        << setupError << ',' << static_cast<int>(reviewNavigation.screen()) << '\n';
 }
 
 void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs& input, const Targets& target,
@@ -508,12 +539,18 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
     manifest << R"(,"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
              << target.pressure << R"(,"g":)" << target.acceleration << '}';
   }
+  manifest << R"(,"screen":)" << static_cast<int>(reviewNavigation.screen());
   manifest << R"(,"setup_error":)" << setupError << R"(,"g":)" << currentGForce << R"(,"lux":)" << input.lux
            << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode
            << R"(,"sensor":)";
   writeSensorTelemetry(manifest);
   manifest << R"(,"actual":)";
   writeDisplayTelemetry(manifest);
+  if (isRiskScenario())
+  {
+    manifest << R"(,"risk":)";
+    writeRiskTelemetry(manifest);
+  }
   manifest << '}';
 }
 
@@ -581,7 +618,8 @@ struct Controls
     }
     if ((keys[2] && !previousKeys[2]) || (keys[3] && !previousKeys[3]))
     {
-      manualMenu = !manualMenu;
+      manualMenu = true;
+      reviewNavigation.tap(keys[3] ? touchX : 100, keys[3] ? touchY : 100);
     }
     previousKeys = keys;
   }
@@ -633,20 +671,57 @@ void initializeDisplay()
   updateBacklightLevel();
 }
 
+auto fixtureScreen(bool menu) -> ReviewScreen
+{
+  if (!isRiskScenario()) return menu ? ReviewScreen::Details : ReviewScreen::Gauges;
+  const uint32_t now = simulator::nowMs;
+  if (now >= 3000 && now < 5000) return ReviewScreen::Graph;
+  if (options().scenario == "risk-window")
+  {
+    if ((now >= 76000 && now < 82000) || (now >= 86000 && now < 90000) || (now >= 145000 && now < 149000) || now >= 153000)
+      return ReviewScreen::Graph;
+    if ((now >= 82000 && now < 84000) || (now >= 149000 && now < 151000)) return ReviewScreen::Details;
+  }
+  else
+  {
+    if ((now >= 66000 && now < 68000) || (now >= 76000 && now < 79000) || (now >= 96000 && now < 98000) ||
+        (now >= 145000 && now < 152000) || now >= 154000)
+      return ReviewScreen::Graph;
+    if (now >= 79000 && now < 81000) return ReviewScreen::Details;
+    if (now >= 152000 && now < 154000) return ReviewScreen::Details;
+  }
+  return ReviewScreen::Gauges;
+}
+
+void navigateTo(ReviewScreen desired)
+{
+  if (reviewNavigation.screen() == desired) return;
+  if (reviewNavigation.screen() == ReviewScreen::Graph && desired == ReviewScreen::Details)
+  {
+    reviewNavigation.tap(280, 10);
+    return;
+  }
+  if (reviewNavigation.reviewing()) reviewNavigation.tap(100, 100);
+  if (desired != ReviewScreen::Gauges) reviewNavigation.tap(100, 100);
+  if (desired == ReviewScreen::Details) reviewNavigation.tap(280, 10);
+}
+
 auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
 {
   inject(input);
   static unsigned long lastAlsMeasurementTime = 0;
-  // 実機loopと同じ順序で測定し、R・詳細画面の間は自動調光を止める。
+  static ReviewScreen previousScreen = ReviewScreen::Gauges;
   if (!showingMenu && !isRacingMode && simulator::nowMs - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
   {
     updateBacklightLevel();
     lastAlsMeasurementTime = simulator::nowMs;
   }
-  const bool menu = input.menu || manualMenu;
+  if (!manualMenu) navigateTo(fixtureScreen(input.menu));
+  const auto screen = reviewNavigation.screen();
+  const bool menu = reviewNavigation.reviewing();
+  const bool changed = screen != previousScreen;
   if (!showingMenu && menu)
   {
-    // 実機の詳細画面への遷移と同じく、Rモードを解除する。
     forceStopRacingMode();
     applyBrightnessMode(BrightnessMode::Day);
   }
@@ -658,20 +733,25 @@ auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
   }
   updateGaugeMonitoring();
   if (!menu) updateRacingMode(simulator::nowMs, currentGForce);
-  if (menu)
-  {
-    refreshMenuScreen(!showingMenu);
-  }
+  if (screen == ReviewScreen::Graph)
+    refreshRiskGraph(changed);
+  else if (screen == ReviewScreen::Details)
+    refreshMenuScreen(changed);
   else
-  {
     updateGauges();
-  }
+  previousScreen = screen;
   return menu;
 }
 
 auto finishRecording(std::ofstream& manifest) -> int
 {
-  manifest << "\n]}\n";
+  manifest << "\n]";
+  if (isRiskScenario())
+  {
+    manifest << R"(,"risk_window":)";
+    writeRiskWindow(manifest);
+  }
+  manifest << "}\n";
   manifest.close();
   exitStatus = 0;
   quit();
@@ -706,7 +786,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       trace.exceptions(std::ios::failbit | std::ios::badbit);
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
       trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g,adc_"
-               "fault,setup_error\n";
+               "fault,setup_error,screen\n";
       manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
                << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)"
                << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)"
@@ -835,7 +915,7 @@ auto main(int argc, char** argv) -> int
         options().scenario != "adc-communication" && options().scenario != "adc-startup" &&
         options().scenario != "adc-steps" && !simulator::isFaultScenario(options().scenario) && !isWarningReview() &&
         options().scenario != "warning-history" && options().scenario != "menu-monitoring" &&
-        options().scenario != "fault-monitoring" && options().scenario != "negative-maxima")
+        options().scenario != "fault-monitoring" && options().scenario != "negative-maxima" && !isRiskScenario())
     {
       throw std::runtime_error("Unknown scenario: " + options().scenario);
     }

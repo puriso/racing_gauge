@@ -25,6 +25,16 @@ from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "risk-window": {
+        "title": "危険点を中央に置く前後1分・油圧/G/油温", "group": "reproduction",
+        "description": "75秒に2G・油圧0.8barのLOW。76秒からタップ後の新グラフで後1分を収集中の表示を確認。詳細ボタンと通常画面への復帰、最悪点の保持、前後60秒が揃ったグラフと何分前かの表示を確認",
+        "seconds": 160, "snapshots": [3, 74, 76, 78, 82, 86, 120, 145, 149, 153, 160],
+    },
+    "risk-predictive": {
+        "title": "LOW未成立の予兆・急低下・最悪点選択・異常除外", "group": "reproduction",
+        "description": "65秒に高G中の急低下DROP、75秒にLOW直前のNEARを記録。100msの一過性低下とADC通信異常では最悪点を上書きしない。前後1分の油温と通信異常の欠損も確認。予兆はヒューリスティックでLOW警告条件は変更しない",
+        "seconds": 160, "snapshots": [3, 64, 66, 76, 79, 90, 96, 120, 145, 152, 155, 160],
+    },
     "negative-maxima": {
         "title": "負温度の最高値・未取得・異常保持・0℃越え", "group": "reproduction",
         "description": "最初の2秒は温度異常でMAX未取得。負温度の初回取得、より高い負温度への更新、再冷却・異常時の保持を詳細画面でも確認。19秒から正温度へ移り、0℃を越えた最高値更新も追う",
@@ -155,7 +165,7 @@ def running_pressure(seconds):
 
 def validate_inputs(metadata):
     validate_communication(metadata)
-    if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring', 'negative-maxima'):
+    if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring', 'negative-maxima', 'risk-window', 'risk-predictive'):
         return
     if metadata["scenario"] in CASES:
         validate_fault_inputs(metadata)
@@ -259,6 +269,29 @@ def validate_inputs(metadata):
 def validate_monitoring(metadata):
     name, frames = metadata['scenario'], metadata['frames']
     at = lambda seconds: frames[round(seconds * FRAME_RATE)]
+    if name.startswith('risk-'):
+        if at(3)['screen'] != 1 or at(3)['risk']['kind'] != 0:
+            raise RuntimeError('最初のタップから記録なしのグラフを開けません')
+        if name == 'risk-window':
+            event = at(145)['risk']
+            if event['kind'] != 3 or not 75000 <= event['at_ms'] < 78000:
+                raise RuntimeError('LOWの最悪点を選択できません')
+            if event['pre_ms'] != 60000 or event['post_ms'] != 60000 or event['age_ms'] < 60000:
+                raise RuntimeError('前後1分と何分前かの記録が不正です')
+            if at(82)['screen'] != 2 or at(145)['screen'] != 1 or at(84)['actual']['warning_history']:
+                raise RuntimeError('グラフ・詳細・メーター復帰時のWリセットが不正です')
+            if at(145)['risk']['at_ms'] != at(84)['risk']['at_ms']:
+                raise RuntimeError('画面から戻ると危険場面が失われています')
+        else:
+            if at(66)['risk']['kind'] != 1 or at(77)['risk']['kind'] != 2:
+                raise RuntimeError('急低下・LOW直前の予兆を記録できません')
+            selected = at(80)['risk']['at_ms']
+            if any(at(t)['risk']['at_ms'] != selected for t in (91, 96, 106, 145, 160)):
+                raise RuntimeError('一過性低下・通信異常で最悪点を上書きしています')
+            if any(frame['actual']['warning_history'] for frame in frames):
+                raise RuntimeError('予兆だけで既存LOWのWを点灯しています')
+            if not any(sample[4] & 16 for sample in metadata['risk_window']):
+                raise RuntimeError('通信異常区間が欠損として残っていません')
     if name == 'negative-maxima':
         if at(0)['actual']['maxima'] != [None, None, None] or at(1.5)['actual']['maxima'][:2] != [None, None]:
             raise RuntimeError('温度の未取得・起動時異常を0度として記録しています')
@@ -346,7 +379,7 @@ def convert_and_check(directory):
             image.save(source.with_suffix(".png"))
             frame = frames[index]
             frame["setup_error_visible"] = setup_error_visible(image)
-            frame["low_visible"] = warning_visible(image)
+            frame["low_visible"] = warning_visible(image) if frame["screen"] == 0 else False
             frame["r_visible"] = racing_visible(image)
             frame["w_visible"] = history_visible(image)
             check_expectations(frame)
@@ -433,7 +466,7 @@ def write_report(output, scenarios):
                'low_event', 'expected_low_event', 'warning_state', 'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
                'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
-               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima']
+               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima', 'risk', 'screen']
     data = []
     for name in scenarios:
         config = SCENARIOS[name]
@@ -442,7 +475,7 @@ def write_report(output, scenarios):
         frames = []
         for frame in metadata['frames']:
             values = {key: frame[key] for key in ('time_ms', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
-            values.update(adc_fault=frame['raw']['adc_fault'])
+            values.update(adc_fault=frame['raw']['adc_fault'], risk=frame.get('risk'), screen=frame['screen'])
             values.update({key: frame['sensor'][key] for key in ('adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last')})
             values.update(adc=frame['raw']['adc'], imu=frame['raw']['imu'],
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))
