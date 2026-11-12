@@ -29,23 +29,29 @@ auto yFor(float value, float minimum, float maximum, int top, int bottom) -> int
 void header()
 {
   mainCanvas.fillRect(0, 0, LCD_WIDTH, 24, COLOR_BLACK);
-  mainCanvas.setFont(&fonts::Font0);
-  mainCanvas.setTextSize(2);
-  mainCanvas.setTextColor(risk::history.event().kind == risk::Kind::Low ? COLOR_RED : COLOR_ORANGE, COLOR_BLACK);
-  mainCanvas.setCursor(4, 4);
+  char title[64];
   if (risk::history.hasEvent())
   {
     const auto seconds = risk::history.ageMs() / 1000;
-    mainCanvas.printf("%s %llum%02llus ago", risk::name(risk::history.event().kind),
-                      static_cast<unsigned long long>(seconds / 60), static_cast<unsigned long long>(seconds % 60));
+    snprintf(title, sizeof(title), "%s %llum%02llus ago", risk::name(risk::history.event().kind),
+             static_cast<unsigned long long>(seconds / 60), static_cast<unsigned long long>(seconds % 60));
   }
   else
   {
-    {
-      mainCanvas.print("NO EVENT");
-    }
+    snprintf(title, sizeof(title), "NO EVENT");
   }
+
+  // 詳細画面と同じ書体に揃え、長い経過時間もDETAILや下段へはみ出させない。
   mainCanvas.setTextSize(1);
+  mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
+  if (mainCanvas.textWidth(title) > 248) mainCanvas.setFont(&fonts::FreeSansBold9pt7b);
+  mainCanvas.setTextColor(risk::history.event().kind == risk::Kind::Low ? COLOR_RED : COLOR_ORANGE, COLOR_BLACK);
+  mainCanvas.setClipRect(4, 0, 248, 24);
+  mainCanvas.setCursor(4, (24 - mainCanvas.fontHeight()) / 2);
+  mainCanvas.print(title);
+  mainCanvas.clearClipRect();
+
+  mainCanvas.setFont(&fonts::Font0);
   mainCanvas.setTextColor(COLOR_WHITE, COLOR_BLACK);
   mainCanvas.drawRect(256, 0, 64, 23, COLOR_GRAY);
   mainCanvas.setCursor(270, 8);
