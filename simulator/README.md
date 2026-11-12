@@ -2,7 +2,7 @@
 
 [確認ページをブラウザーで開く](https://puriso.github.io/racing_gauge/)
 
-既存24本に、前後1分の危険場面グラフと予兆の選択を追加した26本で確認します。
+前後1分の危険場面グラフ・予兆の選択・筑波2000想定の一周を含む28本で確認します。
 本番のセンサー取得・変換・平均化・描画・平滑化・Rモード・LOW警告をSDLで実行し、**24FPS・等速のMP4とindex.html**にまとめます。
 PRのコメントから、ZIPを展開せずGitHub Pages上の確認ページを直接開けます。
 更新・録画は24FPS、すべて1.0倍速です。Rモードの3分保持も実時間どおりに保存し、確認時刻ボタンから場面へ移動できます。
@@ -71,11 +71,13 @@ ADC入力を各カウント500ms保持する専用試験は追加していませ
 
 ## シナリオ
 
-通常走行の油圧は、4秒周期で**3.0〜6.0barを連続往復するADC入力**を作ります。
+筑波想定の2ケースは、Gに連動して油圧が少し下がる一周モデルを使います。それ以外の通常走行の油圧は、4秒周期で**3.0〜6.0barを連続往復するADC入力**を作ります。
 始動直後、意図的な急落、専用の全レンジ試験を除き、5.0barで固定する場面はありません。
 
 | シナリオ | 長さ | 確認する内容 |
 | --- | --- | --- |
+| `tsukuba-lap` | 180秒 | 80秒の合成一周、油温120→140℃、G連動の油圧低下、ダンロップ先で一瞬3barを割ってNEARを記録 |
+| `tsukuba-low` | 180秒 | 同じ一周で油圧低下を長くした比較ケース。500msのLOW成立、前後1分の完成グラフと詳細を確認 |
 | `risk-window` | 160秒 | LOWの最悪点を中央に前後60秒・油温・何分前かを表示。収集中、DETAIL、メーター復帰後の記録保持を確認 |
 | `risk-predictive` | 160秒 | DROP→NEARへの優先更新、一過性低下・通信断・変換タイムアウトの除外、欠損、前後1分を確認 |
 | `negative-maxima` | 24秒 | 起動時温度異常でMAX未取得、負温度の初回取得と最高値更新、再冷却・異常後の保持、詳細画面、0℃越えの更新 |
@@ -186,7 +188,7 @@ Spaceで一時停止、Homeで再生を戻し、Mまたはクリックでグラ�
 python simulator/record.py --output simulator/out/my-review
 ```
 
-11シナリオを実行し、`simulator/out/my-review/index.html`を作ります。
+28シナリオを実行し、`simulator/out/my-review/index.html`を作ります。
 ファイルをブラウザーで直接開けます。動画を参照するため、フォルダー全体を保持してください。
 `--scenario circuit`などで個別に実行でき、ビルド済みなら`--skip-build`を付けられます。
 既存の出力先は上書きしません。FFmpegはPythonパッケージに同梱されています。
@@ -248,7 +250,7 @@ fork・Dependabotでは公開とコメントを省略します。録画ジョブ
 ## English
 
 The simulator feeds raw ADC counts, IMU axes and ALS readings through the unmodified production sensor pipeline and M5GFX SDL.
-Eleven real-time scenarios cover continuous 3–6bar pressure, sudden 2.0G/pressure drops, R activation/three-minute hold/expiry,
+Twenty-eight real-time scenarios cover synthetic Tsukuba 2000 laps, continuous 3–6bar pressure, sudden 2.0G/pressure drops, R activation/three-minute hold/expiry,
 heating/cooling, startup, menus, lighting and raw ADC faults. Production calibration, acquisition intervals,
 sample buffers and IMU offset/direction calculations are executed rather than injecting derived values.
 Videos and optional GIFs carry raw readings and independently calculated average/filter expectations outside the original 320×240 screen.
@@ -319,6 +321,36 @@ ADC通信異常は温度の次回500ms取得を待たず全チャンネルへ反
 未取得、異常前後、NaN/無限値、正常0℃、正温度への更新、チャンネル間の独立性を検証します。
 
 ## 危険場面グラフと予兆
+
+### 筑波2000想定の合成一周
+
+区間順序は筑波サーキットの[公式コース図](https://www.tsukuba-circuit.jp/guide/img/course-spec_2000_01.pdf)を参考にしています。
+**80秒というラップ時間、各区間の時刻・G・油温・油圧は、ユーザー指定の条件を確認するための合成値です。実測テレメトリーではありません。**
+最大負荷をダンロップ後の80R/170Rに置くことも、この試験の条件です。
+
+| 動画の時刻 | 区間・動作 |
+| --- | --- |
+| 0〜60秒 | 起動・IMU補正・走行前の記録。油温120℃ |
+| 60〜64秒 | ホームストレート、一周の開始 |
+| 64〜71秒 | 第1コーナー |
+| 71〜78秒 | S字 |
+| 78〜88秒 | 第1ヘアピン |
+| 88〜97秒 | ダンロップ |
+| 97〜107秒 | 80R/170R。左Gが最大2.0、100秒付近だけ油圧が3barを割る |
+| 107〜117秒 | 第2ヘアピン |
+| 117〜128秒 | バックストレート |
+| 128〜140秒 | 最終〜ホーム。一周を終え、油温140℃へ |
+| 145秒 | 走行後のグラフを開く |
+| 168秒 | 最悪点の前後60秒が揃ったグラフと発生からの経過時間を確認 |
+| 170〜172秒 | DETAILで従来画面、174秒にグラフへ戻って記録保持を確認 |
+
+油温は60〜140秒の一周を通して120→140℃へ直線的に上がります。油圧は連続的な基準変動に対して0.5bar/Gだけ減らし、80R頂点だけ追加の短い低下を与えます。
+`tsukuba-lap`は本番の取得平均・表示平滑化後の3bar以下が500ms未満で、LOWを成立させずNEARとして記録します。
+`tsukuba-low`は同じ箇所の低下だけを長くし、500ms以上でLOWが成立する比較ケースです。警告条件は変更しません。
+どちらもADCカウントとIMU各軸を本番処理へ入力し、温度・油圧・G・方向・LOW・危険点を独立モデルと全フレーム照合します。
+区間名・一周の経過・合成データであることは動画の画面外と確認ページへ表示します。動画は24FPS・等速です。
+
+### 危険点選択の専用ケース
 
 `risk-window`は40秒にF・1.4G、55秒にR・1.8G、75〜78秒にL・2Gと0.8bar、95秒にB・1.2Gを生IMU各軸で入力します。76秒から収集中のグラフ、82秒にDETAIL、
 84秒のメーター復帰でWだけ消去し、145秒には前後60秒が揃った同じ危険点を表示します。

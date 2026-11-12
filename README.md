@@ -13,7 +13,7 @@ A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [
 PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 生ADCカウント・IMU各軸・照度を本番のセンサー処理へ渡し、変換・補正・取得周期・平均化から表示まで確認します。
 シミュレーションと動画は24FPS・1.0倍速です。
-確認ページは26シナリオを収録し、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
+確認ページは28シナリオを収録し、筑波2000想定の一周、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
 
 ADC通信異常への対応（[#381](https://github.com/puriso/racing_gauge/pull/381)）はmainへ取り込み済みです。
 [通信異常の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-communication)と[起動時未接続の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-startup)で、5msの変換期限・1秒間隔の再接続・正常復帰を確認できます。
@@ -361,7 +361,7 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. Sensor faults display `ERR`; unmeasured readings and maxima display `---`.
 
 The sensor table above describes the firmware's conversion model, not manufacturer calibration data.
-Main includes twenty-six 24 FPS real-time preview scenarios, including raw ADC sweeps, disconnected signals, temperature boundaries, negative-temperature maxima, and ADC communication failures.
+The preview includes twenty-eight 24 FPS real-time scenarios, including synthetic Tsukuba 2000 laps, raw ADC sweeps, disconnected signals, temperature boundaries, negative-temperature maxima, and ADC communication failures.
 ADC waits are bounded to 5ms and reconnection is attempted at one-second intervals; temperature recovery starts from the first valid sample.
 Main includes a latched W cleared when leaving the detail screen. Maxima start from the first valid sample, including negative temperatures; unmeasured maxima display `---`. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
 Tap the gauge to review the worst LOW/precursor event, centered in a ±60-second pressure/G/oil-temperature chart with elapsed time. DETAIL opens the previous statistics screen. The fixed RAM log is cleared on reboot; precursor rules are heuristic and do not change LOW alerts.

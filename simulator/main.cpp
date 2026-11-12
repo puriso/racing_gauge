@@ -31,6 +31,7 @@
 #include "modules/startup_error.h"
 #include "sensor_inputs.hpp"
 #include "telemetry.hpp"
+#include "tsukuba_lap.hpp"
 
 namespace simulator
 {
@@ -77,7 +78,11 @@ struct Targets
   int lux = simulator::DEFAULT_AMBIENT_LUX;
 };
 
-auto isRiskScenario() -> bool { return options().scenario == "risk-window" || options().scenario == "risk-predictive"; }
+auto isTsukubaScenario() -> bool { return options().scenario == "tsukuba-lap" || options().scenario == "tsukuba-low"; }
+auto isRiskScenario() -> bool
+{
+  return isTsukubaScenario() || options().scenario == "risk-window" || options().scenario == "risk-predictive";
+}
 
 auto isWarningReview() -> bool
 {
@@ -95,6 +100,7 @@ auto isAdcOrSensorFaultScenario() -> bool
 // NOLINTBEGIN(readability-magic-numbers)
 auto defaultSeconds() -> unsigned int
 {
+  if (isTsukubaScenario()) return simulator::TSUKUBA_SECONDS;
   if (isRiskScenario()) return 160;
   if (options().scenario == "negative-maxima") return 24;
   if (options().scenario == "menu-monitoring") return 28;
@@ -267,6 +273,11 @@ auto sample(double ratio) -> Targets
   // 時間指定を変えても同じ順序のシナリオを伸縮する。
   const auto progress = static_cast<float>(ratio);
   const auto seconds = static_cast<float>(ratio * defaultSeconds());
+  if (isTsukubaScenario())
+  {
+    const auto lap = simulator::tsukubaLap(seconds, options().scenario == "tsukuba-low");
+    return {lap.oil, lap.water, lap.pressure, std::hypot(lap.longitudinal, lap.lateral), false};
+  }
   if (options().scenario == "adc-steps")
   {
     return {0.0F, 0.0F, 0.0F, 0.0F, false};
@@ -429,6 +440,11 @@ auto makeInputs(unsigned int frame, const Targets& target, float seconds) -> Inp
   }
   auto input = simulator::sensorInputs(target);
   simulator::applyFaultInputs(options().scenario, frame * MS_PER_SECOND / TICKS_PER_SECOND, input.adc);
+  if (isTsukubaScenario())
+  {
+    const auto lap = simulator::tsukubaLap(seconds, options().scenario == "tsukuba-low");
+    input.imu = {simulator::FIXTURE_AX_BIAS + lap.longitudinal, simulator::FIXTURE_AY_BIAS + lap.lateral, 1.0F};
+  }
   if (options().scenario == "risk-window")
   {
     if (seconds >= 40.0F && seconds < 41.0F)
@@ -560,6 +576,12 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
              << target.pressure << R"(,"g":)" << target.acceleration << '}';
   }
   manifest << R"(,"screen":)" << static_cast<int>(reviewNavigation.screen());
+  if (isTsukubaScenario())
+  {
+    const float seconds = static_cast<float>(tick) * defaultSeconds() / (options().seconds * TICKS_PER_SECOND);
+    const auto lap = simulator::tsukubaLap(seconds, options().scenario == "tsukuba-low");
+    manifest << R"(,"track":{"section":")" << lap.section << R"(","lap_s":)" << lap.lapSeconds << R"(,"synthetic":true})";
+  }
   manifest << R"(,"setup_error":)" << setupError << R"(,"g":)" << currentGForce << R"(,"lux":)" << input.lux
            << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode
            << R"(,"g_cardinal":)" << static_cast<int>(currentGCardinalDirection) << R"(,"sensor":)";
@@ -696,6 +718,12 @@ auto fixtureScreen(bool menu) -> ReviewScreen
   if (!isRiskScenario()) return menu ? ReviewScreen::Details : ReviewScreen::Gauges;
   const uint32_t now = simulator::nowMs;
   if (now >= 3000 && now < 5000) return ReviewScreen::Graph;
+  if (isTsukubaScenario())
+  {
+    if ((now >= 145000 && now < 170000) || now >= 174000) return ReviewScreen::Graph;
+    if (now >= 170000 && now < 172000) return ReviewScreen::Details;
+    return ReviewScreen::Gauges;
+  }
   if (options().scenario == "risk-window")
   {
     if ((now >= 76000 && now < 82000) || (now >= 86000 && now < 90000) || (now >= 145000 && now < 149000) || now >= 153000)
@@ -896,7 +924,7 @@ auto main(int argc, char** argv) -> int
                      "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|adc-communication|adc-"
                      "startup|adc-steps|sensor-disconnect|"
                      "temperature-high|temperature-low|warning-history|warning-repeat|warning-pending|warning-brief|"
-                     "startup|warm-start|menu] "
+                     "startup|warm-start|menu|tsukuba-lap|tsukuba-low] "
                      "[--seconds N] [--capture "
                      "NEW_DIRECTORY]\n";
         return 0;

@@ -138,7 +138,7 @@ def add_expectations(directory, metadata):
                 acquired = sensor.snapshot()
             else:
                 acquired = sensor.step(now, raw)
-            sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als'], 'setup_error': setup_error, 'risk_scenario': metadata['scenario'].startswith('risk-')}
+            sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als'], 'setup_error': setup_error, 'risk_scenario': metadata['scenario'].startswith(('risk-', 'tsukuba-'))}
             expected = reference.step(sample)
             expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
                                   for key, value in acquired.items()}

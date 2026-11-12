@@ -65,7 +65,11 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         name = ('NONE', 'DROP(est)', 'NEAR(est)', 'LOW')[event['kind']]
         label(16, 297, f"RISK {name} | age {event['age_ms']/1000:.1f}s | pre/post {event['pre_ms']/1000:g}/{event['post_ms']/1000:g}s", font=small)
         direction = ('-', 'F', 'R', 'L', 'B')[event['g_direction']]
-        label(16, 309, f'0s direction {direction} | Peak letters: F front / R right / L left / B back.', font=small)
+        if sample.get('track'):
+            track = sample['track']
+            label(16, 309, f"SYN TC2000 | lap {track['lap_s']:.1f}/80s | {track['section']} | 0s dir {direction}", font=small)
+        else:
+            label(16, 309, f'0s direction {direction} | Peak letters: F front / R right / L left / B back.', font=small)
     elif scenario in ('adc-startup', 'adc-communication'):
         modes = ('OK', 'NO DEVICE', 'BUSY', 'CONFIG WRITE FAIL', 'STATUS READ FAIL', 'RESULT READ FAIL', 'SECOND RESULT FAIL')
         state = sample['sensor']

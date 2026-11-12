@@ -22,9 +22,20 @@ from warning_review import REVIEWS, run_spot_checks, review_spots, validate_revi
 from fault_cases import CASES, validate_fault_inputs
 from reference import add_expectations, check_expectations
 from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
+from tsukuba_lap import validate_tsukuba
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    "tsukuba-lap": {
+        "title": "筑波2000一周・ダンロップ先の一瞬の油圧低下", "group": "reproduction",
+        "description": "60〜140秒の80秒一周を想定した合成データ。油温120→140℃、Gに応じて油圧が少し低下。100秒付近のダンロップ先80R/170Rで最大2Gと一瞬の3bar割れ。500ms未満なのでLOW未成立、NEARを保存。168秒で前後1分の完成グラフを確認。実測ログではありません",
+        "seconds": 180, "snapshots": [3, 60, 67, 75, 83, 94, 99.5, 100.25, 101, 111, 120, 132, 140, 145, 168, 170, 174, 180],
+    },
+    "tsukuba-low": {
+        "title": "筑波2000一周・ダンロップ先でLOW成立する比較ケース", "group": "reproduction",
+        "description": "同じ80秒の合成一周で、ダンロップ先の油圧低下だけを長くした比較用ケース。取得平均・表示平滑化後も3bar以下が500ms以上続いてLOW成立。油温120→140℃、最大2G、Gに連動する油圧変化。168秒で前後1分のグラフを確認。実測ログではありません",
+        "seconds": 180, "snapshots": [60, 67, 83, 94, 99.5, 100.25, 101, 104, 111, 132, 140, 145, 168, 170, 174, 180],
+    },
     "risk-window": {
         "title": "危険点を中央に置く前後1分・油圧/G/油温", "group": "reproduction",
         "description": "75秒に2G・油圧0.8barのLOW。40/55/75/95秒にF/R/L/BのGを入力し、145秒の完成グラフで各ピークの方向と油温の自動スケールを確認。76秒から収集中、82秒の詳細ボタン、通常画面への復帰後の保持、何分前かも確認",
@@ -165,6 +176,8 @@ def running_pressure(seconds):
 
 def validate_inputs(metadata):
     validate_communication(metadata)
+    if metadata['scenario'].startswith('tsukuba-'):
+        return
     if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring', 'negative-maxima', 'risk-window', 'risk-predictive'):
         return
     if metadata["scenario"] in CASES:
@@ -269,6 +282,8 @@ def validate_inputs(metadata):
 def validate_monitoring(metadata):
     name, frames = metadata['scenario'], metadata['frames']
     at = lambda seconds: frames[round(seconds * FRAME_RATE)]
+    if name.startswith('tsukuba-'):
+        validate_tsukuba(metadata)
     if name.startswith('risk-'):
         if at(3)['screen'] != 1 or at(3)['risk']['kind'] != 0:
             raise RuntimeError('最初のタップから記録なしのグラフを開けません')
@@ -471,7 +486,7 @@ def write_report(output, scenarios):
                'low_event', 'expected_low_event', 'warning_state', 'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
                'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
-               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima', 'risk', 'screen']
+               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima', 'risk', 'screen', 'track']
     data = []
     for name in scenarios:
         config = SCENARIOS[name]
@@ -480,7 +495,7 @@ def write_report(output, scenarios):
         frames = []
         for frame in metadata['frames']:
             values = {key: frame[key] for key in ('time_ms', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
-            values.update(adc_fault=frame['raw']['adc_fault'], risk=frame.get('risk'), screen=frame['screen'])
+            values.update(adc_fault=frame['raw']['adc_fault'], risk=frame.get('risk'), screen=frame['screen'], track=frame.get('track'))
             values.update({key: frame['sensor'][key] for key in ('adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last')})
             values.update(adc=frame['raw']['adc'], imu=frame['raw']['imu'],
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))
