@@ -41,6 +41,7 @@ uint32_t nowMs = 0;
 namespace
 {
 constexpr unsigned int TICKS_PER_SECOND = 24;
+constexpr unsigned int SENSOR_TICKS_PER_SECOND = 60;
 constexpr unsigned int DEFAULT_SECONDS = 20;
 constexpr unsigned int MIN_SECONDS = 5;
 constexpr unsigned int MAX_SECONDS = 240;
@@ -65,6 +66,9 @@ auto options() -> Options&
 }
 std::atomic<int> exitStatus{1};
 bool adcInitializationFailed = false;
+unsigned int latestSampleIndex = 0;
+uint32_t latestSampleTime = 0;
+float latestStimulusSeconds = 0;
 
 using Inputs = simulator::RawInputs;
 
@@ -81,7 +85,8 @@ struct Targets
 auto isTsukubaScenario() -> bool { return options().scenario == "tsukuba-lap" || options().scenario == "tsukuba-low"; }
 auto isRiskScenario() -> bool
 {
-  return isTsukubaScenario() || options().scenario == "risk-window" || options().scenario == "risk-predictive";
+  return isTsukubaScenario() || options().scenario == "risk-window" || options().scenario == "risk-predictive" ||
+         options().scenario == "high-g-review";
 }
 
 auto isWarningReview() -> bool
@@ -101,6 +106,7 @@ auto isAdcOrSensorFaultScenario() -> bool
 auto defaultSeconds() -> unsigned int
 {
   if (isTsukubaScenario()) return simulator::TSUKUBA_SECONDS;
+  if (options().scenario == "high-g-review") return 140;
   if (isRiskScenario()) return 160;
   if (options().scenario == "negative-maxima") return 24;
   if (options().scenario == "menu-monitoring") return 28;
@@ -277,6 +283,19 @@ auto sample(double ratio) -> Targets
   {
     const auto lap = simulator::tsukubaLap(seconds, options().scenario == "tsukuba-low");
     return {lap.oil, lap.water, lap.pressure, std::hypot(lap.longitudinal, lap.lateral), false};
+  }
+  if (options().scenario == "high-g-review")
+  {
+    if (seconds >= 20 && seconds < 23) return {100, 95, 5.5F, 1.2F, false};
+    if (seconds >= 30.045F && seconds < 30.06F) return {100, 95, 5.3F, 1.5F, false};
+    if (seconds >= 39 && seconds < 40) return {100, 95, 4.8F, 0, false};
+    if (seconds >= 40 && seconds < 43) return {100, 95, seconds < 42 ? 4.8F : 4.2F, 1.8F, false};
+    if (seconds >= 49 && seconds < 53) return {100, 95, 4, seconds < 50 ? 0.0F : 1.7F, false};
+    if (seconds >= 59 && seconds < 60) return {100, 95, 4, 0, false};
+    if (seconds >= 60 && seconds < 63) return {100, 95, 4, 1.81F, false};
+    if (seconds >= 69 && seconds < 70) return {100, 95, 5, 0, false};
+    if (seconds >= 70 && seconds < 76) return {100, 95, seconds < 75 ? 5.0F : 4.5F, 1.9F, false};
+    return {100, 95, runningPressure(seconds), 0, false};
   }
   if (options().scenario == "adc-steps")
   {
@@ -559,7 +578,8 @@ void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& ta
 void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs& input, const Targets& target,
                         bool showingMenu, bool setupError)
 {
-  manifest << R"({"time_ms":)" << tick * MS_PER_SECOND / TICKS_PER_SECOND << R"(,"raw":{"adc":[)";
+  manifest << R"({"time_ms":)" << tick * MS_PER_SECOND / TICKS_PER_SECOND << R"(,"sample_index":)" << latestSampleIndex
+           << R"(,"sample_time_ms":)" << latestSampleTime << R"(,"raw":{"adc":[)";
   for (size_t channel = 0; channel < input.adc.size(); ++channel)
   {
     if (channel != 0)
@@ -578,9 +598,10 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
   manifest << R"(,"screen":)" << static_cast<int>(reviewNavigation.screen());
   if (isTsukubaScenario())
   {
-    const float seconds = static_cast<float>(tick) * defaultSeconds() / (options().seconds * TICKS_PER_SECOND);
-    const auto lap = simulator::tsukubaLap(seconds, options().scenario == "tsukuba-low");
-    manifest << R"(,"track":{"section":")" << lap.section << R"(","lap_s":)" << lap.lapSeconds << R"(,"synthetic":true})";
+    const auto lap = simulator::tsukubaLap(latestStimulusSeconds, options().scenario == "tsukuba-low");
+    manifest << R"(,"track":{"section":")" << lap.section << R"(","lap_s":)" << lap.lapSeconds << R"(,"lap_number":)"
+             << lap.lapNumber << R"(,"throttle":)" << lap.throttle << R"(,"longitudinal_g":)" << lap.longitudinal
+             << R"(,"lateral_g":)" << lap.lateral << R"(,"synthetic":true})";
   }
   manifest << R"(,"setup_error":)" << setupError << R"(,"g":)" << currentGForce << R"(,"lux":)" << input.lux
            << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode
@@ -718,6 +739,13 @@ auto fixtureScreen(bool menu) -> ReviewScreen
   if (!isRiskScenario()) return menu ? ReviewScreen::Details : ReviewScreen::Gauges;
   const uint32_t now = simulator::nowMs;
   if (now >= 3000 && now < 5000) return ReviewScreen::Graph;
+  if (options().scenario == "high-g-review")
+  {
+    if ((now >= 21000 && now < 24000) || (now >= 31000 && now < 33000) || (now >= 44000 && now < 47000) ||
+        (now >= 52000 && now < 54000) || (now >= 64000 && now < 66000) || now >= 77000)
+      return ReviewScreen::Graph;
+    return ReviewScreen::Gauges;
+  }
   if (isTsukubaScenario())
   {
     if ((now >= 145000 && now < 170000) || now >= 174000) return ReviewScreen::Graph;
@@ -756,7 +784,6 @@ void navigateTo(ReviewScreen desired)
 
 auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
 {
-  inject(input);
   static unsigned long lastAlsMeasurementTime = 0;
   static ReviewScreen previousScreen = ReviewScreen::Gauges;
   if (!showingMenu && !isRacingMode && simulator::nowMs - lastAlsMeasurementTime >= ALS_MEASUREMENT_INTERVAL_MS)
@@ -779,8 +806,6 @@ auto renderFrame(const Inputs& input, bool manualMenu, bool showingMenu) -> bool
     resetGaugeState();
     updateBacklightLevel();
   }
-  updateGaugeMonitoring();
-  if (!menu) updateRacingMode(simulator::nowMs, currentGForce);
   if (screen == ReviewScreen::Graph)
     refreshRiskGraph(changed);
   else if (screen == ReviewScreen::Details)
@@ -835,24 +860,30 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
       trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g,adc_"
                "fault,setup_error,screen\n";
-      manifest << R"({"schema_version":2,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
-               << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT << R"(,"water_temp":)"
-               << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT << R"(,"ambient":)"
-               << SENSOR_AMBIENT_LIGHT_PRESENT << R"(},"settings":{"pressure_alpha":)" << OIL_PRESSURE_SMOOTHING_ALPHA
-               << R"(,"als_interval_ms":)" << ALS_MEASUREMENT_INTERVAL_MS << R"(,"median_size":)" << MEDIAN_BUFFER_SIZE
-               << R"(,"lux_day":)" << static_cast<int>(LUX_THRESHOLD_DAY) << R"(,"lux_dusk":)"
-               << static_cast<int>(LUX_THRESHOLD_DUSK) << R"(,"brightness":[)" << static_cast<int>(BACKLIGHT_DAY) << ','
-               << static_cast<int>(BACKLIGHT_DUSK) << ',' << static_cast<int>(BACKLIGHT_NIGHT) << R"(],"racing_hold_ms":)"
-               << RACING_MODE_START_HOLD_MS << R"(,"racing_duration_ms":)" << RACING_MODE_DURATION_MS << R"(,"racing_g":)"
+      manifest << R"({"schema_version":3,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
+               << R"(,"sample_hz":)" << SENSOR_TICKS_PER_SECOND << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT
+               << R"(,"water_temp":)" << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT
+               << R"(,"ambient":)" << SENSOR_AMBIENT_LIGHT_PRESENT << R"(},"settings":{"pressure_alpha":)"
+               << OIL_PRESSURE_SMOOTHING_ALPHA << R"(,"als_interval_ms":)" << ALS_MEASUREMENT_INTERVAL_MS
+               << R"(,"median_size":)" << MEDIAN_BUFFER_SIZE << R"(,"lux_day":)" << static_cast<int>(LUX_THRESHOLD_DAY)
+               << R"(,"lux_dusk":)" << static_cast<int>(LUX_THRESHOLD_DUSK) << R"(,"brightness":[)"
+               << static_cast<int>(BACKLIGHT_DAY) << ',' << static_cast<int>(BACKLIGHT_DUSK) << ','
+               << static_cast<int>(BACKLIGHT_NIGHT) << R"(],"racing_hold_ms":)" << RACING_MODE_START_HOLD_MS
+               << R"(,"racing_duration_ms":)" << RACING_MODE_DURATION_MS << R"(,"racing_g":)"
                << RACING_MODE_START_THRESHOLD_G << R"(},"sensor_settings":)";
       writeSensorSettings(manifest);
       manifest << R"(,"startup_error_title":")" << ADC_INIT_ERROR_TITLE << R"(","startup_error_hint":")"
                << ADC_INIT_ERROR_HINT << R"(","frames":[)" << '\n';
     }
-    std::cout << "Scenario: " << options().scenario << " | 24FPS | Space: pause | Home: replay | M/click: menu\n";
+    std::cout << "Scenario: " << options().scenario
+              << " | display 24FPS / sensor 60Hz | Space: pause | Home: replay | M/click: menu\n";
     const auto totalTicks = options().seconds * TICKS_PER_SECOND;
     Controls controls;
     bool showingMenu = false;
+    unsigned int elapsedFrames = 0;
+    unsigned int nextSample = 0;
+    Targets target = sample(0);
+    Inputs input = makeInputs(0, target, 0);
     while (*running)
     {
       if (!recording)
@@ -860,20 +891,41 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
         controls.poll();
       }
       const auto tick = controls.tick;
-      const double progress = static_cast<double>(tick) / static_cast<double>(totalTicks);
-      const auto target = sample(progress);
-      const auto input = makeInputs(tick, target, static_cast<float>(progress * defaultSeconds()));
+      const unsigned int sampleLimit = elapsedFrames * SENSOR_TICKS_PER_SECOND / TICKS_PER_SECOND;
+      if (!controls.paused)
+      {
+        while (nextSample <= sampleLimit)
+        {
+          // 共通の120Hz時刻上で、取得60Hzと描画24Hzを順序通り実行する。
+          const int64_t sourceTicks = static_cast<int64_t>(tick) * 5 -
+                                      (static_cast<int64_t>(elapsedFrames) * 5 - static_cast<int64_t>(nextSample) * 2);
+          const double sourceTime = static_cast<double>(std::max<int64_t>(0, sourceTicks)) / 120;
+          const double progress = sourceTime / options().seconds;
+          target = sample(progress);
+          latestStimulusSeconds = static_cast<float>(progress * defaultSeconds());
+          input =
+              makeInputs(static_cast<unsigned int>(std::max<int64_t>(0, sourceTicks) / 5), target, latestStimulusSeconds);
+          simulator::nowMs = nextSample * MS_PER_SECOND / SENSOR_TICKS_PER_SECOND;
+          latestSampleTime = simulator::nowMs;
+          latestSampleIndex = nextSample;
+          const bool sampleSetupError = nextSample == 0 && adcInitializationFailed;
+          if (!sampleSetupError)
+          {
+            inject(input);
+            updateGaugeMonitoring();
+            if (!reviewNavigation.reviewing()) updateRacingMode(simulator::nowMs, currentGForce);
+          }
+          if (recording) writeInputTrace(trace, input, target, reviewNavigation.reviewing(), sampleSetupError);
+          ++nextSample;
+        }
+      }
+      simulator::nowMs = elapsedFrames * MS_PER_SECOND / TICKS_PER_SECOND;
       // 再生を戻しても時計は単調増加させ、警告の継続時間やピーク値を壊さない。
       const bool setupError = tick == 0 && simulator::nowMs == 0 && adcInitializationFailed;
       if (!controls.paused && !setupError)
       {
         showingMenu = renderFrame(input, controls.manualMenu, showingMenu);
       }
-      if (recording)
-      {
-        writeInputTrace(trace, input, target, showingMenu, setupError);
-      }
-
       if (recording)
       {
         captureFrame(tick);
@@ -890,7 +942,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       if (!controls.paused && tick < totalTicks)
       {
         ++controls.tick;
-        simulator::nowMs += (controls.tick * MS_PER_SECOND / TICKS_PER_SECOND) - (tick * MS_PER_SECOND / TICKS_PER_SECOND);
+        ++elapsedFrames;
       }
       if (!recording)
       {

@@ -23,7 +23,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     def label(x, y, text, color='#e9edf3', font=normal):
         draw.text((x, y), text, fill=color, font=font)
 
-    heading = f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x'
+    sample_hz = 60 if 'sample_time_ms' in sample else FRAME_RATE
+    heading = f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS/{sample_hz}Hz | 1.0x'
     if 'input_temperature_c' in sample:
         spec = TEMPERATURE_SENSOR_SPEC
         heading += f" | PDF00903S op {spec['minimum_c']:g}..{spec['maximum_c']:g}C"
@@ -62,12 +63,12 @@ def annotated_frame(source, sample, scenario, sensor_settings):
               f"dir {observed['direction']}/{wanted['direction']}", font=small)
     elif 'risk' in sample:
         event = sample['risk']
-        name = ('NONE', 'DROP(est)', 'NEAR(est)', 'LOW')[event['kind']]
+        name = ('PEAK G' if event.get('recorded') else 'WAITING', 'DROP(est)', 'NEAR(est)', 'LOW')[event['kind']]
         label(16, 297, f"RISK {name} | age {event['age_ms']/1000:.1f}s | pre/post {event['pre_ms']/1000:g}/{event['post_ms']/1000:g}s", font=small)
         direction = ('-', 'F', 'R', 'L', 'B')[event['g_direction']]
         if sample.get('track'):
             track = sample['track']
-            label(16, 309, f"SYN TC2000 | lap {track['lap_s']:.1f}/80s | {track['section']} | 0s dir {direction}", font=small)
+            label(16, 309, f"SYN TC2000 | lap{track['lap_number']} {track['lap_s']:.1f}/80s | {track['section']} | THR {track['throttle']*100:.0f}%", font=small)
         else:
             label(16, 309, f'0s direction {direction} | Peak letters: F front / R right / L left / B back.', font=small)
     elif scenario in ('adc-startup', 'adc-communication'):

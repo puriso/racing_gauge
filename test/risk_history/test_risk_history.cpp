@@ -258,6 +258,35 @@ static void oilScaling()
   range = risk::oilTemperatureRange(missing);
   expect(range.minimum == 0 && range.maximum == 150, "油温未取得時も軸幅をゼロにしない");
 }
+
+static void normalSelection()
+{
+  risk::History h;
+  feed(h, 0, 999, reading(5));
+  expect(!h.hasSelection(), "起動直後の移動平均の過渡値を代表点にしない");
+  h.update(1000, reading(5));
+  expect(h.hasSelection() && !h.hasEvent(), "危険点がなくても正常値からグラフを表示する");
+  h.update(2000, reading(4.8F, 1.8F));
+  h.update(2100, reading(4.0F, 1.81F));
+  expect(h.event().occurredMs == 2100 && h.event().pressure == 4.0F, "同じ0.1G帯では最低油圧を優先する");
+  h.update(2200, reading(3.8F, 1.7F));
+  expect(h.event().occurredMs == 2100, "Gが小さい場面へ最低油圧だけで移動しない");
+  h.update(2300, reading(5.5F, 1.9F));
+  expect(h.event().occurredMs == 2300, "より大きいGなら油圧が高くても代表点を更新する");
+  h.update(63300, reading(5));
+  expect(h.postMs() == 60000 && h.ageMs() == 61000, "正常時の代表点も前後1分と経過時間を保持する");
+}
+
+static void dangerOverridesOverview()
+{
+  risk::History h;
+  feed(h, 0, 2000, reading(5, 2));
+  expect(h.hasSelection() && !h.hasEvent(), "高Gだけでは危険点と分類しない");
+  feed(h, 2100, 2500, reading(3.4F, 1.2F));
+  expect(h.hasEvent() && h.event().kind == Kind::NearLow, "より小さいGでも危険点が成立すれば優先する");
+  h.update(3000, reading(5, 3));
+  expect(h.event().kind == Kind::NearLow && h.event().g == 1.2F, "危険点は後続の正常な最大Gで上書きしない");
+}
 int main()
 {
   const struct
@@ -278,7 +307,9 @@ int main()
                {"peak_direction", retainPeakDirection},
                {"peak_annotations", peakAnnotations},
                {"nearby_peaks", nearbyPeaks},
-               {"oil_scaling", oilScaling}};
+               {"oil_scaling", oilScaling},
+               {"normal_selection", normalSelection},
+               {"danger_overview", dangerOverridesOverview}};
   int failed = 0;
   for (const auto& test : tests)
   {

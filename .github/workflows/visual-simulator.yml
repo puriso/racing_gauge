@@ -26,22 +26,53 @@ on:
       - '.github/workflows/visual-simulator.yml'
   workflow_dispatch:
     inputs:
+      suite:
+        description: 'テスト群（通常と筑波は独立して実行）'
+        type: choice
+        options: [all, standard, tsukuba]
+        default: all
       scenario:
         description: '録画シナリオ'
         type: choice
-        options: [all, tsukuba-lap, tsukuba-low, risk-window, risk-predictive, negative-maxima, menu-monitoring, fault-monitoring, warning-history, warning-repeat, warning-pending, warning-brief, adc-startup, adc-communication, sensor-disconnect, temperature-high, temperature-low, adc-steps, circuit, racing, ambient, raw-faults, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
+        options: [all, high-g-review, tsukuba-lap, tsukuba-low, risk-window, risk-predictive, negative-maxima, menu-monitoring, fault-monitoring, warning-history, warning-repeat, warning-pending, warning-brief, adc-startup, adc-communication, sensor-disconnect, temperature-high, temperature-low, adc-steps, circuit, racing, ambient, raw-faults, ramp, cooldown, pressure-sweep, warnings, startup, warm-start, menu]
         default: all
 
 permissions:
   contents: read
 
 jobs:
-  record:
-    outputs:
-      artifact_url: ${{ steps.recording.outputs.artifact-url }}
-      preview_artifact_id: ${{ steps.preview.outputs.artifact-id }}
+  select-suites:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    outputs:
+      suites: ${{ steps.select.outputs.suites }}
+    steps:
+      - id: select
+        env:
+          TEST_SUITE: ${{ inputs.suite || 'all' }}
+          TEST_SCENARIO: ${{ inputs.scenario || 'all' }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          suite, scenario = os.environ['TEST_SUITE'], os.environ['TEST_SCENARIO']
+          if scenario != 'all':
+              suites = ['tsukuba' if scenario.startswith('tsukuba-') else 'standard']
+              if suite != 'all' and suite not in suites:
+                  raise ValueError('指定したケースは選択したテスト群に含まれません')
+          else:
+              suites = ['standard', 'tsukuba'] if suite == 'all' else [suite]
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('suites=' + json.dumps(suites) + '\n')
+          PY
+
+  record:
+    needs: select-suites
+    name: record (${{ matrix.suite }})
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.select-suites.outputs.suites) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,12 +99,13 @@ jobs:
       - name: シナリオの録画と描画検証
         env:
           SIM_SCENARIO: ${{ inputs.scenario || 'all' }}
-        run: python simulator/record.py --skip-build --scenario "$SIM_SCENARIO" --output simulator/out/ci
+          SIM_SUITE: ${{ matrix.suite }}
+        run: python simulator/record.py --skip-build --suite "$SIM_SUITE" --scenario "$SIM_SCENARIO" --output simulator/out/ci
       - name: 公開用の確認ページを保存
         id: preview
         uses: actions/upload-artifact@v4
         with:
-          name: visual-report
+          name: visual-report-${{ matrix.suite }}
           path: simulator/out/ci/public/
           if-no-files-found: error
           retention-days: 14
@@ -82,7 +114,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visual-simulator
+          name: visual-simulator-${{ matrix.suite }}
           path: simulator/out/ci/
           if-no-files-found: error
           retention-days: 14
@@ -91,9 +123,9 @@ jobs:
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
           ### SDL 目視テスト録画
           PRのコメントにある **等速の確認ページを開く** から、GitHub Pagesで直接確認できます。
-          全PNGは **Artifacts → visual-simulator** からダウンロードできます。
+          全PNGは **Artifacts → visual-simulator-standard / visual-simulator-tsukuba** からダウンロードできます。
           シナリオごとの `recording.mp4`、代表フレーム、全 PNG、入力 JSON を保存しています。
-          筑波2000想定の一周・油圧3〜6barの連続変動・最大2.0Gと油圧急落・Rの3分保持と解除・温度の上昇と下降・周囲の明るさ・生ADCの1カウント往復など、28シナリオを等速で確認できます。
+          通常27ケースと筑波専用2ケースを別ジョブ・別ページで確認できます。取得は60Hz、描画と録画は24FPS・等速です。
           動画の画面外に生ADCカウント・電圧・IMU各軸・変換と平滑化の期待値・照度・輝度の期待／実際を表示します。
           更新・録画は24FPS、全区間1.0倍速です。FPS計測・比較機能は含めません。
           本番の描画・平滑化・警告処理を使用し、センサーと時刻を模擬しています。
@@ -140,7 +172,7 @@ jobs:
         if: steps.current.outputs.publish == 'true'
         uses: actions/download-artifact@v4
         with:
-          artifact-ids: ${{ needs.record.outputs.preview_artifact_id }}
+          pattern: visual-report-*
           path: ${{ runner.temp }}/visual-report
           merge-multiple: true
       - name: 公開ファイルを検証してPR別に保存
@@ -163,12 +195,12 @@ jobs:
           number, sha = os.environ['PR_NUMBER'], os.environ['EXPECTED_SHA']
           assert re.fullmatch(r'[1-9][0-9]*', number)
           assert re.fullmatch(r'[0-9a-f]{40}', sha)
-          scenarios = 'tsukuba-lap|tsukuba-low|risk-window|risk-predictive|negative-maxima|menu-monitoring|fault-monitoring|warning-history|warning-repeat|warning-pending|warning-brief|adc-startup|adc-communication|sensor-disconnect|temperature-high|temperature-low|adc-steps|circuit|racing|ambient|raw-faults|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
-          allowed = re.compile(rf'index\.html|spot-checks\.json|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|poster\.png|inputs\.json)')
+          scenarios = 'high-g-review|tsukuba-lap|tsukuba-low|risk-window|risk-predictive|negative-maxima|menu-monitoring|fault-monitoring|warning-history|warning-repeat|warning-pending|warning-brief|adc-startup|adc-communication|sensor-disconnect|temperature-high|temperature-low|adc-steps|circuit|racing|ambient|raw-faults|ramp|cooldown|pressure-sweep|warnings|startup|warm-start|menu'
+          allowed = re.compile(rf'(?:index|tsukuba)\.html|(?:tsukuba-)?spot-checks\.json|(?:{scenarios})/(?:recording\.mp4|contact-sheet\.png|poster\.png|inputs\.json)')
           files, total = [], 0
           entries = list(source.rglob('*'))
-          # 各シナリオはディレクトリ1件＋公開ファイル4件、ルートHTML・数値テストJSONの2件。
-          if len(entries) > 2 + 5 * len(scenarios.split('|')):
+          # 各シナリオはディレクトリ1件＋公開ファイル4件、通常・筑波のHTMLと数値テストJSONが各2件。
+          if len(entries) > 4 + 5 * len(scenarios.split('|')):
               raise ValueError('公開ファイルが多すぎます')
           for entry in entries:
               info = entry.lstat()
@@ -181,14 +213,14 @@ jobs:
                   continue
               if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not allowed.fullmatch(relative):
                   raise ValueError(f'不正なファイル: {relative}')
-              limit = (20 if relative == 'index.html' else 16) * 1024 * 1024
+              limit = (20 if relative.endswith('.html') else 16) * 1024 * 1024
               if info.st_size > limit:
                   raise ValueError(f'ファイルが大きすぎます: {relative}')
               total += info.st_size
               files.append((entry, relative))
           names = {relative for _, relative in files}
-          # 全28動画と履歴・通信状態・最高値付きJSONを収める公開容量の上限。
-          if 'index.html' not in names or len(files) < 5 or total > 256 * 1024 * 1024:
+          # 通常・筑波の2ページと、29ケースの取得60Hzデータを含む公開容量の上限。
+          if not {'index.html', 'tsukuba.html'}.issubset(names) or len(files) < 5 or total > 256 * 1024 * 1024:
               raise ValueError('公開レポートが不完全、または大きすぎます')
           for directory in {relative.split('/')[0] for relative in names if '/' in relative}:
               required = {f'{directory}/{name}' for name in ('recording.mp4', 'contact-sheet.png', 'poster.png', 'inputs.json')}
@@ -255,7 +287,7 @@ jobs:
         uses: actions/github-script@v8
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-          ARTIFACT_URL: ${{ needs.record.outputs.artifact_url }}
+          ARTIFACT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -270,12 +302,14 @@ jobs:
             const attempt = process.env.GITHUB_RUN_ATTEMPT || '1';
             const notification = `<!-- racing-gauge-sdl-notification:${context.runId}:${attempt} -->`;
             const body = [marker, notification, '### 確認ページを更新しました', '',
-              `[等速の確認ページを開く](${url})`, '',
+              `[通常テストの確認ページを開く](${url})`,
+              `[筑波専用テストを開く](${new URL('tsukuba.html', url).href})`, '',
               'ZIPの展開は不要です。全動画は1.0倍速で、確認時刻ボタンから各場面へ移動できます。',
               '油圧3〜6barの連続変動、最大2.0Gと油圧の急落、Rの3分保持と解除、温度の上昇・下降、始動・詳細画面、照度と調光を確認できます。',
               '最悪のLOW・予兆を中心に前後1分の油圧/G/油温を記録する新グラフ、発生から何分前か、詳細ボタンの動作も確認できます。',
               'risk-windowの145秒では、OIL.P/Gのラベル、GピークのF/R/L/B、記録温度に合わせた油温軸を確認できます。',
-              'tsukuba-lap / tsukuba-lowは筑波2000想定の合成一周です。油温120→140℃・Gに連動する油圧・ダンロップ先の一瞬の閾値割れとLOW成立を比較し、168秒で完成グラフを確認できます。実測ログではありません。',
+              '危険点がない場合も高Gを優先し、同じG帯では最低油圧の場面をグラフへ表示します。high-g-reviewでは描画の間だけのGピークが60Hz取得で残ることも確認できます。',
+              '筑波は専用ページ・別ジョブです。前後の周回も加減速・旋回のGを動かし、全開→アクセルオフで約2bar低下、加速中に速く上がる油温120→140℃を確認できます。合成データです。',
               '負温度での初回最高値・未取得表示・異常後の保持・0℃越えも専用動画で確認できます。',
               'LOW成立の履歴Wは左下へ残り、詳細画面から戻るまで保持される流れを確認できます。',
               'PR #380の再発・期限・短い低下は3本の再現動画で、499/500msや時刻折り返しは数値テストの新旧比較で確認できます。',
@@ -284,7 +318,7 @@ jobs:
               'ADCの起動時未接続・動作中の切断・変換未完了・書込/読取失敗と再接続も、本番ADC読み取り処理を通した動画で確認できます。',
               '生ADCを毎フレーム1カウントずつ増減させ、本番の取得周期のまま中間値を確認できます。',
               '動画の画面外に生ADC・電圧・IMU各軸・取得と平滑化の期待値を表示し、本番センサー処理を通しています。', '',
-              '**24FPS・1.0倍速**で全シナリオを確認できます。FPS計測・比較機能は削除しています。', '',
+              '**取得60Hz・描画24FPS・1.0倍速**です。FPS計測・比較機能は含みません。', '',
               `[全PNG・MP4をダウンロード](${process.env.ARTIFACT_URL})`, '',
               `対象: ${expectedSha.slice(0, 7)} · [CIの実行](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`,
               `CI実行回数: ${attempt}。このURLは対象コミットの録画です。公開に成功するたびに新しいコメントでお知らせします。`,

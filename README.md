@@ -12,8 +12,9 @@ A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [
 油圧3〜6barの連続変動、2.0Gでの油圧急落、Rモードの保持・解除、温度の上昇・下降を、
 PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 生ADCカウント・IMU各軸・照度を本番のセンサー処理へ渡し、変換・補正・取得周期・平均化から表示まで確認します。
-シミュレーションと動画は24FPS・1.0倍速です。
-確認ページは28シナリオを収録し、筑波2000想定の一周、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
+シミュレーターは取得60Hz・描画24FPS・1.0倍速です。
+通常27ケースと筑波専用2ケースを、別のCIジョブ・確認ページへ分けています。各PRコメントに両方のURLを掲載します。
+高Gの代表点、筑波想定の連続走行、生ADCの1カウント往復、信号断線、温度境界と正常復帰も確認できます。
 
 ADC通信異常への対応（[#381](https://github.com/puriso/racing_gauge/pull/381)）はmainへ取り込み済みです。
 [通信異常の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-communication)と[起動時未接続の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-startup)で、5msの変換期限・1秒間隔の再接続・正常復帰を確認できます。
@@ -203,11 +204,13 @@ LCDは上段・油圧・水温・履歴表示を個別に部分転送し、同�
 ## 危険場面の記録とグラフ
 
 メーターをタップすると、最も危険と判定した場面を中央に置く前後60秒のグラフを表示します。
+危険点が未記録でも、最大Gを優先し、同じ0.1G帯なら油圧が0.05bar帯で低い場面を`PEAK G`として表示します。同順位では先の時刻を保持し、危険点が成立するとその記録へ切り替えます。
+起動時の移動平均が落ち着くよう、正常圧力を1秒連続取得した後から代表点を選びます。正常値が未取得の間は`WAITING`です。
 油圧（青）と水平G（黄）は上段、油温（橙）は下段で時間軸を共有し、白い中央線が危険点の0秒です。中央の丸印は選択した瞬間の油圧・G・油温を示します。
 ラベルは`OIL.P`、`G`、`OIL.T [C]`です。Gの山には最大値を取得した時点の主方向をF（前）・R（右）・L（左）・B（後）で表示します。
 斜めGは強い成分の方向に分け、同じ大きさなら前後を優先します。0.5G未満の細かな揺れには文字を付けず、6秒未満で近接する山は強い方へまとめて文字の重なりを防ぎます。
 油温の縦軸は、正常な記録値の最小・最大に10%（最低1℃）の余白を付け、1℃単位で自動調整します。一定温度でも最低6℃分の軸幅を確保します。横軸は全系列で前後60秒です。
-見出しはLOW／NEAR／DROPと「何分何秒前」を表示します。右上DETAILで従来の詳細画面へ進み、
+見出しはPEAK G／LOW／NEAR／DROPと「何分何秒前」を表示します。右上DETAILで従来の詳細画面へ進み、
 グラフの他の場所、または詳細画面をタップするとメーターへ戻ります。
 Wはメーターへ戻ると消えますが、危険場面の記録は残ります。監視はどの画面でも継続します。
 
@@ -361,7 +364,7 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. Sensor faults display `ERR`; unmeasured readings and maxima display `---`.
 
 The sensor table above describes the firmware's conversion model, not manufacturer calibration data.
-The preview includes twenty-eight 24 FPS real-time scenarios, including synthetic Tsukuba 2000 laps, raw ADC sweeps, disconnected signals, temperature boundaries, negative-temperature maxima, and ADC communication failures.
+The preview samples at 60 Hz and renders at 24 FPS. The 27 standard cases and two Tsukuba cases have independent CI jobs and pages. With no risk event, review the highest-G band and then its lowest-pressure point.
 ADC waits are bounded to 5ms and reconnection is attempted at one-second intervals; temperature recovery starts from the first valid sample.
 Main includes a latched W cleared when leaving the detail screen. Maxima start from the first valid sample, including negative temperatures; unmeasured maxima display `---`. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
 Tap the gauge to review the worst LOW/precursor event, centered in a ±60-second pressure/G/oil-temperature chart with elapsed time. DETAIL opens the previous statistics screen. The fixed RAM log is cleared on reboot; precursor rules are heuristic and do not change LOW alerts.

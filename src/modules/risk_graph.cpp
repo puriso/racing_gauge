@@ -31,22 +31,26 @@ void header()
 {
   mainCanvas.fillRect(0, 0, LCD_WIDTH, 24, COLOR_BLACK);
   char title[64];
-  if (risk::history.hasEvent())
+  if (risk::history.hasSelection())
   {
     const auto seconds = risk::history.ageMs() / 1000;
-    snprintf(title, sizeof(title), "%s %llum%02llus ago", risk::name(risk::history.event().kind),
+    snprintf(title, sizeof(title), "%s %llum%02llus ago",
+             risk::history.hasEvent() ? risk::name(risk::history.event().kind) : "PEAK G",
              static_cast<unsigned long long>(seconds / 60), static_cast<unsigned long long>(seconds % 60));
   }
   else
   {
-    snprintf(title, sizeof(title), "NO EVENT");
+    snprintf(title, sizeof(title), "WAITING");
   }
 
   // 詳細画面と同じ書体に揃え、長い経過時間もDETAILや下段へはみ出させない。
   mainCanvas.setTextSize(1);
   mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
   if (mainCanvas.textWidth(title) > 248) mainCanvas.setFont(&fonts::FreeSansBold9pt7b);
-  mainCanvas.setTextColor(risk::history.event().kind == risk::Kind::Low ? COLOR_RED : COLOR_ORANGE, COLOR_BLACK);
+  mainCanvas.setTextColor(!risk::history.hasEvent()                       ? PRESSURE_COLOR
+                          : risk::history.event().kind == risk::Kind::Low ? COLOR_RED
+                                                                          : COLOR_ORANGE,
+                          COLOR_BLACK);
   mainCanvas.setClipRect(4, 0, 248, 24);
   mainCanvas.setCursor(4, (24 - mainCanvas.fontHeight()) / 2);
   mainCanvas.print(title);
@@ -116,15 +120,15 @@ void graph()
   header();
   mainCanvas.setFont(&fonts::Font0);
   mainCanvas.setTextSize(1);
-  if (!risk::history.hasEvent())
+  if (!risk::history.hasSelection())
   {
     mainCanvas.setTextColor(COLOR_WHITE, COLOR_BLACK);
     mainCanvas.setCursor(34, 78);
-    mainCanvas.print("Waiting for LOW or a precursor");
+    mainCanvas.print("Waiting for valid sensor data");
     mainCanvas.setCursor(34, 105);
     mainCanvas.print("Pressure + G + oil temperature");
     mainCanvas.setCursor(34, 132);
-    mainCanvas.print("Worst point centered: -60s..+60s");
+    mainCanvas.print("Peak G, then lowest pressure");
     mainCanvas.setCursor(4, 230);
     mainCanvas.print("Tap: return to gauges");
     return;
@@ -144,7 +148,9 @@ void graph()
   }
   mainCanvas.setCursor(105, 39);
   mainCanvas.setTextColor(COLOR_GRAY, COLOR_BLACK);
-  mainCanvas.print(event.kind == risk::Kind::Low ? "100ms" : "100ms (estimate)");
+  mainCanvas.print(!risk::history.hasEvent()       ? "100ms (peak G)"
+                   : event.kind == risk::Kind::Low ? "100ms"
+                                                   : "100ms (estimate)");
   mainCanvas.setCursor(4, 39);
   mainCanvas.setTextColor(PRESSURE_COLOR);
   mainCanvas.print("OIL.P");
@@ -269,7 +275,7 @@ void refreshRiskGraph(bool force)
     previousRevision = risk::history.revision();
     previousAge = age;
   }
-  else if (risk::history.hasEvent() && previousRevision == risk::history.revision() && age != previousAge)
+  else if (risk::history.hasSelection() && previousRevision == risk::history.revision() && age != previousAge)
   {
     header();
     push(false);

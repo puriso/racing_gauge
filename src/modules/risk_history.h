@@ -76,12 +76,14 @@ class History
   [[nodiscard]] auto preMs() const -> uint32_t;
   [[nodiscard]] auto revision() const -> uint32_t { return revision_; }
   [[nodiscard]] auto hasEvent() const -> bool { return event_.kind != Kind::None; }
+  [[nodiscard]] auto hasSelection() const -> bool { return selectedPoint_; }
 
  private:
   void advance(uint64_t tick);
   static void merge(Sample& sample, const Input& input);
   auto candidate(const Input& input) -> Kind;
   [[nodiscard]] auto better(Kind kind, const Input& input) const -> bool;
+  [[nodiscard]] auto betterOverview(const Input& input) const -> bool;
   void select(Kind kind, const Input& input);
   [[nodiscard]] auto recentMaximum() const -> float;
 
@@ -101,6 +103,7 @@ class History
   bool nearPending_ = false;
   bool dropPending_ = false;
   bool postComplete_ = false;
+  bool selectedPoint_ = false;
 };
 
 static_assert(sizeof(History) < 25 * 1024, "Risk history must fit the fixed RAM budget");

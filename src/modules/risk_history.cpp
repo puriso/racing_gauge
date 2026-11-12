@@ -170,6 +170,7 @@ auto History::better(Kind kind, const Input& input) const -> bool
 
 void History::select(Kind kind, const Input& input)
 {
+  selectedPoint_ = true;
   event_ = {kind, elapsedMs_, input.pressure, input.g, input.oil, input.oilValid, input.gDirection};
   eventTick_ = tick_;
   postComplete_ = false;
@@ -200,12 +201,12 @@ void History::update(uint32_t nowMs, const Input& raw)
   input.pressureValid = input.pressureValid && std::isfinite(input.pressure) && input.pressure >= 0;
   input.oilValid = input.oilValid && std::isfinite(input.oil);
   merge(history_[tick_ % WINDOW_SAMPLES], input);
-  if (hasEvent() && tick_ >= eventTick_ && tick_ - eventTick_ <= HALF_WINDOW)
+  if (hasSelection() && tick_ >= eventTick_ && tick_ - eventTick_ <= HALF_WINDOW)
   {
     merge(selected_[HALF_WINDOW + static_cast<size_t>(tick_ - eventTick_)], input);
     ++revision_;
   }
-  if (hasEvent() && !postComplete_ && ageMs() >= HALF_WINDOW * SAMPLE_MS)
+  if (hasSelection() && !postComplete_ && ageMs() >= HALF_WINDOW * SAMPLE_MS)
   {
     postComplete_ = true;
     ++revision_;
@@ -215,6 +216,24 @@ void History::update(uint32_t nowMs, const Input& raw)
   {
     select(kind, input);
   }
+  else if (betterOverview(input))
+  {
+    select(Kind::None, input);
+  }
+}
+
+auto History::betterOverview(const Input& input) const -> bool
+{
+  // 危険点を優先し、起動直後の移動平均バッファが落ち着くまで1秒待つ。
+  if (hasEvent() || !pressureContinuous_ || elapsedMs_ - validSince_ < 1000)
+  {
+    return false;
+  }
+  if (!hasSelection()) return true;
+  const long gBand = std::lround(input.g * 10.0F);
+  const long selectedG = std::lround(event_.g * 10.0F);
+  return gBand > selectedG ||
+         (gBand == selectedG && std::lround(input.pressure * 20.0F) < std::lround(event_.pressure * 20.0F));
 }
 
 auto History::postMs() const -> uint32_t

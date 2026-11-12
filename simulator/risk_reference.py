@@ -16,6 +16,7 @@ class RiskReference:
         self.history = {}
         self.window = [[0, 0, 0, 0, 0, 0] for _ in range(1201)]
         self.kind = 0
+        self.recorded = False
         self.at = self.anchor = 0
         self.point = (0, 0, None)
         self.direction = 0
@@ -54,7 +55,7 @@ class RiskReference:
         args = pressure, g, oil, valid, oil_valid, low, direction
         bucket = self.history.setdefault(self.tick, [0, 0, 0, 0, 0, 0])
         self.merge(bucket, *args)
-        if self.kind and 0 <= self.tick - self.anchor <= 600:
+        if self.recorded and 0 <= self.tick - self.anchor <= 600:
             self.merge(self.window[600 + self.tick - self.anchor], *args)
         kind = 0
         if not valid or not math.isfinite(g) or g < 0:
@@ -80,7 +81,11 @@ class RiskReference:
         band, selected = rounded(pressure, 20), rounded(self.point[0], 20)
         better = kind > self.kind or (kind == self.kind and (band < selected or
                                     (band == selected and g >= f32(self.point[1] + f32(0.1)))))
-        if kind and better:
+        overview = (not self.kind and self.valid_since is not None and self.now - self.valid_since >= 1000 and
+                    (not self.recorded or rounded(g, 10) > rounded(self.point[1], 10) or
+                     (rounded(g, 10) == rounded(self.point[1], 10) and band < selected)))
+        if (kind and better) or overview:
+            self.recorded = True
             self.kind, self.at, self.anchor = kind, self.now, self.tick
             self.point = pressure, g, oil if oil_valid else None
             self.direction = direction
@@ -89,7 +94,7 @@ class RiskReference:
         return self.snapshot()
 
     def snapshot(self):
-        return dict(kind=self.kind, at_ms=self.at, age_ms=self.now - self.at if self.kind else 0,
+        return dict(kind=self.kind, recorded=self.recorded, at_ms=self.at, age_ms=self.now - self.at if self.recorded else 0,
                     pressure_bar=self.point[0], g=self.point[1], oil_c=self.point[2], g_direction=self.direction,
-                    pre_ms=min(self.anchor, 600) * 100 if self.kind else 0,
-                    post_ms=min(self.now - self.at, 60000) if self.kind else 0)
+                    pre_ms=min(self.anchor, 600) * 100 if self.recorded else 0,
+                    post_ms=min(self.now - self.at, 60000) if self.recorded else 0)

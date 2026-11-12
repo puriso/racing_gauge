@@ -2,10 +2,11 @@
 
 [確認ページをブラウザーで開く](https://puriso.github.io/racing_gauge/)
 
-前後1分の危険場面グラフ・予兆の選択・筑波2000想定の一周を含む28本で確認します。
-本番のセンサー取得・変換・平均化・描画・平滑化・Rモード・LOW警告をSDLで実行し、**24FPS・等速のMP4とindex.html**にまとめます。
+通常27ケースと筑波専用2ケースを、独立したジョブ・ページで確認します。
+本番の取得・変換・平均化・監視・R/LOWを**60Hz**で実行し、描画とMP4は**24FPS・等速**です。
+通常ページは`index.html`、筑波専用は`tsukuba.html`です。各PRの公開コメントに両方のリンクを載せます。
 PRのコメントから、ZIPを展開せずGitHub Pages上の確認ページを直接開けます。
-更新・録画は24FPS、すべて1.0倍速です。Rモードの3分保持も実時間どおりに保存し、確認時刻ボタンから場面へ移動できます。
+1枚の描画までに2〜3回の取得を行い、描画の間だけのピークも履歴・警告判定へ反映します。すべて1.0倍速で、Rモードの3分保持も実時間どおりです。
 
 動画・GIFには、320×240の製品画面の**外側**に入力と期待値を表示します。MP4を直接開いても数値を追えます。
 
@@ -42,7 +43,7 @@ flowchart LR
 たとえば油圧3bar相当のADC=551は約3.000996barとなり、3bar境界も生値から判定します。
 
 起動中にIMU補正が終わるまでは、本番コードが温度・油圧の取得も返さず終了します。
-24FPSで仮想時刻0から起動した場合は約1.04秒まで取得値が0となり、その後も500ms取得・移動平均・平滑化による遅れがあります。
+60Hz取得で仮想時刻0から起動した場合は約0.53秒まで初期補正中となり、その後も500msの温度取得・移動平均・平滑化による遅れがあります。
 初期バッファを目標値で埋める処理は行いません。
 
 ## PR #380の再現確認
@@ -76,7 +77,8 @@ ADC入力を各カウント500ms保持する専用試験は追加していませ
 
 | シナリオ | 長さ | 確認する内容 |
 | --- | --- | --- |
-| `tsukuba-lap` | 180秒 | 80秒の合成一周、油温120→140℃、G連動の油圧低下、ダンロップ先で一瞬3barを割ってNEARを記録 |
+| `high-g-review` | 140秒 | 危険点なしでも高Gと同G帯の最低油圧を表示。描画の間の約16msのGピークも60Hzで保存 |
+| `tsukuba-lap` | 180秒 | 連続走行の中の80秒の注目周。アクセルオフで約2bar低下、徐々に120→140℃、ダンロップ先の短い閾値割れを予兆として記録 |
 | `tsukuba-low` | 180秒 | 同じ一周で油圧低下を長くした比較ケース。500msのLOW成立、前後1分の完成グラフと詳細を確認 |
 | `risk-window` | 160秒 | LOWの最悪点を中央に前後60秒・油温・何分前かを表示。収集中、DETAIL、メーター復帰後の記録保持を確認 |
 | `risk-predictive` | 160秒 | DROP→NEARへの優先更新、一過性低下・通信断・変換タイムアウトの除外、欠損、前後1分を確認 |
@@ -122,7 +124,7 @@ ADC入力を各カウント500ms保持する専用試験は追加していませ
 
 `adc-steps`は最初の2秒でIMU補正を待ち、以後はCH0・CH1・CH2を毎フレーム1カウントずつ
 `0→2047→0` と連続的に往復させます。折り返し後も同じ順序で動き続け、各値を保持する専用処理はありません。
-CH3は未使用の0です。24FPSなので、1カウントの変化は約41.7msごとです。
+CH3は未使用の0です。刺激は24Hzで1カウントずつ変え、取得は60Hz、描画は24FPSです。描画に出ない中間の取得値も`raw_samples`とCSVで全件確認します。
 温度からの逆変換を使わず、℃・barの変換・平均化・平滑化は生ADCから本番処理で計算します。
 温度の取得は本番どおり500ms周期のため、全カウントが温度サンプルとして取得されるわけではありません。
 動画の一時停止・確認時刻ボタンと入力JSONで、上昇・下降の中間カウントを確認できます。
@@ -131,7 +133,7 @@ CH3は未使用の0です。24FPSなので、1カウントの変化は約41.7ms�
 
 | 時刻 | 入力・確認する動作 |
 | --- | --- |
-| 4.00〜4.05秒 | 2.0Gと0.8bar相当ADCへ同時に急変。24FPSでは2フレーム取得し、R・LOWとも非点灯 |
+| 4.00〜4.05秒 | 2.0Gと0.8bar相当ADCへ同時に急変。60Hzで取得し、R・LOWとも非点灯 |
 | 8.00〜10.50秒 | 2.0Gと0.8barを継続。R進入、LOW点灯、油圧回復後の表示保持 |
 | 18.00〜18.20秒 | 2.0Gと0.8barへ200msだけ低下。LOWは点灯しない |
 | 22.00〜24.00秒 | 再度継続して急落。LOWの再点灯と回復を確認 |
@@ -142,7 +144,7 @@ Gは各軸の取得値から算出します。4秒＝前、8秒＝右、18秒＝
 `racing`の確認時刻は2.1秒（短いGで非進入）、4.2秒（進入）、184秒（保持中）、
 184.3秒（3分後の解除）、187.3秒（再進入）、190秒（詳細画面での解除）です。
 入力とゲージ表示には本番の平均化・平滑化による遅れがあります。
-24FPSの1フレームは約41.7msで、判定はその刻みで実行します。100ms保持のR進入は125ms後のフレームで成立します。
+描画は約41.7ms刻み、取得と判定は約16.7ms刻みです。判定結果を次の24FPSフレームへ反映します。
 Rは1.0G以上が100ms継続、LOWは1.0G超かつ表示用油圧3bar以下が500ms継続すると点灯します。
 `racing`は2luxの夜間入力です。R中の最大輝度と3分後の夜間輝度への復帰も確認します。
 
@@ -188,7 +190,8 @@ Spaceで一時停止、Homeで再生を戻し、Mまたはクリックでグラ�
 python simulator/record.py --output simulator/out/my-review
 ```
 
-28シナリオを実行し、`simulator/out/my-review/index.html`を作ります。
+29ケースを実行し、通常27ケースの`index.html`と筑波2ケースの`tsukuba.html`を作ります。
+`--suite standard`と`--suite tsukuba`でテスト群を独立して実行できます。CIも別ジョブで並行実行します。
 ファイルをブラウザーで直接開けます。動画を参照するため、フォルダー全体を保持してください。
 `--scenario circuit`などで個別に実行でき、ビルド済みなら`--skip-build`を付けられます。
 既存の出力先は上書きしません。FFmpegはPythonパッケージに同梱されています。
@@ -198,13 +201,13 @@ python simulator/record.py --output simulator/out/my-review
 - `<scenario>/poster.png`: 数値付きの動画ポスター
 - `<scenario>/frame-*.png`: 24FPSの全転送先フレーム。圧縮にじみのない画素確認用
 - `<scenario>/contact-sheet.png`: 代表フレームの一覧
-- `<scenario>/inputs.json`: schema_version=2。`raw`=ADC/IMU/ALS、`target`=波形生成用の目標、`sensor`=本番の取得結果・ADC読取回数、`expected`=独立モデル、`actual`=描画・調光設定、R・LOWの画素判定
-- `<scenario>/trace.csv`: ADCカウント・IMU各軸・照度と目標波形を記録した24FPSの全入力。公開用には含めず、Actions成果物に保存
+- `<scenario>/inputs.json`: schema_version=3。`fps=24`、`sample_hz=60`。`frames`は描画時点の最新取得値・独立期待値・描画値で、`sample_index/sample_time_ms`が使用した取得を示します。`raw_samples/sample_columns`に60Hzの全入力も収録します。
+- `<scenario>/trace.csv`: ADC・IMU・照度・目標波形を記録した60Hzの全入力。CSV自体はActions成果物、同じ入力列は公開JSONにも保存
 - `public/`: 公開用のindex.html・MP4・代表画像・JSON。全PNGは含めず、公開データ量を抑える
 
 入力範囲、連続した油圧変動、温度の上昇・下降、Rの非進入・進入・保持・解除を自動検証します。
 さらに実際の転送先PNGでR表示との一致、LOWの点灯・保持・消灯、油温バーの枠内描画と赤色の解除を確認します。
-全19,979フレームで、生ADCからの変換・ダミー読み取りを含む取得回数・最終取得値・取得周期・平均化・IMU補正と方向・R/LOW・調光を独立モデルと照合します。
+取得60Hzの全入力と描画24FPSの全フレームで、生ADCからの変換・ダミー読み取りを含む取得回数・最終取得値・取得周期・平均化・IMU補正と方向・R/LOW・調光を独立モデルと照合します。
 さらに、平滑化と描画値の差が部分描画の更新幅以内か確認します。
 MP4も再デコードして破損を検出します。それ以外の外観は確認ページで目視してください。
 
@@ -234,7 +237,7 @@ fork・Dependabotでは公開とコメントを省略します。録画ジョブ
 公開ジョブは検証済みの成果物だけを使い、許可したパス・通常ファイル・サイズ上限を確認します。
 公開ブランチのコードや成果物内のスクリプトは実行しません。公開を直列化し、別PRの録画も保持します。
 
-全PNGを含む`visual-simulator`成果物はActionsに14日間保存します。
+全PNGを含む`visual-simulator-standard` / `visual-simulator-tsukuba`成果物はActionsに14日間保存します。
 公開用の動画とHTMLはGit履歴として残ります。mainへのpushと手動実行では成果物の保存までを行います。
 
 ## 実装範囲
@@ -250,14 +253,14 @@ fork・Dependabotでは公開とコメントを省略します。録画ジョブ
 ## English
 
 The simulator feeds raw ADC counts, IMU axes and ALS readings through the unmodified production sensor pipeline and M5GFX SDL.
-Twenty-eight real-time scenarios cover synthetic Tsukuba 2000 laps, continuous 3–6bar pressure, sudden 2.0G/pressure drops, R activation/three-minute hold/expiry,
+Twenty-nine real-time scenarios in separate standard and Tsukuba suites cover synthetic Tsukuba 2000 laps, continuous 3–6bar pressure, sudden 2.0G/pressure drops, R activation/three-minute hold/expiry,
 heating/cooling, startup, menus, lighting and raw ADC faults. Production calibration, acquisition intervals,
 sample buffers and IMU offset/direction calculations are executed rather than injecting derived values.
 Videos and optional GIFs carry raw readings and independently calculated average/filter expectations outside the original 320×240 screen.
 The HTML review page offers normal-speed video, timestamp links and input/state readouts.
 Trusted same-repository PRs publish a commit-specific GitHub Pages URL; full PNG artifacts remain in Actions for 14 days.
 Optional GIF generation is also real-time. Electrical behavior, bus timing and hardware performance are outside this simulator's scope.
-Simulation and MP4 output run at 24 FPS and normal speed. GIF delays use 40/50ms intervals to average 24 FPS.
+Sensor acquisition and monitoring run at 60 Hz; display and MP4 run at 24 FPS and normal speed. The standard and Tsukuba suites have separate pages and CI jobs.
 FPS benchmarking, comparison CLI options and performance reports are removed.
 
 ### LOWの発生履歴W
@@ -278,7 +281,7 @@ python simulator/record.py --scenario warning-history
 
 画面外とHTMLには外部応答・ADCの接続状態・初期化試行回数・最後に成功した取得値・変換結果の取得回数を表示します。RAW ADCは模擬装置へ与えた入力であり、通信失敗時に取得できた値ではありません。ダミー取得は成功回数に含みますが、本取得失敗時の値はセンサー平均へ反映しません。
 
-仮想ポーリング待ち時間の5msは、本番処理が`delay(1)`を5回通る期限判定の値です。実機のI²C転送時間やFPSの推定ではなく、24FPSの入力時刻も変えません。SDLの内部時計は変更しません。電気特性・バスの物理的な状態・実機応答時間は検証対象外です。
+仮想ポーリング待ち時間の5msは、本番処理が`delay(1)`を5回通る期限判定の値です。実機のI²C転送時間やFPSの推定ではなく、取得60Hz・描画24FPSの基準時刻も変えません。SDLの内部時計は変更しません。電気特性・バスの物理的な状態・実機応答時間は検証対象外です。
 
 24FPS動画は約41.7ms刻みです。5msの期限、999/1000msの再試行境界、符号拡張・ダミー取得・復帰時のバッファ初期化は、次の本番C++テストでも検証します。
 
@@ -330,7 +333,8 @@ ADC通信異常は温度の次回500ms取得を待たず全チャンネルへ反
 
 | 動画の時刻 | 区間・動作 |
 | --- | --- |
-| 0〜60秒 | 起動・IMU補正・走行前の記録。油温120℃ |
+| 0〜0.8秒 | IMU補正のため静止 |
+| 0.8〜60秒 | 前周を走行し、加減速・旋回に合わせてGとアクセルを動かす |
 | 60〜64秒 | ホームストレート、一周の開始 |
 | 64〜71秒 | 第1コーナー |
 | 71〜78秒 | S字 |
@@ -339,16 +343,24 @@ ADC通信異常は温度の次回500ms取得を待たず全チャンネルへ反
 | 97〜107秒 | 80R/170R。左Gが最大2.0、100秒付近だけ油圧が3barを割る |
 | 107〜117秒 | 第2ヘアピン |
 | 117〜128秒 | バックストレート |
-| 128〜140秒 | 最終〜ホーム。一周を終え、油温140℃へ |
+| 128〜140秒 | 最終〜ホーム。注目する一周を終え、その後も次周を走行 |
 | 145秒 | 走行後のグラフを開く |
 | 168秒 | 最悪点の前後60秒が揃ったグラフと発生からの経過時間を確認 |
 | 170〜172秒 | DETAILで従来画面、174秒にグラフへ戻って記録保持を確認 |
 
-油温は60〜140秒の一周を通して120→140℃へ直線的に上がります。油圧は連続的な基準変動に対して0.5bar/Gだけ減らし、80R頂点だけ追加の短い低下を与えます。
-`tsukuba-lap`は本番の取得平均・表示平滑化後の3bar以下が500ms未満で、LOWを成立させずNEARとして記録します。
+油温は全180秒を通して120→140℃へ上がり、アクセル量の積分で上昇速度を変えます。全開区間の上昇速度はアクセルオフ区間の約3倍です。
+油圧はアクセル主体で、全開→オフの100ms遷移で直前より約2bar低下し、G・油温の小さな影響も重ねます。80Rの注目周だけ追加の短い低下を与えます。
+IMU補正後は前後の周回も連続して動かし、直線中も加減速・横Gの小さな変化を残します。アクセル情報は合成波形の生成と検証用で、本番判定へ直接注入しません。
+`tsukuba-lap`は3bar以下の短い低下を、LOW未成立の予兆として記録します。
 `tsukuba-low`は同じ箇所の低下だけを長くし、500ms以上でLOWが成立する比較ケースです。警告条件は変更しません。
 どちらもADCカウントとIMU各軸を本番処理へ入力し、温度・油圧・G・方向・LOW・危険点を独立モデルと全フレーム照合します。
 区間名・一周の経過・合成データであることは動画の画面外と確認ページへ表示します。動画は24FPS・等速です。
+
+### 危険点がない場合の代表点
+
+正常圧力を1秒連続取得した後は、危険点がなくても`PEAK G`を表示します。最大0.1G帯を優先し、同じ帯なら低い0.05bar帯、同順位なら先の時刻を保持します。
+危険点が成立したら代表点より優先し、その後の正常な高Gだけでは上書きしません。正常値未取得の間だけ`WAITING`です。
+`high-g-review`の3秒で通常時のグラフ、31秒で描画の間に入った30.05秒のGピーク、44/77秒で同G帯の低い油圧への更新、138秒で完成グラフを確認します。
 
 ### 危険点選択の専用ケース
 
@@ -367,7 +379,7 @@ Pythonの独立モデルが各フレームの種類、選択時刻、油圧・G�
 データのない前後はフラグ0、通信異常は欠損フラグで区別します。
 
 メーター→グラフ→DETAIL→メーター、およびグラフ→メーターの遷移を本番の共通コントローラーで実行します。
-既存24シナリオの詳細画面確認はDETAILを指定して継続し、新しい2シナリオで初回タップからのグラフを検証します。
+既存ケースの詳細画面確認はDETAILを指定して継続し、危険点・通常時の代表点・筑波のケースで初回タップからのグラフを検証します。
 グラフは最大2Hzで更新し、収集完了後は経過時間の見出しだけ更新します。動画は従来どおり24FPS・等速です。
 
 本番の固定長履歴・危険点選択・時計折り返し・画面遷移は`python test/risk_history/run_tests.py`で検証します。

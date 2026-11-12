@@ -3,6 +3,20 @@ from risk_reference import RiskReference
 
 
 class RiskReferenceTest(unittest.TestCase):
+    def test_normal_g_peak_prefers_lower_pressure_and_risk_overrides_it(self):
+        r = RiskReference()
+        r.step(0, 5, 0, 100, True, True, False)
+        self.assertFalse(r.snapshot()['recorded'])
+        r.step(1000, 5, 2, 100, True, True, False)
+        self.assertTrue(r.snapshot()['recorded'])
+        r.step(1100, 4, 2.01, 100, True, True, False)
+        self.assertEqual(r.snapshot()['at_ms'], 1100)
+        r.step(1200, 3.8, 1.8, 100, True, True, False)
+        self.assertEqual(r.snapshot()['at_ms'], 1100)
+        r.step(1300, 3.4, 1.2, 100, True, True, False)
+        r.step(1600, 3.4, 1.2, 100, True, True, False)
+        self.assertEqual(r.snapshot()['kind'], 2)
+
     def test_peak_direction_belongs_to_maximum_not_latest_value(self):
         r = RiskReference()
         r.step(0, 1, 2, 100, True, True, True, 1)

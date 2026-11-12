@@ -109,14 +109,14 @@ void writeRiskTelemetry(std::ostream& output)
   const auto& history = risk::history;
   const auto& event = history.event();
   output << R"({"kind":)" << static_cast<int>(event.kind) << R"(,"at_ms":)" << event.occurredMs << R"(,"age_ms":)"
-         << (history.hasEvent() ? history.ageMs() : 0) << R"(,"pressure_bar":)" << event.pressure << R"(,"g":)" << event.g
-         << R"(,"oil_c":)";
+         << (history.hasSelection() ? history.ageMs() : 0) << R"(,"recorded":)" << history.hasSelection()
+         << R"(,"pressure_bar":)" << event.pressure << R"(,"g":)" << event.g << R"(,"oil_c":)";
   if (event.oilValid)
     output << event.oil;
   else
     output << "null";
-  output << R"(,"pre_ms":)" << (history.hasEvent() ? history.preMs() : 0) << R"(,"post_ms":)"
-         << (history.hasEvent() ? history.postMs() : 0) << R"(,"g_direction":)" << static_cast<int>(event.gDirection)
+  output << R"(,"pre_ms":)" << (history.hasSelection() ? history.preMs() : 0) << R"(,"post_ms":)"
+         << (history.hasSelection() ? history.postMs() : 0) << R"(,"g_direction":)" << static_cast<int>(event.gDirection)
          << '}';
 }
 

@@ -57,7 +57,8 @@ def validate_fault_inputs(metadata):
     metadata['temperature_sensor_spec'] = TEMPERATURE_SENSOR_SPEC.copy()
     seen = set()
     for frame in frames:
-        counts, name, label = fault_case(scenario, frame['time_ms'])
+        source_ms = frame.get('sample_time_ms', frame['time_ms'])
+        counts, name, label = fault_case(scenario, source_ms)
         seen.add(name)
         for channel, count in enumerate(counts):
             if count is not None and frame['raw']['adc'][channel] != count:
@@ -68,7 +69,7 @@ def validate_fault_inputs(metadata):
         if counts[1] is None and frame['raw']['adc'][1] != 168:
             raise ValueError('水温の正常入力・復帰がありません')
         if counts[2] is None:
-            phase = (frame['time_ms'] % 4000) / 2000
+            phase = (source_ms % 4000) / 2000
             pressure = 3 + 3 * (phase if phase <= 1 else 2 - phase)
             voltage = (0.5 + pressure / 2.5) / sensor.correction
             expected = round(voltage * metadata['sensor_settings']['adc_max'] / metadata['sensor_settings']['adc_full_scale_v'])
