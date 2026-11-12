@@ -17,7 +17,9 @@ constexpr int PRESSURE_TOP = 52;
 constexpr int PRESSURE_BOTTOM = 151;
 constexpr int OIL_TOP = 177;
 constexpr int OIL_BOTTOM = 210;
-constexpr uint16_t PRESSURE_COLOR = rgb565(64, 208, 255);
+constexpr int OIL_LABEL_PADDING = 5;
+constexpr uint16_t PRESSURE_COLOR = COLOR_YELLOW;
+constexpr uint16_t G_COLOR = rgb565(64, 208, 255);
 constexpr uint16_t GRID_COLOR = rgb565(45, 52, 61);
 constexpr uint16_t OIL_COLOR = rgb565(255, 160, 64);
 
@@ -47,7 +49,7 @@ void header()
   mainCanvas.setTextSize(1);
   mainCanvas.setFont(&fonts::FreeSansBold12pt7b);
   if (mainCanvas.textWidth(title) > 248) mainCanvas.setFont(&fonts::FreeSansBold9pt7b);
-  mainCanvas.setTextColor(!risk::history.hasEvent()                       ? PRESSURE_COLOR
+  mainCanvas.setTextColor(!risk::history.hasEvent()                       ? G_COLOR
                           : risk::history.event().kind == risk::Kind::Low ? COLOR_RED
                                                                           : COLOR_ORANGE,
                           COLOR_BLACK);
@@ -137,10 +139,16 @@ void graph()
   const auto& event = risk::history.event();
   mainCanvas.setTextColor(COLOR_WHITE, COLOR_BLACK);
   mainCanvas.setCursor(4, 27);
-  mainCanvas.printf("0s: %.2fbar  %.2fG %s  OIL:", event.pressure, event.g, gDirectionLabel(event.gDirection));
+  mainCanvas.print("0s:");
+  mainCanvas.setTextColor(PRESSURE_COLOR, COLOR_BLACK);
+  mainCanvas.printf(" %.2fbar", event.pressure);
+  mainCanvas.setTextColor(G_COLOR, COLOR_BLACK);
+  mainCanvas.printf(" %.2fG %s", event.g, gDirectionLabel(event.gDirection));
+  mainCanvas.setTextColor(OIL_COLOR, COLOR_BLACK);
+  mainCanvas.print(" OIL.T:");
   if (event.oilValid)
   {
-    mainCanvas.printf("%.0fC", event.oil);
+    mainCanvas.printf("%.1fC", event.oil);
   }
   else
   {
@@ -154,7 +162,7 @@ void graph()
   mainCanvas.setCursor(4, 39);
   mainCanvas.setTextColor(PRESSURE_COLOR);
   mainCanvas.print("OIL.P");
-  mainCanvas.setTextColor(COLOR_YELLOW);
+  mainCanvas.setTextColor(G_COLOR);
   mainCanvas.setCursor(265, 39);
   mainCanvas.print("G");
 
@@ -197,7 +205,7 @@ void graph()
   mainCanvas.print("3");
   mainCanvas.setCursor(4, PRESSURE_BOTTOM - 7);
   mainCanvas.print("0");
-  mainCanvas.setTextColor(COLOR_YELLOW, COLOR_BLACK);
+  mainCanvas.setTextColor(G_COLOR, COLOR_BLACK);
   mainCanvas.setCursor(295, PRESSURE_TOP);
   mainCanvas.printf("%.0f", maxG);
   mainCanvas.setCursor(295, PRESSURE_BOTTOM - 7);
@@ -211,7 +219,7 @@ void graph()
   mainCanvas.printf("%.0f", minOil);
 
   series(risk::PressureValid, 0, maxPressure, PRESSURE_TOP, PRESSURE_BOTTOM, PRESSURE_COLOR);
-  series(risk::GValid, 0, maxG, PRESSURE_TOP, PRESSURE_BOTTOM, COLOR_YELLOW);
+  series(risk::GValid, 0, maxG, PRESSURE_TOP, PRESSURE_BOTTOM, G_COLOR);
   series(risk::OilValid, minOil, maxOil, OIL_TOP, OIL_BOTTOM, OIL_COLOR);
   const int center = LEFT + WIDTH / 2;
   for (int y = PRESSURE_TOP; y <= OIL_BOTTOM; y += 4)
@@ -219,9 +227,27 @@ void graph()
     mainCanvas.drawPixel(center, y, COLOR_WHITE);
   }
   mainCanvas.fillCircle(center, yFor(event.pressure, 0, maxPressure, PRESSURE_TOP, PRESSURE_BOTTOM), 2, PRESSURE_COLOR);
-  mainCanvas.fillCircle(center, yFor(event.g, 0, maxG, PRESSURE_TOP, PRESSURE_BOTTOM), 2, COLOR_YELLOW);
+  mainCanvas.fillCircle(center, yFor(event.g, 0, maxG, PRESSURE_TOP, PRESSURE_BOTTOM), 2, G_COLOR);
   if (event.oilValid) mainCanvas.fillCircle(center, yFor(event.oil, minOil, maxOil, OIL_TOP, OIL_BOTTOM), 2, OIL_COLOR);
-  mainCanvas.setTextColor(COLOR_YELLOW, COLOR_BLACK);
+  // 中央の記録点に対応する油温を、曲線に重ならない帯へ表示する。
+  mainCanvas.setFont(&fonts::FreeSansBold9pt7b);
+  mainCanvas.setTextColor(OIL_COLOR, COLOR_BLACK);
+  const int oilLabelLeft = center + OIL_LABEL_PADDING;
+  mainCanvas.setClipRect(oilLabelLeft - 1, PRESSURE_BOTTOM + 1, LEFT + WIDTH - oilLabelLeft + 1,
+                         OIL_TOP - PRESSURE_BOTTOM - 2);
+  mainCanvas.setCursor(oilLabelLeft, OIL_TOP - mainCanvas.fontHeight() - 1);
+  mainCanvas.printf("%s ", risk::history.hasEvent() ? risk::name(event.kind) : "0s");
+  if (event.oilValid)
+  {
+    mainCanvas.printf("%.1fC", event.oil);
+  }
+  else
+  {
+    mainCanvas.print("---");
+  }
+  mainCanvas.clearClipRect();
+  mainCanvas.setFont(&fonts::Font0);
+  mainCanvas.setTextColor(G_COLOR, COLOR_BLACK);
   const auto peaks = risk::gPeaks(risk::history);
   for (size_t index = 0; index < peaks.count; ++index)
   {
@@ -231,7 +257,7 @@ void graph()
     const bool above = y >= PRESSURE_TOP + 10;
     const int labelY = above ? y - 10 : y + 4;
     const int labelX = std::clamp(above ? x - 2 : x + 4, LEFT, LEFT + WIDTH - 6);
-    mainCanvas.fillCircle(x, y, 2, COLOR_YELLOW);
+    mainCanvas.fillCircle(x, y, 2, G_COLOR);
     mainCanvas.setCursor(labelX, labelY);
     mainCanvas.print(gDirectionLabel(peak.direction));
   }

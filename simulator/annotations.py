@@ -64,7 +64,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     elif 'risk' in sample:
         event = sample['risk']
         name = ('PEAK G' if event.get('recorded') else 'WAITING', 'DROP(est)', 'NEAR(est)', 'LOW')[event['kind']]
-        label(16, 297, f"RISK {name} | age {event['age_ms']/1000:.1f}s | pre/post {event['pre_ms']/1000:g}/{event['post_ms']/1000:g}s", font=small)
+        oil = '---' if event['oil_c'] is None else f"{event['oil_c']:.1f}C"
+        label(16, 297, f"RISK {name} | age {event['age_ms']/1000:.1f}s | pre/post {event['pre_ms']/1000:g}/{event['post_ms']/1000:g}s | OIL.T@0s {oil}", font=small)
         direction = ('-', 'F', 'R', 'L', 'B')[event['g_direction']]
         if sample.get('track'):
             track = sample['track']
