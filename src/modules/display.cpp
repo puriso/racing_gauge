@@ -286,7 +286,7 @@ void updateGaugeMonitoring()
   monitoredOilTemp = smooth(oil, oilValid, 0.1F, smoothOilTemp);
   updateLowPressureWarning(currentGForce, monitoredPressure, pressureValid);
   risk::history.update(static_cast<uint32_t>(millis()), {monitoredPressure, currentGForce, monitoredOilTemp, pressureValid,
-                                                         oilValid, isLowPressureQualified()});
+                                                         oilValid, isLowPressureQualified(), currentGCardinalDirection});
 }
 
 void updateGauges() { renderDisplayAndLog(monitoredPressure, monitoredWaterTemp, monitoredOilTemp, recordedMaxOilTempTop); }

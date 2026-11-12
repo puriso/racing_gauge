@@ -285,7 +285,12 @@ auto sample(double ratio) -> Targets
     if (options().scenario == "risk-window")
     {
       const bool corner = seconds >= 75.0F && seconds < 78.0F;
-      return {95.0F + progress * 30.0F, 95.0F, corner ? 0.8F : pressure, corner ? 2.0F : 0.0F, false};
+      const float g = corner                                ? 2.0F
+                      : seconds >= 40.0F && seconds < 41.0F ? 1.4F
+                      : seconds >= 55.0F && seconds < 56.0F ? 1.8F
+                      : seconds >= 95.0F && seconds < 96.0F ? 1.2F
+                                                            : 0.0F;
+      return {95.0F + progress * 30.0F, 95.0F, corner ? 0.8F : pressure, g, false};
     }
     const bool baseline = seconds >= 63.0F && seconds < 65.0F;
     const bool drop = seconds >= 65.0F && seconds < 65.9F;
@@ -424,6 +429,21 @@ auto makeInputs(unsigned int frame, const Targets& target, float seconds) -> Inp
   }
   auto input = simulator::sensorInputs(target);
   simulator::applyFaultInputs(options().scenario, frame * MS_PER_SECOND / TICKS_PER_SECOND, input.adc);
+  if (options().scenario == "risk-window")
+  {
+    if (seconds >= 40.0F && seconds < 41.0F)
+    {
+      input.imu = {simulator::FIXTURE_AX_BIAS + target.acceleration, simulator::FIXTURE_AY_BIAS, 1.0F};
+    }
+    else if (seconds >= 75.0F && seconds < 78.0F)
+    {
+      input.imu = {simulator::FIXTURE_AX_BIAS, simulator::FIXTURE_AY_BIAS - target.acceleration, 1.0F};
+    }
+    else if (seconds >= 95.0F && seconds < 96.0F)
+    {
+      input.imu = {simulator::FIXTURE_AX_BIAS - target.acceleration, simulator::FIXTURE_AY_BIAS, 1.0F};
+    }
+  }
   if (options().scenario == "circuit")
   {
     if (seconds >= 4.0F && seconds < 4.05F)
@@ -542,7 +562,7 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
   manifest << R"(,"screen":)" << static_cast<int>(reviewNavigation.screen());
   manifest << R"(,"setup_error":)" << setupError << R"(,"g":)" << currentGForce << R"(,"lux":)" << input.lux
            << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode
-           << R"(,"sensor":)";
+           << R"(,"g_cardinal":)" << static_cast<int>(currentGCardinalDirection) << R"(,"sensor":)";
   writeSensorTelemetry(manifest);
   manifest << R"(,"actual":)";
   writeDisplayTelemetry(manifest);

@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
     "risk-window": {
         "title": "危険点を中央に置く前後1分・油圧/G/油温", "group": "reproduction",
-        "description": "75秒に2G・油圧0.8barのLOW。76秒からタップ後の新グラフで後1分を収集中の表示を確認。詳細ボタンと通常画面への復帰、最悪点の保持、前後60秒が揃ったグラフと何分前かの表示を確認",
+        "description": "75秒に2G・油圧0.8barのLOW。40/55/75/95秒にF/R/L/BのGを入力し、145秒の完成グラフで各ピークの方向と油温の自動スケールを確認。76秒から収集中、82秒の詳細ボタン、通常画面への復帰後の保持、何分前かも確認",
         "seconds": 160, "snapshots": [3, 74, 76, 78, 82, 86, 120, 145, 149, 153, 160],
     },
     "risk-predictive": {
@@ -282,6 +282,11 @@ def validate_monitoring(metadata):
                 raise RuntimeError('グラフ・詳細・メーター復帰時のWリセットが不正です')
             if at(145)['risk']['at_ms'] != at(84)['risk']['at_ms']:
                 raise RuntimeError('画面から戻ると危険場面が失われています')
+            for seconds, direction in [(40, 1), (55, 2), (75, 3), (95, 4)]:
+                if at(seconds)['g_cardinal'] != direction:
+                    raise RuntimeError('IMUから計算したGピークのF/R/L/Bが不正です')
+            if {sample[5] for sample in metadata['risk_window'] if sample[2] >= 50} != {1, 2, 3, 4}:
+                raise RuntimeError('前後1分にGピーク4方向が保持されていません')
         else:
             if at(66)['risk']['kind'] != 1 or at(77)['risk']['kind'] != 2:
                 raise RuntimeError('急低下・LOW直前の予兆を記録できません')

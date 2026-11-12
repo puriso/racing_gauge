@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "g_direction.h"
+
 namespace risk
 {
 constexpr uint32_t SAMPLE_MS = 100;
@@ -28,7 +30,7 @@ enum SampleFlag : uint8_t
   OilError = 32,
 };
 
-// 100msごとの油圧最小/最大・G最大・油温最新値。SDや動的メモリを使わない。
+// 100msごとの油圧最小/最大・G最大とその方向・油温最新値。SDや動的メモリを使わない。
 struct Sample
 {
   uint16_t pressureMin = 0;
@@ -36,7 +38,9 @@ struct Sample
   uint16_t gMax = 0;
   int16_t oilLast = 0;
   uint8_t flags = 0;
+  GDirection gDirection = GDirection::None;
 };
+static_assert(sizeof(Sample) == 10, "Direction must use the existing sample padding");
 
 struct Input
 {
@@ -46,6 +50,7 @@ struct Input
   bool pressureValid;
   bool oilValid;
   bool qualifiedLow;
+  GDirection gDirection = GDirection::None;
 };
 
 struct Event
@@ -56,6 +61,7 @@ struct Event
   float g = 0;
   float oil = 0;
   bool oilValid = false;
+  GDirection gDirection = GDirection::None;
 };
 
 class History

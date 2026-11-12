@@ -65,7 +65,11 @@ void History::merge(Sample& sample, const Input& input)
   if (std::isfinite(input.g) && input.g >= 0)
   {
     auto value = static_cast<uint16_t>(std::lround(std::min(input.g, 655.35F) * 100.0F));
-    sample.gMax = (sample.flags & GValid) != 0 ? std::max(sample.gMax, value) : value;
+    if ((sample.flags & GValid) == 0 || value > sample.gMax)
+    {
+      sample.gMax = value;
+      sample.gDirection = input.gDirection;
+    }
     sample.flags |= GValid;
   }
   if (input.oilValid)
@@ -166,7 +170,7 @@ auto History::better(Kind kind, const Input& input) const -> bool
 
 void History::select(Kind kind, const Input& input)
 {
-  event_ = {kind, elapsedMs_, input.pressure, input.g, input.oil, input.oilValid};
+  event_ = {kind, elapsedMs_, input.pressure, input.g, input.oil, input.oilValid, input.gDirection};
   eventTick_ = tick_;
   postComplete_ = false;
   selected_.fill({});

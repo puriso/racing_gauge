@@ -14,14 +14,15 @@ class RiskReference:
         self.previous = None
         self.tick = 0
         self.history = {}
-        self.window = [[0, 0, 0, 0, 0] for _ in range(1201)]
+        self.window = [[0, 0, 0, 0, 0, 0] for _ in range(1201)]
         self.kind = 0
         self.at = self.anchor = 0
         self.point = (0, 0, None)
+        self.direction = 0
         self.valid_since = self.near_since = self.drop_since = None
 
     @staticmethod
-    def merge(bucket, pressure, g, oil, valid, oil_valid, low):
+    def merge(bucket, pressure, g, oil, valid, oil_valid, low, direction):
         if valid:
             p = rounded(max(0, min(pressure, f32(655.35))), 100)
             if bucket[4] & 1:
@@ -33,7 +34,8 @@ class RiskReference:
             bucket[4] |= 16
         if math.isfinite(g) and g >= 0:
             value = rounded(min(g, f32(655.35)), 100)
-            bucket[2] = max(bucket[2], value) if bucket[4] & 2 else value
+            if not bucket[4] & 2 or value > bucket[2]:
+                bucket[2], bucket[5] = value, direction
             bucket[4] |= 2
         if oil_valid:
             bucket[3] = rounded(max(-273, min(oil, 199)), 10)
@@ -43,14 +45,14 @@ class RiskReference:
         if low:
             bucket[4] |= 8
 
-    def step(self, now, pressure, g, oil, valid, oil_valid, low):
+    def step(self, now, pressure, g, oil, valid, oil_valid, low, direction=0):
         if self.previous is not None:
             self.now += (now - self.previous) & 0xffffffff
         self.previous = now
         self.tick = self.now // 100
         self.history = {tick: value for tick, value in self.history.items() if tick >= self.tick - 1200}
-        args = pressure, g, oil, valid, oil_valid, low
-        bucket = self.history.setdefault(self.tick, [0, 0, 0, 0, 0])
+        args = pressure, g, oil, valid, oil_valid, low, direction
+        bucket = self.history.setdefault(self.tick, [0, 0, 0, 0, 0, 0])
         self.merge(bucket, *args)
         if self.kind and 0 <= self.tick - self.anchor <= 600:
             self.merge(self.window[600 + self.tick - self.anchor], *args)
@@ -81,12 +83,13 @@ class RiskReference:
         if kind and better:
             self.kind, self.at, self.anchor = kind, self.now, self.tick
             self.point = pressure, g, oil if oil_valid else None
-            self.window = [self.history.get(self.anchor + offset, [0, 0, 0, 0, 0]).copy()
-                           if offset <= 0 else [0, 0, 0, 0, 0] for offset in range(-600, 601)]
+            self.direction = direction
+            self.window = [self.history.get(self.anchor + offset, [0, 0, 0, 0, 0, 0]).copy()
+                           if offset <= 0 else [0, 0, 0, 0, 0, 0] for offset in range(-600, 601)]
         return self.snapshot()
 
     def snapshot(self):
         return dict(kind=self.kind, at_ms=self.at, age_ms=self.now - self.at if self.kind else 0,
-                    pressure_bar=self.point[0], g=self.point[1], oil_c=self.point[2],
+                    pressure_bar=self.point[0], g=self.point[1], oil_c=self.point[2], g_direction=self.direction,
                     pre_ms=min(self.anchor, 600) * 100 if self.kind else 0,
                     post_ms=min(self.now - self.at, 60000) if self.kind else 0)

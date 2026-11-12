@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "review_screen.h"
+#include "risk_graph_layout.h"
 #include "risk_history.h"
 
 using risk::Input;
@@ -151,6 +152,112 @@ static void navigation()
   n.tap(100, 100);
   expect(!n.reviewing(), "グラフからもメーターへ戻る");
 }
+
+static void cardinalDirections()
+{
+  expect(cardinalGDirection(0, 2) == GDirection::Front, "前はF");
+  expect(cardinalGDirection(2, 0) == GDirection::Right, "右はR");
+  expect(cardinalGDirection(-2, 0) == GDirection::Left, "左はL");
+  expect(cardinalGDirection(0, -2) == GDirection::Back, "後ろはB");
+  expect(cardinalGDirection(1, -2) == GDirection::Back && cardinalGDirection(-2, 1) == GDirection::Left,
+         "斜めGは強い成分で4方向に分ける");
+  expect(cardinalGDirection(0, 0) == GDirection::None &&
+             cardinalGDirection(std::numeric_limits<float>::quiet_NaN(), 1) == GDirection::None,
+         "ゼロ・取得不能時に方向を捏造しない");
+}
+
+static void retainPeakDirection()
+{
+  risk::History h;
+  auto input = reading(1, 2, 100, true);
+  input.gDirection = GDirection::Front;
+  h.update(0, input);
+  input.g = 1;
+  input.gDirection = GDirection::Back;
+  h.update(40, input);
+  expect(h.sample(600).gMax == 200 && h.sample(600).gDirection == GDirection::Front,
+         "同じ100ms内でGが下がって方向が変わっても最大G時の方向を保持する");
+  input.g = 2;
+  h.update(60, input);
+  expect(h.sample(600).gDirection == GDirection::Front, "同値のGでは最初のピーク方向を保持する");
+  input.g = 2.5F;
+  input.gDirection = GDirection::Left;
+  h.update(80, input);
+  expect(
+      h.sample(600).gMax == 250 && h.sample(600).gDirection == GDirection::Left && h.event().gDirection == GDirection::Left,
+      "最大Gと最悪点の更新ではそれぞれの方向も更新する");
+}
+
+static void peakAnnotations()
+{
+  risk::History h;
+  auto input = reading(5, 0);
+  for (uint32_t t = 0; t <= 130000; t += 100)
+  {
+    input = reading(5, 0);
+    if ((t >= 30000 && t <= 30200) || t == 50000 || t == 70000 || t == 90000)
+    {
+      input.g = 2;
+      input.gDirection = t < 40000   ? GDirection::Front
+                         : t < 60000 ? GDirection::Right
+                         : t < 80000 ? GDirection::Left
+                                     : GDirection::Back;
+    }
+    if (t == 70000)
+    {
+      input.pressure = 1;
+      input.qualifiedLow = true;
+    }
+    h.update(t, input);
+  }
+  const auto peaks = risk::gPeaks(h);
+  expect(peaks.count == 4, "平坦な頂点を重複させず、独立した4つの山を表示する");
+  expect(peaks.values[0].direction == GDirection::Front && peaks.values[1].direction == GDirection::Right &&
+             peaks.values[2].direction == GDirection::Left && peaks.values[3].direction == GDirection::Back,
+         "記録後の現在方向ではなく、各山に保存したF/R/L/Bを使う");
+}
+
+static void nearbyPeaks()
+{
+  risk::History h;
+  for (uint32_t t = 0; t <= 10000; t += 100)
+  {
+    auto input = reading(5, 0.4F);
+    input.gDirection = GDirection::Front;
+    if (t == 3000) input.g = 1;
+    if (t == 5000)
+    {
+      input = reading(1, 2, 100, true);
+      input.gDirection = GDirection::Right;
+    }
+    h.update(t, input);
+  }
+  const auto peaks = risk::gPeaks(h);
+  expect(peaks.count == 1 && peaks.values[0].g == 200 && peaks.values[0].direction == GDirection::Right,
+         "小さな揺れを除外し、重なる山のラベルは強いピークの向きにまとめる");
+}
+
+static void oilScaling()
+{
+  risk::History h;
+  h.update(0, reading(1, 2, -10, true));
+  auto range = risk::oilTemperatureRange(h);
+  expect(range.minimum == -13 && range.maximum == -7, "一定の負温度でも幅を持つ軸を表示する");
+  h.update(100, reading(5, 0, 31));
+  range = risk::oilTemperatureRange(h);
+  expect(range.minimum == -15 && range.maximum == 36, "温度の上下限と10%の余白を1℃単位で追従させる");
+  auto invalid = reading(5, 0, 500);
+  invalid.oilValid = false;
+  h.update(200, invalid);
+  expect(risk::oilTemperatureRange(h).maximum == range.maximum, "通信異常時の値で温度軸を拡大しない");
+
+  risk::History missing;
+  invalid = reading(1, 2, 0, true);
+  invalid.oilValid = false;
+  missing.update(0, invalid);
+  range = risk::oilTemperatureRange(missing);
+  expect(range.minimum == 0 && range.maximum == 150, "油温未取得時も軸幅をゼロにしない");
+}
 int main()
 {
   const struct
@@ -166,7 +273,12 @@ int main()
                {"peaks_wrap", shortPeaksAndWrap},
                {"interrupted_near", interruptedNear},
                {"later_worst", laterWorstAfterRingWrap},
-               {"navigation", navigation}};
+               {"navigation", navigation},
+               {"cardinal_directions", cardinalDirections},
+               {"peak_direction", retainPeakDirection},
+               {"peak_annotations", peakAnnotations},
+               {"nearby_peaks", nearbyPeaks},
+               {"oil_scaling", oilScaling}};
   int failed = 0;
   for (const auto& test : tests)
   {

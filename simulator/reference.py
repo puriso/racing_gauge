@@ -103,7 +103,7 @@ class Reference:
             status = sample['status']
             result['risk'] = self.risk.step(now + sample.get('adc_wait_ms', 0), self.monitored['pressure_bar'], sample['g'], self.monitored['oil_c'],
                                            pressure_valid, status[0] == 1 and math.isfinite(sample['oil_c']) and sample['oil_c'] < 199,
-                                           self.warning.qualified)
+                                           self.warning.qualified, sample['g_cardinal'])
         return result
 
     def snapshot(self, low):
@@ -176,7 +176,8 @@ def check_expectations(frame):
         if frame['sensor'][key] != expected['sensor'][key]:
             raise RuntimeError(f'取得・異常判定の期待値が一致しません: {key}, {frame}')
     if (not math.isclose(frame['g'], expected['sensor']['g'], abs_tol=0.00001)
-            or frame['g_direction'] != expected['sensor']['g_direction']):
+            or frame['g_direction'] != expected['sensor']['g_direction']
+            or frame['g_cardinal'] != expected['sensor']['g_cardinal']):
         raise RuntimeError(f'IMUの補正・水平G・方向の期待値が一致しません: {frame}')
     for key in ('g', 'pressure_bar', 'duration_s'):
         if not math.isclose(expected['low_event'][key], actual['low_event'][key], abs_tol=0.0001):

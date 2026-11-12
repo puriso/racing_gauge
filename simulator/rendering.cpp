@@ -116,7 +116,8 @@ void writeRiskTelemetry(std::ostream& output)
   else
     output << "null";
   output << R"(,"pre_ms":)" << (history.hasEvent() ? history.preMs() : 0) << R"(,"post_ms":)"
-         << (history.hasEvent() ? history.postMs() : 0) << '}';
+         << (history.hasEvent() ? history.postMs() : 0) << R"(,"g_direction":)" << static_cast<int>(event.gDirection)
+         << '}';
 }
 
 void writeRiskWindow(std::ostream& output)
@@ -127,7 +128,7 @@ void writeRiskWindow(std::ostream& output)
     if (index != 0) output << ',';
     const auto& sample = risk::history.sample(index);
     output << '[' << sample.pressureMin << ',' << sample.pressureMax << ',' << sample.gMax << ',' << sample.oilLast << ','
-           << static_cast<int>(sample.flags) << ']';
+           << static_cast<int>(sample.flags) << ',' << static_cast<int>(sample.gDirection) << ']';
   }
   output << ']';
 }

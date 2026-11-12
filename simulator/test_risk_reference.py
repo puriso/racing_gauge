@@ -3,6 +3,17 @@ from risk_reference import RiskReference
 
 
 class RiskReferenceTest(unittest.TestCase):
+    def test_peak_direction_belongs_to_maximum_not_latest_value(self):
+        r = RiskReference()
+        r.step(0, 1, 2, 100, True, True, True, 1)
+        r.step(40, 5, 1, 100, True, True, False, 4)
+        self.assertEqual(r.window[600][2:3] + r.window[600][5:6], [200, 1])
+        r.step(60, 5, 2, 100, True, True, False, 4)
+        self.assertEqual(r.window[600][5], 1)
+        r.step(80, 5, 2.5, 100, True, True, False, 3)
+        self.assertEqual((r.window[600][2], r.window[600][5]), (250, 3))
+        self.assertEqual(r.snapshot()['g_direction'], 1)
+
     def test_near_low_does_not_need_low_warning(self):
         r = RiskReference()
         for now in range(0, 2001, 50):

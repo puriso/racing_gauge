@@ -73,7 +73,7 @@ for (const scenario of scenarios) {
     card.querySelector('.risk-reading').hidden = !frame.risk;
     if (frame.risk) {
       const r = frame.risk;
-      card.querySelector('[data-value=risk]').textContent = r.kind === 0 ? 'まだ記録対象の危険点はありません' : `${['未記録','急低下（推定）','LOW直前（推定）','LOW成立'][r.kind]} / ${Math.floor(r.age_ms/60000)}分${Math.floor(r.age_ms/1000)%60}秒前 / 前${r.pre_ms/1000}秒・後${r.post_ms/1000}秒`;
+      card.querySelector('[data-value=risk]').textContent = r.kind === 0 ? 'まだ記録対象の危険点はありません' : `${['未記録','急低下（推定）','LOW直前（推定）','LOW成立'][r.kind]} / ${Math.floor(r.age_ms/60000)}分${Math.floor(r.age_ms/1000)%60}秒前 / 前${r.pre_ms/1000}秒・後${r.post_ms/1000}秒 / 中央のG方向 ${['—','F（前）','R（右）','L（左）','B（後）'][r.g_direction]}`;
     }
     card.querySelector('.setup-reading').hidden = scenario.name !== 'adc-startup';
     card.querySelector('[data-value=setup-phase]').textContent = frame.setup_error ? `${scenario.startup_error_title} / ${scenario.startup_error_hint}（setup直後・初回loop前）` : '通常更新（loop）';

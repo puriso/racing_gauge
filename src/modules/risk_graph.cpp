@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "display.h"
+#include "risk_graph_layout.h"
 #include "risk_history.h"
 
 namespace
@@ -132,7 +133,7 @@ void graph()
   const auto& event = risk::history.event();
   mainCanvas.setTextColor(COLOR_WHITE, COLOR_BLACK);
   mainCanvas.setCursor(4, 27);
-  mainCanvas.printf("0s: %.2fbar  %.2fG  OIL:", event.pressure, event.g);
+  mainCanvas.printf("0s: %.2fbar  %.2fG %s  OIL:", event.pressure, event.g, gDirectionLabel(event.gDirection));
   if (event.oilValid)
   {
     mainCanvas.printf("%.0fC", event.oil);
@@ -146,14 +147,15 @@ void graph()
   mainCanvas.print(event.kind == risk::Kind::Low ? "100ms" : "100ms (estimate)");
   mainCanvas.setCursor(4, 39);
   mainCanvas.setTextColor(PRESSURE_COLOR);
-  mainCanvas.print("P[bar]");
+  mainCanvas.print("OIL.P");
   mainCanvas.setTextColor(COLOR_YELLOW);
   mainCanvas.setCursor(265, 39);
-  mainCanvas.print("G[g]");
+  mainCanvas.print("G");
 
   float maxPressure = 10, maxG = 2;
-  float minOil = event.oilValid ? event.oil : std::numeric_limits<float>::max();
-  float maxOil = event.oilValid ? event.oil : std::numeric_limits<float>::lowest();
+  const auto oilRange = risk::oilTemperatureRange(risk::history);
+  const float minOil = oilRange.minimum;
+  const float maxOil = oilRange.maximum;
   for (size_t index = 0; index < risk::WINDOW_SAMPLES; ++index)
   {
     const auto& sample = risk::history.sample(index);
@@ -165,24 +167,9 @@ void graph()
     {
       maxG = std::max(maxG, sample.gMax / 100.0F);
     }
-    if ((sample.flags & risk::OilValid) != 0 && (sample.flags & risk::OilError) == 0)
-    {
-      minOil = std::min(minOil, sample.oilLast / 10.0F);
-      maxOil = std::max(maxOil, sample.oilLast / 10.0F);
-    }
   }
   maxPressure = std::ceil(maxPressure);
   maxG = std::ceil(maxG);
-  if (minOil > maxOil)
-  {
-    minOil = 0;
-    maxOil = 150;
-  }
-  else
-  {
-    minOil = std::floor((minOil - 5) / 10) * 10;
-    maxOil = std::ceil((maxOil + 5) / 10) * 10;
-  }
 
   for (int position : {0, WIDTH / 2, WIDTH})
   {
@@ -228,6 +215,20 @@ void graph()
   mainCanvas.fillCircle(center, yFor(event.pressure, 0, maxPressure, PRESSURE_TOP, PRESSURE_BOTTOM), 2, PRESSURE_COLOR);
   mainCanvas.fillCircle(center, yFor(event.g, 0, maxG, PRESSURE_TOP, PRESSURE_BOTTOM), 2, COLOR_YELLOW);
   if (event.oilValid) mainCanvas.fillCircle(center, yFor(event.oil, minOil, maxOil, OIL_TOP, OIL_BOTTOM), 2, OIL_COLOR);
+  mainCanvas.setTextColor(COLOR_YELLOW, COLOR_BLACK);
+  const auto peaks = risk::gPeaks(risk::history);
+  for (size_t index = 0; index < peaks.count; ++index)
+  {
+    const auto& peak = peaks.values[index];
+    const int x = LEFT + static_cast<int>(peak.index * WIDTH / (risk::WINDOW_SAMPLES - 1));
+    const int y = yFor(peak.g / 100.0F, 0, maxG, PRESSURE_TOP, PRESSURE_BOTTOM);
+    const bool above = y >= PRESSURE_TOP + 10;
+    const int labelY = above ? y - 10 : y + 4;
+    const int labelX = std::clamp(above ? x - 2 : x + 4, LEFT, LEFT + WIDTH - 6);
+    mainCanvas.fillCircle(x, y, 2, COLOR_YELLOW);
+    mainCanvas.setCursor(labelX, labelY);
+    mainCanvas.print(gDirectionLabel(peak.direction));
+  }
   mainCanvas.setTextColor(COLOR_WHITE, COLOR_BLACK);
   mainCanvas.setCursor(LEFT - 8, 216);
   mainCanvas.print("-60s");
