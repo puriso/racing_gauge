@@ -11,14 +11,13 @@ def validate_adc_steps(frames, samples=None):
         if frame['raw']['adc'] != [151, 168, 551, 0]:
             raise ValueError('IMU補正中のADC入力が一定ではありません')
     for index, frame in enumerate(frames[warmup:], start=warmup):
-        stimulus = frame['sample_index'] * FRAME_RATE // SAMPLE_RATE if 'sample_index' in frame else index
-        phase = (stimulus - warmup) % 4094
+        phase = (index - warmup) % 4094
         value = phase if phase <= 2047 else 4094 - phase
         if frame['raw']['adc'] != [value, value, value, 0]:
             raise ValueError(f'生ADCが毎フレーム1カウントずつ増減していません: {index}')
     if samples is not None:
         for index, row in enumerate(samples):
-            stimulus = index * FRAME_RATE // SAMPLE_RATE
+            stimulus = (2 * index * FRAME_RATE + SAMPLE_RATE) // (2 * SAMPLE_RATE)
             if stimulus < warmup:
                 expected = [151, 168, 551, 0]
             else:

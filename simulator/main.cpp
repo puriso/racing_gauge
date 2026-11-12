@@ -410,7 +410,7 @@ auto sample(double ratio) -> Targets
   }
   if (options().scenario == "startup")
   {
-    // 24FPSでのIMU補正後も70℃相当のADCを取得できるよう、最初の2秒は保持する。
+    // IMU補正後も70℃相当のADCを取得できるよう、最初の2秒は保持する。
     const bool initialReading = seconds < 2.0F;
     const float warming = (seconds - 2.0F) / 28.0F;
     return {
@@ -903,8 +903,10 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
           const double progress = sourceTime / options().seconds;
           target = sample(progress);
           latestStimulusSeconds = static_cast<float>(progress * defaultSeconds());
-          input =
-              makeInputs(static_cast<unsigned int>(std::max<int64_t>(0, sourceTicks) / 5), target, latestStimulusSeconds);
+          // ADC往復は最寄りの24Hz刺激へ丸め、描画でも中間のカウントを欠落させない。
+          const auto stimulusFrame = static_cast<unsigned int>(
+              (std::max<int64_t>(0, sourceTicks) + (options().scenario == "adc-steps" ? 2 : 0)) / 5);
+          input = makeInputs(stimulusFrame, target, latestStimulusSeconds);
           simulator::nowMs = nextSample * MS_PER_SECOND / SENSOR_TICKS_PER_SECOND;
           latestSampleTime = simulator::nowMs;
           latestSampleIndex = nextSample;

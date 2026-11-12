@@ -48,12 +48,15 @@ class AdcStepsTest(unittest.TestCase):
             frame['sample_index'] = index * 60 // 24
         samples = []
         for index in range(173 * 60 + 1):
-            adc = self.frames[index * 24 // 60]['raw']['adc']
+            stimulus = (index * 48 + 60) // 120
+            adc = self.frames[stimulus]['raw']['adc']
             samples.append({f'adc{channel}': value for channel, value in enumerate(adc)})
         for frame in frames:
             latest = samples[frame['sample_index']]
             frame['raw']['adc'] = [latest[f'adc{channel}'] for channel in range(4)]
         validate_adc_steps(frames, samples)
+        self.assertEqual(frames[49]['raw']['adc'], [1, 1, 1, 0])
+        self.assertEqual(frames[50]['raw']['adc'], [2, 2, 2, 0])
         # 2秒直後、24FPSでは直接描画されない取得値だけを壊す。
         self.assertNotIn(121, [frame['sample_index'] for frame in frames])
         samples[121]['adc0'] = 2
