@@ -23,7 +23,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     def label(x, y, text, color='#e9edf3', font=normal):
         draw.text((x, y), text, fill=color, font=font)
 
-    heading = f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS | 1.0x'
+    sample_hz = 60 if 'sample_time_ms' in sample else FRAME_RATE
+    heading = f'{scenario} | {sample["time_ms"] / 1000:.3f}s | {FRAME_RATE}FPS/{sample_hz}Hz | 1.0x'
     if 'input_temperature_c' in sample:
         spec = TEMPERATURE_SENSOR_SPEC
         heading += f" | PDF00903S op {spec['minimum_c']:g}..{spec['maximum_c']:g}C"
@@ -60,6 +61,17 @@ def annotated_frame(source, sample, scenario, sensor_settings):
               f"min {observed['pressure_bar']:.2f}/{wanted['pressure_bar']:.2f}bar | "
               f"time {observed['duration_s']:.2f}/{wanted['duration_s']:.2f}s | "
               f"dir {observed['direction']}/{wanted['direction']}", font=small)
+    elif 'risk' in sample:
+        event = sample['risk']
+        name = ('PEAK G' if event.get('recorded') else 'WAITING', 'DROP(est)', 'NEAR(est)', 'LOW')[event['kind']]
+        oil = '---' if event['oil_c'] is None else f"{event['oil_c']:.1f}C"
+        label(16, 297, f"RISK {name} | age {event['age_ms']/1000:.1f}s | pre/post {event['pre_ms']/1000:g}/{event['post_ms']/1000:g}s | OIL.T@0s {oil}", font=small)
+        direction = ('-', 'F', 'R', 'L', 'B')[event['g_direction']]
+        if sample.get('track'):
+            track = sample['track']
+            label(16, 309, f"SYN TC2000 | lap{track['lap_number']} {track['lap_s']:.1f}/80s | {track['section']} | THR {track['throttle']*100:.0f}%", font=small)
+        else:
+            label(16, 309, f'0s direction {direction} | Peak letters: F front / R right / L left / B back.', font=small)
     elif scenario in ('adc-startup', 'adc-communication'):
         modes = ('OK', 'NO DEVICE', 'BUSY', 'CONFIG WRITE FAIL', 'STATUS READ FAIL', 'RESULT READ FAIL', 'SECOND RESULT FAIL')
         state = sample['sensor']
@@ -97,6 +109,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     statuses = '/'.join(names[value] for value in sample['sensor']['status'])
     label(16, 482, f'Sensor O/W/P: {statuses}', font=small)
     observed, wanted = actual['maxima'], expected['maxima']
-    label(16, 506, f'MAX act/exp: oil {observed[0]:g}/{wanted[0]:g}C | water {observed[1]:.1f}/{wanted[1]:.1f}C | P {observed[2]:.2f}/{wanted[2]:.2f}bar', font=small)
+    def peak(value, digits):
+        return '---' if value is None else f'{value:.{digits}f}'
+    label(16, 506, f'MAX act/exp: oil {peak(observed[0], 0)}/{peak(wanted[0], 0)}C | water {peak(observed[1], 1)}/{peak(wanted[1], 1)}C | P {peak(observed[2], 2)}/{peak(wanted[2], 2)}bar', font=small)
     # 最下部は動画の操作バー用。R表示や比較値に重ならないよう余白を残す。
     return frame

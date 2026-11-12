@@ -26,6 +26,7 @@ class SensorReference:
         self.imu_ready = False
         self.g = 0.0
         self.direction = 'Right'
+        self.cardinal = 0
         self.pressure_fault = False
         self.status = {key: 0 if enabled[sensor] else 4 for key, sensor in
                        [('oil_c', 'oil_temp'), ('water_c', 'water_temp'), ('pressure_bar', 'pressure')]}
@@ -76,6 +77,9 @@ class SensorReference:
         longitudinal = f32(axes[0] - self.offset[0])
         lateral = f32(axes[1] - self.offset[1])
         self.g = f32(math.sqrt(f32(f32(lateral * lateral) + f32(longitudinal * longitudinal))))
+        self.cardinal = (0 if lateral == longitudinal == 0 else
+                         (1 if longitudinal >= 0 else 4) if abs(longitudinal) >= abs(lateral) else
+                         (2 if lateral >= 0 else 3))
         if abs(lateral) <= f32(abs(longitudinal) * f32(0.17632698)):
             self.direction = 'Front' if longitudinal >= 0 else 'Rear'
         elif abs(longitudinal) <= f32(abs(lateral) * f32(0.17632698)):
@@ -128,6 +132,6 @@ class SensorReference:
         status = [self.status[key] for key in ('oil_c', 'water_c', 'pressure_bar')]
         if not self.bus.connected:
             status = [2 if value != 4 else 4 for value in status]
-        return {**averages, 'status': status, 'g': self.g, 'g_direction': self.direction, 'pressure_fault': self.pressure_fault,
+        return {**averages, 'status': status, 'g': self.g, 'g_direction': self.direction, 'g_cardinal': self.cardinal, 'pressure_fault': self.pressure_fault,
                 'adc_reads': self.adc_reads.copy(), 'adc_last': self.adc_last.copy(),
                 'adc_connected': self.bus.connected, 'adc_begin_calls': self.bus.attempts, 'adc_wait_ms': self.bus.wait}

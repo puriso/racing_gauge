@@ -10,18 +10,20 @@
 #include "fps_display.h"
 #include "low_warning.h"
 #include "racing_indicator.h"
+#include "risk_history.h"
 #include "sensor.h"
 
 // ────────────────────── グローバル変数 ──────────────────────
 M5GFX display;
 M5Canvas mainCanvas(&display);
+ReviewNavigation reviewNavigation;
 
 static bool pressureGaugeInitialized = false;
 static bool waterGaugeInitialized = false;
 
-float recordedMaxOilPressure = 0.0F;
-float recordedMaxWaterTemp = 0.0F;
-int recordedMaxOilTempTop = 0;
+RecordedMaximum<float> recordedMaxOilPressure;
+RecordedMaximum<float> recordedMaxWaterTemp;
+RecordedMaximum<int> recordedMaxOilTempTop;
 // 監視値は詳細画面の表示中も更新し、描画キャッシュとは分ける。
 static float monitoredPressure = 0.0F;
 static float monitoredWaterTemp = 0.0F;
@@ -68,7 +70,7 @@ struct DisplayCache
                   std::numeric_limits<float>::quiet_NaN(), INT16_MIN};
 
 // ────────────────────── 油温バー描画 ──────────────────────
-void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
+void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, const RecordedMaximum<int>& maxOilTemp)
 {
   constexpr int MIN_TEMP = 80;
   constexpr int MAX_TEMP = 130;
@@ -124,12 +126,16 @@ void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
     const int alertX = X + static_cast<int>(W * (ALERT_TEMP - MIN_TEMP) / RANGE);
     canvas.drawLine(alertX, Y, alertX, Y + H - 2, COLOR_GRAY);
   }
-  if (initialize || maxOilTemp != previousMax)
+  const int maximumValue = maxOilTemp.hasValue() ? maxOilTemp.value() : INT16_MIN;
+  if (initialize || maximumValue != previousMax)
   {
     canvas.fillRect(X, Y + H + 4, 215, 9, COLOR_BLACK);
     canvas.setCursor(X, Y + H + 4);
-    canvas.printf("OIL.T / Celsius,  MAX:%03d", maxOilTemp);
-    previousMax = maxOilTemp;
+    if (maxOilTemp.hasValue())
+      canvas.printf("OIL.T / Celsius,  MAX:%03d", maxOilTemp.value());
+    else
+      canvas.print("OIL.T / Celsius,  MAX:---");
+    previousMax = maximumValue;
   }
   char tempStr[16];
   const char* status = sensorText(oilTemperatureStatus);
@@ -149,15 +155,16 @@ void drawOilTemperatureTopBar(M5Canvas& canvas, float oilTemp, int maxOilTemp)
 }
 
 // ────────────────────── 画面更新＋ログ ──────────────────────
-void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, int16_t maxOilTemp)
+void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, const RecordedMaximum<int>& maxOilTemp)
 {
   const int TOPBAR_Y = 0;
   const int TOPBAR_H = 50;
   const int GAUGE_H = 170;
 
+  const int16_t maximumValue = maxOilTemp.hasValue() ? maxOilTemp.value() : INT16_MIN;
   // 水温は0.05度以上、油温は0.1度以上、油圧は0.05bar以上変化したら更新する
   bool oilChanged = std::isnan(displayCache.oilTemp) || fabs(oilTemp - displayCache.oilTemp) >= 0.1F ||
-                    (maxOilTemp != displayCache.maxOilTemp) || drawnOilStatus != oilTemperatureStatus;
+                    (maximumValue != displayCache.maxOilTemp) || drawnOilStatus != oilTemperatureStatus;
   bool pressureChanged = std::isnan(displayCache.pressureAvg) || fabs(pressureAvg - displayCache.pressureAvg) >= 0.05F ||
                          drawnPressureStatus != oilPressureStatus;
   bool waterChanged = std::isnan(displayCache.waterTempAvg) || fabs(waterTempAvg - displayCache.waterTempAvg) >= 0.05F ||
@@ -170,7 +177,7 @@ void renderDisplayAndLog(float pressureAvg, float waterTempAvg, float oilTemp, i
     if (!oilBarInitialized) mainCanvas.fillRect(0, TOPBAR_Y, LCD_WIDTH, TOPBAR_H, COLOR_BLACK);
     drawOilTemperatureTopBar(mainCanvas, oilTemp, maxOilTemp);
     displayCache.oilTemp = oilTemp;
-    displayCache.maxOilTemp = maxOilTemp;
+    displayCache.maxOilTemp = maximumValue;
     drawnOilStatus = oilTemperatureStatus;
   }
 
@@ -258,9 +265,9 @@ void updateGaugeMonitoring()
   bool pressureValid = oilPressureStatus == SensorStatus::Valid && std::isfinite(pressure) && pressure < 11.0F;
   bool waterValid = waterTemperatureStatus == SensorStatus::Valid && std::isfinite(water) && water < 199.0F;
   bool oilValid = oilTemperatureStatus == SensorStatus::Valid && std::isfinite(oil) && oil < 199.0F;
-  if (pressureValid) recordedMaxOilPressure = std::max(recordedMaxOilPressure, pressure);
-  if (waterValid) recordedMaxWaterTemp = std::max(recordedMaxWaterTemp, water);
-  if (oilValid) recordedMaxOilTempTop = std::max(recordedMaxOilTempTop, static_cast<int>(oil));
+  recordedMaxOilPressure.observe(pressure, pressureValid);
+  recordedMaxWaterTemp.observe(water, waterValid);
+  if (oilValid) recordedMaxOilTempTop.observe(static_cast<int>(oil), true);
 
   // 異常値を平滑化に混ぜず、復帰後の最初の値から再開する。最高値は保持する。
   auto smooth = [](float target, bool valid, float alpha, float& previous) -> float
@@ -278,6 +285,8 @@ void updateGaugeMonitoring()
   monitoredWaterTemp = smooth(water, waterValid, 0.1F, smoothWaterTemp);
   monitoredOilTemp = smooth(oil, oilValid, 0.1F, smoothOilTemp);
   updateLowPressureWarning(currentGForce, monitoredPressure, pressureValid);
+  risk::history.update(static_cast<uint32_t>(millis()), {monitoredPressure, currentGForce, monitoredOilTemp, pressureValid,
+                                                         oilValid, isLowPressureQualified(), currentGCardinalDirection});
 }
 
 void updateGauges() { renderDisplayAndLog(monitoredPressure, monitoredWaterTemp, monitoredOilTemp, recordedMaxOilTempTop); }
@@ -316,7 +325,10 @@ void drawMenuScreen()
   mainCanvas.print("WATER.T MAX:");
 #if SENSOR_WATER_TEMP_PRESENT
   // 小数点を表示しない
-  snprintf(valStr, sizeof(valStr), "%6.0f", recordedMaxWaterTemp);
+  if (recordedMaxWaterTemp.hasValue())
+    snprintf(valStr, sizeof(valStr), "%6.0f", recordedMaxWaterTemp.value());
+  else
+    snprintf(valStr, sizeof(valStr), "---");
   mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 #else
   // センサー無効時は Disabled と表示
@@ -328,7 +340,10 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.T MAX:");
 #if SENSOR_OIL_TEMP_PRESENT
-  snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop);
+  if (recordedMaxOilTempTop.hasValue())
+    snprintf(valStr, sizeof(valStr), "%6d", recordedMaxOilTempTop.value());
+  else
+    snprintf(valStr, sizeof(valStr), "---");
   mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 #else
   // センサー無効時は Disabled と表示
@@ -340,7 +355,10 @@ void drawMenuScreen()
   mainCanvas.setCursor(10, y);
   mainCanvas.print("OIL.P MAX:");
 #if SENSOR_OIL_PRESSURE_PRESENT
-  snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure);
+  if (recordedMaxOilPressure.hasValue())
+    snprintf(valStr, sizeof(valStr), "%6.1f", recordedMaxOilPressure.value());
+  else
+    snprintf(valStr, sizeof(valStr), "---");
   mainCanvas.drawRightString(valStr, LCD_WIDTH - 10, y);
 #else
   // センサー無効時は Disabled と表示

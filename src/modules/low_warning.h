@@ -14,6 +14,7 @@ bool drawLowPressureWarning(M5Canvas& canvas, float gForce, float pressure, bool
 void updateLowPressureWarning(float gForce, float pressure, bool pressureValid = true);
 bool drawLowPressureWarning(M5Canvas& canvas, bool& stateChanged, bool backgroundChanged = false);
 void invalidateLowPressureWarning();
+auto isLowPressureQualified() -> bool;
 
 // LOW成立の履歴。画面再描画では保持し、明示的なリセットで消去する。
 auto hasLowWarningHistory() -> bool;

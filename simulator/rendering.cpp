@@ -11,6 +11,8 @@
 #include "../src/modules/low_warning.cpp"
 #include "../src/modules/racing_indicator.cpp"
 #include "../src/modules/racing_mode.cpp"
+#include "../src/modules/risk_graph.cpp"
+#include "../src/modules/risk_history.cpp"
 #include "../src/modules/sensor.cpp"
 #include "../src/modules/startup_error.cpp"
 // NOLINTEND(bugprone-suspicious-include)
@@ -30,6 +32,15 @@ static void writeRenderedValue(std::ostream& output, float value)
   }
 }
 
+template <typename T>
+static void writeMaximum(std::ostream& output, const RecordedMaximum<T>& maximum)
+{
+  if (maximum.hasValue())
+    output << maximum.value();
+  else
+    output << "null";
+}
+
 void writeDisplayTelemetry(std::ostream& output)
 {
   output << R"({"oil_c":)";
@@ -39,8 +50,13 @@ void writeDisplayTelemetry(std::ostream& output)
   output << R"(,"pressure_bar":)";
   writeRenderedValue(output, displayCache.pressureAvg);
   output << R"(,"monitor":[)" << monitoredOilTemp << ',' << monitoredWaterTemp << ',' << monitoredPressure
-         << R"(],"maxima":[)" << recordedMaxOilTempTop << ',' << recordedMaxWaterTemp << ',' << recordedMaxOilPressure
-         << ']';
+         << R"(],"maxima":[)";
+  writeMaximum(output, recordedMaxOilTempTop);
+  output << ',';
+  writeMaximum(output, recordedMaxWaterTemp);
+  output << ',';
+  writeMaximum(output, recordedMaxOilPressure);
+  output << ']';
   output << R"(,"brightness_mode":)" << static_cast<int>(currentBrightnessMode) << R"(,"brightness_pwm":)"
          << static_cast<int>(display.getBrightness()) << R"(,"lux_sample":)" << latestLux << R"(,"lux_median":)"
          << medianLuxValue << R"(,"warning_history":)" << hasLowWarningHistory() << R"(,"low_event":{"g":)" << lastLowEventG
@@ -86,4 +102,33 @@ void writeSensorTelemetry(std::ostream& output)
   }
   output << R"(],"adc_connected":)" << adcInitialized << R"(,"adc_begin_calls":)" << simulator::adcBeginCalls
          << R"(,"adc_wait_ms":)" << simulator::adcWaitMs << '}';
+}
+
+void writeRiskTelemetry(std::ostream& output)
+{
+  const auto& history = risk::history;
+  const auto& event = history.event();
+  output << R"({"kind":)" << static_cast<int>(event.kind) << R"(,"at_ms":)" << event.occurredMs << R"(,"age_ms":)"
+         << (history.hasSelection() ? history.ageMs() : 0) << R"(,"recorded":)" << history.hasSelection()
+         << R"(,"pressure_bar":)" << event.pressure << R"(,"g":)" << event.g << R"(,"oil_c":)";
+  if (event.oilValid)
+    output << event.oil;
+  else
+    output << "null";
+  output << R"(,"pre_ms":)" << (history.hasSelection() ? history.preMs() : 0) << R"(,"post_ms":)"
+         << (history.hasSelection() ? history.postMs() : 0) << R"(,"g_direction":)" << static_cast<int>(event.gDirection)
+         << '}';
+}
+
+void writeRiskWindow(std::ostream& output)
+{
+  output << '[';
+  for (size_t index = 0; index < risk::WINDOW_SAMPLES; ++index)
+  {
+    if (index != 0) output << ',';
+    const auto& sample = risk::history.sample(index);
+    output << '[' << sample.pressureMin << ',' << sample.pressureMax << ',' << sample.gMax << ',' << sample.oilLast << ','
+           << static_cast<int>(sample.flags) << ',' << static_cast<int>(sample.gDirection) << ']';
+  }
+  output << ']';
 }

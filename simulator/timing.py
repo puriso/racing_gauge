@@ -1,6 +1,15 @@
 """24FPSの仮想時刻と、メディアの表示時刻を揃える。"""
 
 FRAME_RATE = 24
+SAMPLE_RATE = 60
+
+
+def sample_time_ms(index):
+    return index * 1000 // SAMPLE_RATE
+
+
+def sample_at_frame(index):
+    return index * SAMPLE_RATE // FRAME_RATE
 
 
 def frame_time_ms(index):

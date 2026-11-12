@@ -44,6 +44,8 @@ class AdcBusReference:
 
 
 def fault_input(scenario, now):
+    if scenario == 'risk-predictive':
+        return 1 if 95000 <= now < 96000 else 2 if 105000 <= now < 106000 else 0
     if scenario in ('menu-monitoring', 'fault-monitoring'):
         start = 17000 if scenario == 'menu-monitoring' else 4000
         return int(start <= now < start + 200)
