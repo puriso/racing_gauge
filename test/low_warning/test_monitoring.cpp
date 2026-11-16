@@ -47,13 +47,27 @@ static void invalidPressureCannotQualify()
   expect(hasLowWarningHistory(), "正常な0barはLOWを成立させる");
 }
 
+static void qualifiedStateExcludesHeldWarning()
+{
+  nowMs = 100;
+  updateLowPressureWarning(2.0F, 1.0F);
+  nowMs = 600;
+  updateLowPressureWarning(2.0F, 1.0F);
+  expect(isLowPressureQualified(), "成立中のLOWを記録へ渡す");
+  nowMs = 700;
+  updateLowPressureWarning(0.0F, 5.0F);
+  M5Canvas canvas;
+  bool changed = false;
+  expect(!isLowPressureQualified() && drawLowPressureWarning(canvas, changed), "保持表示を新しい危険点として渡さない");
+}
+
 int main(int argc, char** argv)
 {
   if (argc != 2) return 2;
   std::string name = argv[1];
   if (name == "--list")
   {
-    std::cout << "hidden_monitoring\ninvalid_pressure\n";
+    std::cout << "hidden_monitoring\ninvalid_pressure\nqualified_state\n";
     return 0;
   }
   try
@@ -62,6 +76,8 @@ int main(int argc, char** argv)
       monitorWithoutDrawing();
     else if (name == "invalid_pressure")
       invalidPressureCannotQualify();
+    else if (name == "qualified_state")
+      qualifiedStateExcludesHeldWarning();
     else
       return 2;
     return 0;

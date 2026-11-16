@@ -2,10 +2,21 @@
 
 import unittest
 
-from timing import FRAME_RATE, frame_at_or_after, frame_time_ms, gif_duration_ms
+from timing import FRAME_RATE, SAMPLE_RATE, frame_at_or_after, frame_time_ms, gif_duration_ms, sample_at_frame, sample_time_ms
 
 
 class FrameTimingTest(unittest.TestCase):
+    def test_sixty_samples_and_twenty_four_frames_share_the_same_second(self):
+        self.assertEqual(SAMPLE_RATE, 60)
+        self.assertEqual(sample_time_ms(60), frame_time_ms(24))
+        latest = [sample_at_frame(i) for i in range(25)]
+        self.assertEqual(latest[:5], [0, 2, 5, 7, 10])
+        self.assertEqual({b-a for a,b in zip(latest, latest[1:])}, {2, 3})
+        self.assertEqual(latest[-1], 60)
+        for frame, sample in enumerate(latest):
+            self.assertLessEqual(sample_time_ms(sample), frame_time_ms(frame))
+            self.assertGreater(sample_time_ms(sample+1), frame_time_ms(frame))
+
     def test_frame_times_keep_fractional_milliseconds(self):
         self.assertEqual(FRAME_RATE, 24)
         self.assertEqual([frame_time_ms(index) for index in range(7)], [0, 41, 83, 125, 166, 208, 250])

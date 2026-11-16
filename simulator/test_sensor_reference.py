@@ -97,13 +97,15 @@ class SensorReferenceTest(unittest.TestCase):
 
     def test_axis_bias_direction_and_vertical_exclusion(self):
         self.settle()
-        for axes, direction in [([2.125, -0.0625, 1], 'Front'), ([-1.875, -0.0625, 1], 'Rear'),
-                                ([0.125, 1.9375, 1], 'Right'), ([0.125, -2.0625, 1], 'Left')]:
+        for axes, direction, cardinal in [([2.125, -0.0625, 1], 'Front', 1), ([-1.875, -0.0625, 1], 'Rear', 4),
+                                          ([0.125, 1.9375, 1], 'Right', 2), ([0.125, -2.0625, 1], 'Left', 3)]:
             result = self.sensor.step(1250, self.raw | {'imu': axes})
             self.assertEqual(result['g'], 2)
             self.assertEqual(result['g_direction'], direction)
+            self.assertEqual(result['g_cardinal'], cardinal)
         result = self.sensor.step(1291, self.raw | {'imu': [0.125, -0.0625, 3]})
         self.assertEqual(result['g'], 0)
+        self.assertEqual(result['g_cardinal'], 0)
 
     def test_setup_snapshot_does_not_acquire_adc_or_calibrate_imu(self):
         self.sensor.bus.frame(0, 1)

@@ -9,6 +9,7 @@
 #include "modules/low_warning.h"
 #include "modules/racing_indicator.h"
 #include "modules/racing_mode.h"
+#include "modules/risk_graph.h"
 #include "modules/sensor.h"
 #include "modules/startup_error.h"
 
@@ -55,6 +56,8 @@ void setup()
   // DMA を初期化
   display.initDMA();
   display.setRotation(3);
+  // タップ座標の回転を、実際に描画するディスプレイと一致させる。
+  M5.Touch.begin(&display);
   display.setColorDepth(DISPLAY_COLOR_DEPTH);
   display.setBrightness(BACKLIGHT_DAY);
 
@@ -129,14 +132,17 @@ void loop()
   bool menuChanged = touched && !wasTouched;
   if (menuChanged)
   {
-    isMenuVisible = !isMenuVisible;
-    if (isMenuVisible)
+    const bool wasReviewing = reviewNavigation.reviewing();
+    const auto& touch = M5.Touch.getDetail();
+    reviewNavigation.tap(touch.x, touch.y);
+    isMenuVisible = reviewNavigation.reviewing();
+    if (!wasReviewing && isMenuVisible)
     {
       forceStopRacingMode();  // 詳細画面ではレーシングモードを解除
       // メニュー表示中は輝度を最大にする
       applyBrightnessMode(BrightnessMode::Day);
     }
-    else
+    else if (wasReviewing && !isMenuVisible)
     {
       resetLowWarningHistory();
       resetGaugeState();
@@ -165,6 +171,10 @@ void loop()
   if (!isMenuVisible)
   {
     updateGauges();
+  }
+  else if (reviewNavigation.screen() == ReviewScreen::Graph)
+  {
+    refreshRiskGraph(menuChanged);
   }
   else
   {

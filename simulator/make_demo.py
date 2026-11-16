@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def load_segment(recordings, scenario, indices=None):
     directory = recordings / scenario
     metadata = json.loads((directory / "inputs.json").read_text())
-    if metadata.get('schema_version') != 2 or metadata["scenario"] != scenario or metadata["fps"] != FRAME_RATE:
+    if metadata.get('schema_version') not in (2, 3) or metadata["scenario"] != scenario or metadata["fps"] != FRAME_RATE:
         raise ValueError(f"record.pyで生成した、生ADC・IMU入力付き{FRAME_RATE}FPSの{scenario}録画を指定してください")
     samples = metadata['frames']
     if not samples:

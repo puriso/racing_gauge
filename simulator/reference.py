@@ -5,7 +5,8 @@ import math
 from numeric import float32
 from low_warning_reference import LowWarningReference
 from sensor_reference import SensorReference
-from timing import FRAME_RATE, frame_time_ms
+from timing import FRAME_RATE, SAMPLE_RATE, frame_time_ms, sample_time_ms, sample_at_frame
+from risk_reference import RiskReference
 
 
 class Reference:
@@ -14,7 +15,7 @@ class Reference:
         self.sensors = sensors
         self.filtered = {}
         self.monitored = {}
-        self.maxima = [0, 0.0, 0.0]
+        self.maxima = [None, None, None]
         self.samples = [0] * settings['median_size']
         self.sample_index = 0
         self.lux_sample = self.lux_median = 0
@@ -23,7 +24,10 @@ class Reference:
         self.menu = self.racing = False
         self.racing_until = self.g_since = None
         self.warning = LowWarningReference()
+        self.risk = RiskReference()
         self.initialized = False
+        self.low_visible = False
+        self.risk_enabled = False
 
     def read_light(self, lux):
         if not self.sensors['ambient']:
@@ -37,15 +41,12 @@ class Reference:
         self.mode = (0 if self.lux_median >= self.settings['lux_day'] else
                      1 if self.lux_median >= self.settings['lux_dusk'] else 2)
 
-    def step(self, sample):
-        now, menu = sample['time_ms'], sample['menu']
+    def navigate(self, now, menu, lux):
         if not self.initialized:
-            self.read_light(sample['lux'])
+            self.read_light(lux)
             self.initialized = True
-        if sample.get('setup_error'):
-            return self.snapshot(False)
         if not self.menu and not self.racing and now - self.last_als >= self.settings['als_interval_ms']:
-            self.read_light(sample['lux'])
+            self.read_light(lux)
             self.last_als = now
         if menu and not self.menu:
             self.racing = False
@@ -53,8 +54,27 @@ class Reference:
             self.mode = 0
         if self.menu and not menu:
             self.warning.history = False
-            self.read_light(sample['lux'])
+            self.read_light(lux)
         self.menu = menu
+
+    def present(self, now, menu, lux):
+        self.navigate(now, menu, lux)
+        result = self.snapshot(self.low_visible and not menu)
+        if self.risk_enabled:
+            result['risk'] = self.risk.snapshot()
+        return result
+
+    def step(self, sample):
+        now = sample['time_ms']
+        self.risk_enabled = self.risk_enabled or sample.get('risk_scenario', False)
+        if not self.initialized:
+            self.read_light(sample['lux'])
+            self.initialized = True
+        if sample.get('setup_error'):
+            return self.snapshot(False)
+        if sample.get('navigation', True):
+            self.navigate(now, sample['menu'], sample['lux'])
+        menu = self.menu
 
         if menu:
             self.racing = False
@@ -86,7 +106,8 @@ class Reference:
             else:
                 valid = valid and math.isfinite(target) and target < 199
             if valid:
-                self.maxima[index] = max(self.maxima[index], int(target) if index == 0 else target)
+                candidate = int(target) if index == 0 else target
+                self.maxima[index] = candidate if self.maxima[index] is None else max(self.maxima[index], candidate)
                 previous = self.filtered.get(key, target)
                 self.filtered[key] = float32(previous + float32(float32(alpha) * float32(target - previous)))
                 self.monitored[key] = self.filtered[key]
@@ -94,8 +115,15 @@ class Reference:
                 self.filtered.pop(key, None)
                 self.monitored[key] = 0.0
         pressure_valid = sample.get('status', [1, 1, 1])[2] == 1 and sample['pressure_bar'] < 11 and not sample.get('pressure_fault', False)
-        low = self.warning.step(now, sample['g'] if pressure_valid else 0, self.monitored['pressure_bar'], sample.get('g_direction', 'Right'))
-        return self.snapshot(low and not menu)
+        low = self.warning.step(now + sample.get('adc_wait_ms', 0), sample['g'] if pressure_valid else 0, self.monitored['pressure_bar'], sample.get('g_direction', 'Right'))
+        self.low_visible = low
+        result = self.snapshot(low and not menu)
+        if sample.get('risk_scenario'):
+            status = sample['status']
+            result['risk'] = self.risk.step(now + sample.get('adc_wait_ms', 0), self.monitored['pressure_bar'], sample['g'], self.monitored['oil_c'],
+                                           pressure_valid, status[0] == 1 and math.isfinite(sample['oil_c']) and sample['oil_c'] < 199,
+                                           self.warning.qualified, sample['g_cardinal'])
+        return result
 
     def snapshot(self, low):
         return {**{key: round(self.monitored[key], 4) if key in self.monitored else None
@@ -108,43 +136,57 @@ class Reference:
 
 
 def add_expectations(directory, metadata):
-    if metadata['fps'] != FRAME_RATE:
-        raise ValueError(f'{FRAME_RATE}FPSの生センサー入力が必要です')
+    if metadata['fps'] != FRAME_RATE or metadata.get('sample_hz') != SAMPLE_RATE:
+        raise ValueError('取得60Hz・描画24FPSの入力が必要です')
     frames = metadata['frames']
     reference = Reference(metadata['settings'], metadata['sensors'])
     sensor = SensorReference(metadata['sensor_settings'], metadata['sensors'])
-    count = 0
-    tick = -1
     with (directory / 'trace.csv').open(newline='') as source:
-        for tick, row in enumerate(csv.DictReader(source)):
+        rows = list(csv.DictReader(source))
+    columns = list(rows[0])
+    float_columns = {'ax', 'ay', 'az', 'target_oil_c', 'target_water_c', 'target_pressure_bar', 'target_g'}
+    metadata['sample_columns'] = columns
+    metadata['raw_samples'] = [[float(row[key]) if key in float_columns else int(row[key]) for key in columns] for row in rows]
+    cursor = 0
+    for tick, frame in enumerate(frames):
+        if frame['time_ms'] != frame_time_ms(tick):
+            raise ValueError('描画時刻が24FPSではありません')
+        while cursor < len(rows) and int(rows[cursor]['time_ms']) <= frame['time_ms']:
+            row = rows[cursor]
             now = int(row['time_ms'])
             raw = {'adc': [int(row[f'adc{channel}']) for channel in range(4)],
                    'imu': [float(row[axis]) for axis in ('ax', 'ay', 'az')], 'als': int(row['lux']), 'adc_fault': int(row['adc_fault'])}
-            if (now != frame_time_ms(tick) or not all(0 <= value <= 2047 for value in raw['adc'])
+            if (now != sample_time_ms(cursor) or not all(0 <= value <= 2047 for value in raw['adc'])
                     or not all(math.isfinite(value) for value in raw['imu'])):
-                raise ValueError('期待値の計算に使う24FPS入力が欠損・不正です')
+                raise ValueError('期待値の計算に使う60Hz入力が欠損・不正です')
             setup_error = bool(int(row['setup_error']))
             if setup_error:
                 sensor.bus.frame(now, raw['adc_fault'])
                 acquired = sensor.snapshot()
             else:
                 acquired = sensor.step(now, raw)
-            sample = {**acquired, 'time_ms': now, 'menu': bool(int(row['menu'])), 'lux': raw['als'], 'setup_error': setup_error}
-            expected = reference.step(sample)
-            expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
-                                  for key, value in acquired.items()}
-            expected['voltage'] = [round(sensor.voltage(value), 6) for value in raw['adc']]
-            frame = frames[tick]
-            if (frame['setup_error'] != setup_error or frame['time_ms'] != now or frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als']
-                    or frame['raw']['adc_fault'] != raw['adc_fault']
-                    or frame['lux'] != raw['als'] or frame['menu'] != sample['menu']
-                    or any(not math.isclose(before, after, abs_tol=0.000001)
-                           for before, after in zip(frame['raw']['imu'], raw['imu']))):
-                raise ValueError(f'録画と24FPSの生入力が一致しません: {frame}')
-            frame['expected'] = expected
-            count += 1
-    if count != len(frames) or tick != len(frames) - 1:
-        raise ValueError('24FPS入力と録画の長さが一致しません')
+            if bool(int(row['menu'])) != reference.menu:
+                raise ValueError('取得時の画面状態が期待値と一致しません')
+            sample = {**acquired, 'time_ms': now, 'menu': reference.menu, 'navigation': False,
+                      'lux': raw['als'], 'setup_error': setup_error,
+                      'risk_scenario': metadata['scenario'].startswith(('risk-', 'tsukuba-', 'high-g-'))}
+            reference.step(sample)
+            cursor += 1
+        expected = reference.present(frame['time_ms'], frame['menu'], raw['als'])
+        expected['sensor'] = {key: round(value, 6) if isinstance(value, float) else value
+                              for key, value in acquired.items()}
+        expected['voltage'] = [round(sensor.voltage(value), 6) for value in raw['adc']]
+        if (frame['sample_index'] != sample_at_frame(tick) or frame['sample_index'] != cursor - 1 or
+                frame['sample_time_ms'] != now or frame['setup_error'] != setup_error or
+                frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als'] or
+                frame['raw']['adc_fault'] != raw['adc_fault'] or frame['lux'] != raw['als'] or
+                any(not math.isclose(a, b, abs_tol=0.000001) for a, b in zip(frame['raw']['imu'], raw['imu']))):
+            raise ValueError(f'24FPS描画に使った最新の60Hz生入力が一致しません: {tick}')
+        frame['expected'] = expected
+    if 'risk_window' in metadata and metadata['risk_window'] != reference.risk.window:
+        raise ValueError('危険点の前後1分データが独立モデルと一致しません')
+    if cursor != len(rows) or cursor != frames[-1]['time_ms'] * SAMPLE_RATE // 1000 + 1:
+        raise ValueError('60Hzの全取得値と24FPSの録画が揃っていません')
 
 
 def check_expectations(frame):
@@ -165,7 +207,8 @@ def check_expectations(frame):
         if frame['sensor'][key] != expected['sensor'][key]:
             raise RuntimeError(f'取得・異常判定の期待値が一致しません: {key}, {frame}')
     if (not math.isclose(frame['g'], expected['sensor']['g'], abs_tol=0.00001)
-            or frame['g_direction'] != expected['sensor']['g_direction']):
+            or frame['g_direction'] != expected['sensor']['g_direction']
+            or frame['g_cardinal'] != expected['sensor']['g_cardinal']):
         raise RuntimeError(f'IMUの補正・水平G・方向の期待値が一致しません: {frame}')
     for key in ('g', 'pressure_bar', 'duration_s'):
         if not math.isclose(expected['low_event'][key], actual['low_event'][key], abs_tol=0.0001):
@@ -182,5 +225,20 @@ def check_expectations(frame):
 
     for key, tolerance in [('monitor', 0.002), ('maxima', 0.002)]:
         for wanted, observed in zip(expected[key], actual[key]):
-            if not math.isclose(wanted, observed, abs_tol=tolerance):
+            if (wanted is None or observed is None):
+                if wanted is not observed:
+                    raise RuntimeError(f'最高値の未取得状態が一致しません: {key}, {frame}')
+            elif not math.isclose(wanted, observed, abs_tol=tolerance):
                 raise RuntimeError(f'監視値・最高値が一致しません: {key}, {frame}')
+
+    if 'risk' in frame:
+        for key, observed in frame['risk'].items():
+            wanted = expected['risk'][key]
+            if wanted is None or observed is None:
+                correct = wanted is observed
+            elif isinstance(wanted, float):
+                correct = math.isclose(wanted, observed, abs_tol=0.002)
+            else:
+                correct = wanted == observed
+            if not correct:
+                raise RuntimeError(f'危険場面の選択・経過時間が一致しません: {key}, {frame}')

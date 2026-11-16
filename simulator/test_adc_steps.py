@@ -42,6 +42,27 @@ class AdcStepsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '173秒'):
             validate_adc_steps(self.frames[:-1])
 
+    def test_rejects_corruption_in_a_sample_between_draws(self):
+        frames = copy.deepcopy(self.frames)
+        for index, frame in enumerate(frames):
+            frame['sample_index'] = index * 60 // 24
+        samples = []
+        for index in range(173 * 60 + 1):
+            stimulus = (index * 48 + 60) // 120
+            adc = self.frames[stimulus]['raw']['adc']
+            samples.append({f'adc{channel}': value for channel, value in enumerate(adc)})
+        for frame in frames:
+            latest = samples[frame['sample_index']]
+            frame['raw']['adc'] = [latest[f'adc{channel}'] for channel in range(4)]
+        validate_adc_steps(frames, samples)
+        self.assertEqual(frames[49]['raw']['adc'], [1, 1, 1, 0])
+        self.assertEqual(frames[50]['raw']['adc'], [2, 2, 2, 0])
+        # 2秒直後、24FPSでは直接描画されない取得値だけを壊す。
+        self.assertNotIn(121, [frame['sample_index'] for frame in frames])
+        samples[121]['adc0'] = 2
+        with self.assertRaisesRegex(ValueError, '描画の間の60Hz取得'):
+            validate_adc_steps(frames, samples)
+
 
 if __name__ == '__main__':
     unittest.main()

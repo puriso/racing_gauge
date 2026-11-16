@@ -21,10 +21,41 @@ from annotations import SIZE, annotated_frame
 from warning_review import REVIEWS, run_spot_checks, review_spots, validate_review
 from fault_cases import CASES, validate_fault_inputs
 from reference import add_expectations, check_expectations
-from timing import FRAME_RATE, frame_at_or_after, frame_time_ms
+from timing import FRAME_RATE, SAMPLE_RATE, frame_at_or_after, frame_time_ms
+from tsukuba_lap import validate_tsukuba
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    'high-g-review': {
+        'title': '危険点なし・最大Gと同G帯の最低油圧を記録', 'group': 'reproduction',
+        'description': '危険点がなくてもPEAK Gを表示。30.05秒には描画の間だけの1.5Gを60Hzで記録。20/40/60/70秒により高いG、42/75秒は同G帯で油圧低下。50秒の低いGでは更新せず、138秒に完成グラフを確認。取得60Hz・描画24FPS。',
+        'seconds': 140, 'snapshots': [3, 21, 31, 44, 52, 64, 74, 77, 138, 140],
+    },
+    "tsukuba-lap": {
+        "title": "筑波2000一周・ダンロップ先の一瞬の油圧低下", "group": "reproduction",
+        "description": "筑波専用の連続走行。注目する一周は60〜140秒、前後も走り続けてGを変化させます。全開→アクセルオフで約2bar低下し、加速中は油温の上昇が速くなります。全180秒で120→140℃。100秒付近の80Rで短い閾値割れ、168秒に完成グラフを確認。合成データ・取得60Hz/描画24FPS。",
+        "seconds": 180, "snapshots": [3, 60, 67, 75, 83, 94, 99.5, 100.25, 101, 111, 120, 132, 140, 145, 168, 170, 174, 180],
+    },
+    "tsukuba-low": {
+        "title": "筑波2000一周・ダンロップ先でLOW成立する比較ケース", "group": "reproduction",
+        "description": "同じ連続走行で80Rの油圧低下だけを長くし、3bar以下が500ms以上続いてLOWが成立する比較ケース。加減速・旋回のGとアクセル連動の油圧、加速中に速く上がる油温120→140℃を確認。168秒で前後1分のグラフ。合成データ・取得60Hz/描画24FPS。",
+        "seconds": 180, "snapshots": [60, 67, 83, 94, 99.5, 100.25, 101, 104, 111, 132, 140, 145, 168, 170, 174, 180],
+    },
+    "risk-window": {
+        "title": "危険点を中央に置く前後1分・油圧/G/油温", "group": "reproduction",
+        "description": "75秒に2G・油圧0.8barのLOW。40/55/75/95秒にF/R/L/BのGを入力し、145秒の完成グラフで各ピークの方向と油温の自動スケールを確認。76秒から収集中、82秒の詳細ボタン、通常画面への復帰後の保持、何分前かも確認",
+        "seconds": 160, "snapshots": [3, 74, 76, 78, 82, 86, 120, 145, 149, 153, 160],
+    },
+    "risk-predictive": {
+        "title": "LOW未成立の予兆・急低下・最悪点選択・異常除外", "group": "reproduction",
+        "description": "65秒に高G中の急低下DROP、75秒にLOW直前のNEARを記録。100msの一過性低下とADC通信異常では最悪点を上書きしない。前後1分の油温と通信異常の欠損も確認。予兆はヒューリスティックでLOW警告条件は変更しない",
+        "seconds": 160, "snapshots": [3, 64, 66, 76, 79, 90, 96, 120, 145, 152, 155, 160],
+    },
+    "negative-maxima": {
+        "title": "負温度の最高値・未取得・異常保持・0℃越え", "group": "reproduction",
+        "description": "最初の2秒は温度異常でMAX未取得。負温度の初回取得、より高い負温度への更新、再冷却・異常時の保持を詳細画面でも確認。19秒から正温度へ移り、0℃を越えた最高値更新も追う",
+        "seconds": 24, "snapshots": [0, 1.5, 3, 5, 7.8, 8.5, 11, 13.5, 16.5, 18, 20, 22.5, 24],
+    },
     "menu-monitoring": {
         "title": "詳細画面中のLOW・最高値とR復帰", "group": "reproduction",
         "description": "3秒にR開始、4〜12秒は詳細画面。6〜9秒のLOWと8〜11秒の温度・油圧ピークを表示中も記録。高Gのまま戻ってR再表示、17秒の200ms切断後も最高値を保持する",
@@ -150,13 +181,16 @@ def running_pressure(seconds):
 
 def validate_inputs(metadata):
     validate_communication(metadata)
-    if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring'):
+    if metadata['scenario'].startswith('tsukuba-') or metadata['scenario'] == 'high-g-review':
+        return
+    if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring', 'negative-maxima', 'risk-window', 'risk-predictive'):
         return
     if metadata["scenario"] in CASES:
         validate_fault_inputs(metadata)
         return
     if metadata["scenario"] == "adc-steps":
-        validate_adc_steps(metadata["frames"])
+        validate_adc_steps(metadata["frames"],
+                           [dict(zip(metadata['sample_columns'], row)) for row in metadata['raw_samples']])
         return
     # 目標はADC波形を生成するためだけの値。実際の取得値は別途独立モデルと照合する。
     frames = [{**frame, **frame['target']} for frame in metadata["frames"]]
@@ -169,7 +203,7 @@ def validate_inputs(metadata):
             raise RuntimeError(f"G入力が0〜2.0Gの範囲外です: {frame}")
         if not 0 <= frame["lux"] <= 100:
             raise RuntimeError(f"照度入力が0〜100luxの範囲外です: {frame}")
-        seconds = index / FRAME_RATE
+        seconds = frame['sample_index'] / SAMPLE_RATE
         ordinary = scenario not in ("pressure-sweep", "warnings", "circuit", "warning-history", *REVIEWS) and seconds >= 1
         if ordinary and not math.isclose(frame["pressure_bar"], running_pressure(seconds), abs_tol=0.0001):
             raise RuntimeError(f"油圧が3〜6barで連続変動していません: {frame}")
@@ -247,13 +281,75 @@ def validate_inputs(metadata):
         for key in ("oil_c", "water_c"):
             if scenario == "startup" and after["time_ms"] == 2000:
                 continue
-            if abs(after[key] - before[key]) > 2.2 * (after["time_ms"] - before["time_ms"]) / 1000 + 0.0001:
+            acquired_seconds = (after['sample_index'] - before['sample_index']) / SAMPLE_RATE
+            if abs(after[key] - before[key]) > 2.2 * acquired_seconds + 0.0001:
                 raise RuntimeError(f"温度が急変しています: {scenario}, {after}")
 
 
 def validate_monitoring(metadata):
     name, frames = metadata['scenario'], metadata['frames']
     at = lambda seconds: frames[round(seconds * FRAME_RATE)]
+    if name.startswith('tsukuba-'):
+        validate_tsukuba(metadata)
+    if name == 'high-g-review':
+        if any(f['risk']['kind'] or f['actual']['warning_history'] for f in frames):
+            raise RuntimeError('正常時の代表点を危険点・LOWとして扱っています')
+        if not at(3)['risk']['recorded'] or at(3)['screen'] != 1:
+            raise RuntimeError('危険点がないときにグラフを表示できません')
+        if not 30045 <= at(31)['risk']['at_ms'] < 30061 or abs(at(31)['risk']['g'] - 1.5) > 0.001:
+            raise RuntimeError('描画の間の16msのGピークを60Hz取得で保持できません')
+        if any(f['g'] >= 1.49 for f in frames if 30000 <= f['time_ms'] <= 30100):
+            raise RuntimeError('描画の間のピークという試験条件を満たしていません')
+        if not 42000 <= at(44)['risk']['at_ms'] < 43000:
+            raise RuntimeError('同G帯で最低油圧の場面へ更新しません')
+        if at(52)['risk']['at_ms'] != at(44)['risk']['at_ms']:
+            raise RuntimeError('低いGの場面へ油圧だけで更新しています')
+        if not 75000 <= at(77)['risk']['at_ms'] < 76000:
+            raise RuntimeError('より高いGと同G帯の低い油圧の順に選べません')
+        if at(138)['risk']['post_ms'] != 60000:
+            raise RuntimeError('正常時の代表点の後1分を保持できません')
+    if name.startswith('risk-'):
+        if at(3)['screen'] != 1 or at(3)['risk']['kind'] != 0 or not at(3)['risk']['recorded']:
+            raise RuntimeError('最初のタップから通常時の代表点グラフを開けません')
+        if name == 'risk-window':
+            event = at(145)['risk']
+            if event['kind'] != 3 or not 75000 <= event['at_ms'] < 78000:
+                raise RuntimeError('LOWの最悪点を選択できません')
+            if event['pre_ms'] != 60000 or event['post_ms'] != 60000 or event['age_ms'] < 60000:
+                raise RuntimeError('前後1分と何分前かの記録が不正です')
+            if at(82)['screen'] != 2 or at(145)['screen'] != 1 or at(84)['actual']['warning_history']:
+                raise RuntimeError('グラフ・詳細・メーター復帰時のWリセットが不正です')
+            if at(145)['risk']['at_ms'] != at(84)['risk']['at_ms']:
+                raise RuntimeError('画面から戻ると危険場面が失われています')
+            for seconds, direction in [(40, 1), (55, 2), (75, 3), (95, 4)]:
+                if at(seconds)['g_cardinal'] != direction:
+                    raise RuntimeError('IMUから計算したGピークのF/R/L/Bが不正です')
+            if {sample[5] for sample in metadata['risk_window'] if sample[2] >= 50} != {1, 2, 3, 4}:
+                raise RuntimeError('前後1分にGピーク4方向が保持されていません')
+        else:
+            if at(66)['risk']['kind'] != 1 or at(77)['risk']['kind'] != 2:
+                raise RuntimeError('急低下・LOW直前の予兆を記録できません')
+            selected = at(80)['risk']['at_ms']
+            if any(at(t)['risk']['at_ms'] != selected for t in (91, 96, 106, 145, 160)):
+                raise RuntimeError('一過性低下・通信異常で最悪点を上書きしています')
+            if any(frame['actual']['warning_history'] for frame in frames):
+                raise RuntimeError('予兆だけで既存LOWのWを点灯しています')
+            if not any(sample[4] & 16 for sample in metadata['risk_window']):
+                raise RuntimeError('通信異常区間が欠損として残っていません')
+    if name == 'negative-maxima':
+        if at(0)['actual']['maxima'] != [None, None, None] or at(1.5)['actual']['maxima'][:2] != [None, None]:
+            raise RuntimeError('温度の未取得・起動時異常を0度として記録しています')
+        if not all(value < 0 for value in at(3)['actual']['maxima'][:2]):
+            raise RuntimeError('初回の負温度を最高値へ記録できていません')
+        first, warmer = at(5)['actual']['maxima'][:2], at(8.5)['actual']['maxima'][:2]
+        if not all(before < after < 0 for before, after in zip(first, warmer)):
+            raise RuntimeError('負温度同士の最高値更新が不正です')
+        if at(13.5)['sensor']['status'][:2] != [3, 3]:
+            raise RuntimeError('正常取得後の温度異常を再現できていません')
+        if not all(at(second)['actual']['maxima'][:2] == warmer for second in (11, 13.5, 18)):
+            raise RuntimeError('再冷却・温度異常で負の最高値を失っています')
+        if not all(value > 0 for value in at(23)['actual']['maxima'][:2]):
+            raise RuntimeError('0度越えの最高値更新が不正です')
     if name == 'menu-monitoring':
         if not all(frame['menu'] and not frame['racing'] for frame in frames[4 * FRAME_RATE:12 * FRAME_RATE]):
             raise RuntimeError('詳細画面中にRモードが再開しています')
@@ -303,8 +399,8 @@ def racing_visible(image):
 
 def convert_and_check(directory):
     metadata = json.loads((directory / "inputs.json").read_text())
-    if metadata.get('schema_version') != 2 or metadata['fps'] != FRAME_RATE:
-        raise RuntimeError('24FPSの生ADC・IMU入力を記録したschema_version=2の録画が必要です')
+    if metadata.get('schema_version') != 3 or metadata['fps'] != FRAME_RATE or metadata.get('sample_hz') != SAMPLE_RATE:
+        raise RuntimeError('取得60Hz・描画24FPSを記録したschema_version=3の録画が必要です')
     frames = metadata["frames"]
     config = SCENARIOS[metadata["scenario"]]
     sources = sorted(directory.glob("frame-*.ppm"))
@@ -327,7 +423,7 @@ def convert_and_check(directory):
             image.save(source.with_suffix(".png"))
             frame = frames[index]
             frame["setup_error_visible"] = setup_error_visible(image)
-            frame["low_visible"] = warning_visible(image)
+            frame["low_visible"] = warning_visible(image) if frame["screen"] == 0 else False
             frame["r_visible"] = racing_visible(image)
             frame["w_visible"] = history_visible(image)
             check_expectations(frame)
@@ -409,12 +505,12 @@ def encode(directory):
     )
 
 
-def write_report(output, scenarios):
-    columns = ['time_ms', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible', 'adc', 'imu', 'pressure_bar',
+def write_report(output, scenarios, suite='standard'):
+    columns = ['time_ms', 'sample_time_ms', 'sample_index', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible', 'adc', 'imu', 'pressure_bar',
                'low_event', 'expected_low_event', 'warning_state', 'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
                'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
-               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima']
+               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima', 'risk', 'screen', 'track']
     data = []
     for name in scenarios:
         config = SCENARIOS[name]
@@ -422,8 +518,8 @@ def write_report(output, scenarios):
         # 列名を共有して数値行にし、24FPSの全区間でもHTMLを直開きできる量に収める。
         frames = []
         for frame in metadata['frames']:
-            values = {key: frame[key] for key in ('time_ms', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
-            values.update(adc_fault=frame['raw']['adc_fault'])
+            values = {key: frame[key] for key in ('time_ms', 'sample_time_ms', 'sample_index', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
+            values.update(adc_fault=frame['raw']['adc_fault'], risk=frame.get('risk'), screen=frame['screen'], track=frame.get('track'))
             values.update({key: frame['sensor'][key] for key in ('adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last')})
             values.update(adc=frame['raw']['adc'], imu=frame['raw']['imu'],
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))
@@ -439,18 +535,29 @@ def write_report(output, scenarios):
             values['expected_brightness_pwm'] = frame['expected']['brightness_pwm']
             frames.append([values[key] for key in columns])
         cues = [frame_at_or_after(round(second * 1000)) for second in config['snapshots']]
-        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'columns': columns, "frames": frames, "sensor_spec": metadata.get("temperature_sensor_spec"), "startup_error_title": metadata["startup_error_title"], "startup_error_hint": metadata["startup_error_hint"], "review": REVIEWS.get(name), "review_spots": review_spots(name, metadata["frames"])})
+        data.append({"name": name, **config, 'snapshots': cues, 'fps': FRAME_RATE, 'sample_hz': SAMPLE_RATE, 'columns': columns, "frames": frames, "sensor_spec": metadata.get("temperature_sensor_spec"), "startup_error_title": metadata["startup_error_title"], "startup_error_hint": metadata["startup_error_hint"], "review": REVIEWS.get(name), "review_spots": review_spots(name, metadata["frames"])})
     template = (ROOT / "report.html").read_text()
     payload = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace("<", "\\u003c")
-    (output / "index.html").write_text(template.replace("@@SCENARIOS@@", payload).replace("@@SPOT_CHECKS@@", (output / "spot-checks.json").read_text().replace("<", "\\u003c")), encoding="utf-8")
+    page = 'tsukuba.html' if suite == 'tsukuba' else 'index.html'
+    title = '筑波2000・専用走行テスト' if suite == 'tsukuba' else '通常ケース・動きと警告の確認'
+    intro = ('筑波2000を想定した合成走行です。加減速・旋回のG、アクセル連動の油圧、加速時に速く上がる油温を確認します。'
+             '実測ログではありません。注目する一周は60〜140秒、完成グラフは168秒です。' if suite == 'tsukuba' else
+             '通常動作・境界・異常入力・高Gの代表点・警告を確認します。筑波の走行ケースは専用ページへ分離しています。')
+    template = template.replace('@@SUITE@@', suite).replace('@@REPORT_TITLE@@', title).replace('@@REPORT_INTRO@@', intro)
+    if suite == 'tsukuba':
+        template = template.replace('href="spot-checks.json"', 'href="tsukuba-spot-checks.json"')
+    (output / page).write_text(template.replace("@@SCENARIOS@@", payload).replace("@@SPOT_CHECKS@@", (output / "spot-checks.json").read_text().replace("<", "\\u003c")), encoding="utf-8")
 
 
 def export_preview(output, scenarios):
     # 公開用には動画と代表画像だけを含め、全PNGはActionsの成果物へ残す。
     preview = output / "public"
     preview.mkdir()
-    shutil.copyfile(output / "index.html", preview / "index.html")
-    shutil.copyfile(output / "spot-checks.json", preview / "spot-checks.json")
+    for name in ('index.html', 'tsukuba.html'):
+        if (output / name).exists():
+            shutil.copyfile(output / name, preview / name)
+            checks = 'tsukuba-spot-checks.json' if name == 'tsukuba.html' else 'spot-checks.json'
+            shutil.copyfile(output / 'spot-checks.json', preview / checks)
     for scenario in scenarios:
         destination = preview / scenario
         destination.mkdir()
@@ -463,6 +570,7 @@ def main():
     parser.add_argument("--scenario", choices=["all", *SCENARIOS], default="all")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument('--suite', choices=['all', 'standard', 'tsukuba'], default='all')
     args = parser.parse_args()
     output = args.output or ROOT / "out" / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     output = output.resolve()
@@ -472,6 +580,9 @@ def main():
         subprocess.run([sys.executable, "-m", "platformio", "run", "-d", str(ROOT), "-e", "desktop"], check=True)
     program = ROOT / ".pio" / "build" / "desktop" / ("program.exe" if os.name == "nt" else "program")
     scenarios = list(SCENARIOS) if args.scenario == "all" else [args.scenario]
+    scenarios = [name for name in scenarios if args.suite == 'all' or (name.startswith('tsukuba-') == (args.suite == 'tsukuba'))]
+    if not scenarios:
+        raise ValueError('指定したケースは選択したテスト群に含まれません')
     run_spot_checks(output)
     for scenario in scenarios:
         directory = output / scenario
@@ -482,9 +593,14 @@ def main():
         )
         convert_and_check(directory)
         encode(directory)
-    write_report(output, scenarios)
+    standard = [name for name in scenarios if not name.startswith('tsukuba-')]
+    tsukuba = [name for name in scenarios if name.startswith('tsukuba-')]
+    if standard:
+        write_report(output, standard, 'standard')
+    if tsukuba:
+        write_report(output, tsukuba, 'tsukuba')
     export_preview(output, scenarios)
-    print(f"録画とレポート: {output / 'index.html'}")
+    print(f"録画とレポート: {output / ('index.html' if standard else 'tsukuba.html')}")
 
 
 if __name__ == "__main__":

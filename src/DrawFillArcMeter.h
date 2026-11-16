@@ -36,6 +36,7 @@ void drawFillArcMeter(M5Canvas& canvas, float value, float minValue, float maxVa
   const int GAUGE_LEFT = x + 1;                    // 円メーターの左端
   const int CENTER_X_CORRECTED = GAUGE_LEFT + 70;  // 半径 70px を考慮した中心X座標
   const int VALUE_BASE_X = x + 160;                // 数値表示位置
+  const int VALUE_WIDTH = 80;                      // 24ptの3桁数値（78px）を収める幅
   const int CENTER_Y_CORRECTED = y + 90 - 10;      // スプライト内の中心Y座標
   const int RADIUS = 70;                           // 半円メーターの半径
   const int ARC_WIDTH = 10;                        // 弧の幅
@@ -221,8 +222,8 @@ void drawFillArcMeter(M5Canvas& canvas, float value, float minValue, float maxVa
   if (valueCache != nullptr) snprintf(valueCache->text, sizeof(valueCache->text), "%s", valueText);
   canvas.setFont(&FreeSansBold24pt7b);
   int clearHeight = canvas.fontHeight();
-  canvas.fillRect(valueX - 75, valueY - clearHeight / 2 - 2, 75, clearHeight + 4, BACKGROUND_COLOR);
-  if (statusText != nullptr || canvas.textWidth(valueText) > 75) canvas.setFont(&fonts::FreeSansBold12pt7b);
+  canvas.fillRect(valueX - VALUE_WIDTH, valueY - clearHeight / 2 - 2, VALUE_WIDTH, clearHeight + 4, BACKGROUND_COLOR);
+  if (statusText != nullptr || canvas.textWidth(valueText) > VALUE_WIDTH) canvas.setFont(&fonts::FreeSansBold12pt7b);
   canvas.setTextColor(TEXT_COLOR, BACKGROUND_COLOR);
   canvas.setCursor(valueX - canvas.textWidth(valueText), valueY - (canvas.fontHeight() / 2));
   canvas.print(valueText);

@@ -66,6 +66,8 @@ struct LowWarningState
 
 static LowWarningState state;
 
+auto isLowPressureQualified() -> bool { return state.eventActive && state.eventQualified; }
+
 void invalidateLowPressureWarning() { state.isShowing = false; }
 
 // 詳細画面でも判定を継続し、描画の有無で監視を止めない。

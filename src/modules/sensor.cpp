@@ -19,6 +19,7 @@ SensorStatus waterTemperatureStatus = SENSOR_WATER_TEMP_PRESENT ? SensorStatus::
 SensorStatus oilTemperatureStatus = SENSOR_OIL_TEMP_PRESENT ? SensorStatus::Pending : SensorStatus::Disabled;
 float currentGForce = 0.0F;
 const char* currentGDirection = "Right";
+GDirection currentGCardinalDirection = GDirection::None;
 static int oilPressureIndex = 0;
 static int waterTempIndex = 0;
 static int oilTempIndex = 0;
@@ -213,6 +214,7 @@ void acquireSensorData()
     if (now - imuSettlingStart < IMU_SETTLING_MS)
     {
       currentGForce = 0.0F;
+      currentGCardinalDirection = GDirection::None;
       currentGDirection = "Right";
       return;
     }
@@ -233,6 +235,7 @@ void acquireSensorData()
     {
       // オフセット確定までは 0G 扱い
       currentGForce = 0.0F;
+      currentGCardinalDirection = GDirection::None;
       currentGDirection = "Right";
       return;
     }
@@ -269,6 +272,7 @@ void acquireSensorData()
   // 方向判定。許容角度 10 度以内で単独方向とする
   constexpr float PURE_TAN = 0.17632698F;  // tan(10度)
   currentGForce = sqrtf((lat * lat) + (lon * lon));
+  currentGCardinalDirection = cardinalGDirection(lat, lon);
   if (absLat <= absLon * PURE_TAN)
   {
     // 前後方向として扱う

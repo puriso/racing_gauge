@@ -12,8 +12,9 @@ A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [
 油圧3〜6barの連続変動、2.0Gでの油圧急落、Rモードの保持・解除、温度の上昇・下降を、
 PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 生ADCカウント・IMU各軸・照度を本番のセンサー処理へ渡し、変換・補正・取得周期・平均化から表示まで確認します。
-シミュレーションと動画は24FPS・1.0倍速です。
-確認ページは23シナリオを収録し、生ADCの毎フレーム1カウント往復、信号断線、200℃以上、PDF00903Sの動作下限-20℃前後と正常復帰も確認できます。
+シミュレーターは取得60Hz・描画24FPS・1.0倍速です。
+通常27ケースと筑波専用2ケースを、別のCIジョブ・確認ページへ分けています。各PRコメントに両方のURLを掲載します。
+高Gの代表点、筑波想定の連続走行、生ADCの1カウント往復、信号断線、温度境界と正常復帰も確認できます。
 
 ADC通信異常への対応（[#381](https://github.com/puriso/racing_gauge/pull/381)）はmainへ取り込み済みです。
 [通信異常の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-communication)と[起動時未接続の動画](https://puriso.github.io/racing_gauge/previews/pr-381/18b5be26fc6a439f017c427d5edc0458e796d3e2/#adc-startup)で、5msの変換期限・1秒間隔の再接続・正常復帰を確認できます。
@@ -38,7 +39,8 @@ racing-mode transitions, and heating/cooling scenarios. All videos play at norma
 | 油圧 | アナログ風ゲージと数値 | 0–10 bar、8 bar以上で赤色 |
 | 水温 | アナログ風ゲージと数値 | 85–115°C、110°C以上で赤色 |
 | 油温 | 画面上部のバーと数値 | 80–130°C、120°C以上で赤色 |
-| 詳細画面 | 最高油圧・最高水温・最高油温、直近の低油圧イベント、照度 | 画面タップで開閉 |
+| 危険場面グラフ | 最悪点を中央に前後60秒の油圧・G・油温、発生からの経過時間 | 最初のタップで表示、右上DETAILから従来の詳細へ |
+| 詳細画面 | 最高油圧・最高水温・最高油温、直近の低油圧イベント、照度 | タップでメーターへ戻る |
 
 - **低油圧警告**：水平Gが1.0 Gを超え、表示用の油圧が3.0 bar以下の状態が500ms継続すると、`LOW`を表示します。警告条件の最終検知から3秒間の表示保持を設けています。
 - **レーシングモード**：水平Gが1.0 G以上の状態が100ms継続すると、3分間、輝度を最大にして`R`を表示します。
@@ -47,7 +49,7 @@ racing-mode transitions, and heating/cooling scenarios. All videos play at norma
 - **デモモード**：外付けADC・センサーを接続せずに表示を確認できます。初期設定では無効です。
 
 油圧の画面上の単位`x100kPa`はbarと同じ大きさです（1 bar = 100 kPa）。
-最高値・イベント履歴はメモリ上に保持し、再起動するとリセットされます。最高値は正常な取得・平均値から更新し、通信・信号異常では消去しません。詳細画面中もLOW判定・最高値更新を継続し、Rへの移行は停止します。
+最高値・イベント履歴はメモリ上に保持し、再起動するとリセットされます。最高値は正常な取得・平均値から更新し、通信・信号異常では消去しません。初回正常値が負温度でもその値から記録し、正常値を一度も取得していない最高値は`---`で表示します。詳細画面中もLOW判定・最高値更新を継続し、Rへの移行は停止します。
 
 ## セットアップ
 
@@ -199,6 +201,39 @@ LCDは上段・油圧・水温・履歴表示を個別に部分転送し、同�
 低油圧警告・バーの赤色しきい値は[src/modules/low_warning.cpp](src/modules/low_warning.cpp)と[src/modules/display.cpp](src/modules/display.cpp)、
 温度の取得間隔・換算係数は[src/modules/sensor.cpp](src/modules/sensor.cpp)で定義しています。
 
+## 危険場面の記録とグラフ
+
+メーターをタップすると、最も危険と判定した場面を中央に置く前後60秒のグラフを表示します。
+危険点が未記録でも、最大Gを優先し、同じ0.1G帯なら油圧が0.05bar帯で低い場面を`PEAK G`として表示します。同順位では先の時刻を保持し、危険点が成立するとその記録へ切り替えます。
+起動時の移動平均が落ち着くよう、正常圧力を1秒連続取得した後から代表点を選びます。正常値が未取得の間は`WAITING`です。
+油圧（黄）と水平G（水色）は上段、油温（橙）は下段で時間軸を共有し、白い中央線が危険点の0秒です。線・目盛り・選択値・Gの方向表示を同じ色で揃えます。中央の丸印は選択した瞬間の油圧・G・油温を示します。
+油温グラフの中央に対応する位置へ`LOW 130.9C`のように記録時の油温を小数1桁で表示し、上部の0秒の数値にも同じ値を表示します。油温未取得時は`---`です。
+ラベルは`OIL.P`、`G`、`OIL.T [C]`です。Gの山には最大値を取得した時点の主方向をF（前）・R（右）・L（左）・B（後）で表示します。
+斜めGは強い成分の方向に分け、同じ大きさなら前後を優先します。0.5G未満の細かな揺れには文字を付けず、6秒未満で近接する山は強い方へまとめて文字の重なりを防ぎます。
+油温の縦軸は、正常な記録値の最小・最大に10%（最低1℃）の余白を付け、1℃単位で自動調整します。一定温度でも最低6℃分の軸幅を確保します。横軸は全系列で前後60秒です。
+見出しはPEAK G／LOW／NEAR／DROPと「何分何秒前」を表示します。右上DETAILで従来の詳細画面へ進み、
+グラフの他の場所、または詳細画面をタップするとメーターへ戻ります。
+Wはメーターへ戻ると消えますが、危険場面の記録は残ります。監視はどの画面でも継続します。
+
+選択は以下の暫定ルールです。予兆は参考推定で、既存LOW警告の条件・Wの点灯条件は変更しません。
+
+| 種類 | 条件 |
+| --- | --- |
+| LOW | 本番LOW判定が500ms継続して成立している点。解除後の3秒保持やW履歴だけでは再記録しない |
+| NEAR（推定） | G > 1.0、油圧 <= 3.5barが300ms継続 |
+| DROP（推定） | G >= 0.8、直近約0.5秒の最大油圧から1.5bar以上かつ30%以上低下した状態が150ms継続 |
+
+優先順位はLOW > NEAR > DROP。同じ種類では0.05bar単位で低い油圧を優先し、同圧帯では0.1G以上大きい点を選びます。
+同じ危険度なら時刻を動かしません。予兆は正常な圧力が1秒間連続取得できた後から判定し、通信／信号異常では判定をリセットします。
+回転数を取得していないため、エンジンごとの適正油圧や故障原因を断定するものではありません。油温は選択点と前後の変化を表示します。
+
+記録は100ms単位で油圧最小/最大・G最大とその時の方向・油温最新値を保持します。これらの極値は同じ100ms区間内でも厳密に同時刻とは限りません。
+危険点の選択そのものは同一フレームの油圧・Gから行います。横方向に複数サンプルが入る場合も最小／最大を残して短い変化を潰しません。
+
+記録開始前、収集中の未来、通信／信号異常は空白とし、0値で埋めたり、前後1分未満を引き伸ばしたりしません。
+PRE/POSTは前後の記録時間です。より危険な点があれば中心と前後1分を更新し、それ以外では記録を維持します。
+履歴は固定長RAM（25KiB未満）に保持し、SD書き込み・動的メモリ確保は行いません。**電源OFF・再起動で消えます。**
+
 ## センサーの換算と校正
 
 ### 油圧
@@ -327,12 +362,13 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **Power:** The intended setup uses the DinBase DC input at 12V and its built-in buck converter. Current main enables external 5V output with `M5.Power.setExtOutput(true)` and has no `EXTERNAL_5V_OUTPUT_ENABLED` switch. Align initialization and output settings with the power direction; see the [power section](#電源設定). The former #382 was closed without merging. Do not feed the 5V pin from another source while its output is enabled.
 - **Sampling:** Pressure uses five samples plus smoothing. Each temperature is sampled every 500ms and averaged over the latest two samples, then smoothed; the average changes every 500ms.
 - **Defaults:** Ambient-light dimming is enabled; demo mode, debug logging, and the FPS overlay are disabled. Edit [config.h](include/config.h) and rebuild to change them.
-- **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. A zero reading can also represent a detected fault.
+- **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. Sensor faults display `ERR`; unmeasured readings and maxima display `---`.
 
 The sensor table above describes the firmware's conversion model, not manufacturer calibration data.
-Main includes seventeen 24 FPS real-time preview scenarios, including raw ADC sweeps, disconnected signals, temperature boundaries, and ADC communication failures.
+The preview samples at 60 Hz and renders at 24 FPS. The 27 standard cases and two Tsukuba cases have independent CI jobs and pages. With no risk event, review the highest-G band and then its lowest-pressure point.
 ADC waits are bounded to 5ms and reconnection is attempted at one-second intervals; temperature recovery starts from the first valid sample.
-Pending [#380](https://github.com/puriso/racing_gauge/pull/380) adds a latched W cleared when leaving the detail screen. W history is separate from the behavior on main. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
+Main includes a latched W cleared when leaving the detail screen. Maxima start from the first valid sample, including negative temperatures; unmeasured maxima display `---`. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
+Tap the gauge to review the worst LOW/precursor event, centered in a ±60-second pressure/G/oil-temperature chart with elapsed time. DETAIL opens the previous statistics screen. The fixed RAM log is cleared on reboot; precursor rules are heuristic and do not change LOW alerts.
 Hardware accuracy and vehicle behavior require separate verification.
 
 ## ライセンス / License
