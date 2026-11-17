@@ -47,6 +47,8 @@ def annotated_frame(source, sample, scenario, sensor_settings):
     ]
     if scenario in ("adc-startup", "adc-communication"):
         rows.append(("ADC link", "UP" if expected["sensor"]["adc_connected"] else "DOWN", "UP" if sample["sensor"]["adc_connected"] else "DOWN"))
+    if scenario == 'imu-communication':
+        rows.append(('G valid', 'YES' if expected['sensor']['g'] is not None else 'NO', 'YES' if sample['g'] is not None else 'NO'))
     for index, (name, wanted, observed) in enumerate(rows):
         y = 78 + index * 22
         label(352, y, name, font=small)
@@ -70,6 +72,9 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         if sample.get('track'):
             track = sample['track']
             label(16, 309, f"SYN TC2000 | lap{track['lap_number']} {track['lap_s']:.1f}/80s | {track['section']} | THR {track['throttle']*100:.0f}%", font=small)
+        elif scenario == 'imu-communication':
+            raw = sample['raw']
+            label(16, 309, f"IMU {'UP' if raw['imu_connected'] else 'NO DEVICE'} | accel {'NEW' if raw['imu_accel_updated'] else 'NOT UPDATED / gyro only'} | invalid G = gap", font=small)
         else:
             label(16, 309, f'0s direction {direction} | Peak letters: F front / R right / L left / B back.', font=small)
     elif scenario in ('adc-startup', 'adc-communication'):
@@ -96,8 +101,10 @@ def annotated_frame(source, sample, scenario, sensor_settings):
         target = f'{expected["sensor"][key]:.2f} / {filtered}'
         signals.append((name, raw, target))
     axes = '/'.join(f'{axis:+.2f}' for axis in sample['raw']['imu'])
+    expected_g = expected['sensor']['g']
+    g_text = '--- (invalid)' if expected_g is None else f'{expected_g:.2f} G / {expected["sensor"]["g_direction"]}'
     signals.extend([
-        ('IMU x/y/z (g)', axes, f'{expected["sensor"]["g"]:.2f} G / {expected["sensor"]["g_direction"]}'),
+        ('IMU x/y/z (g)', axes, g_text),
         ('Ambient light', f'{sample["lux"]} lux', f'{MODES[expected["brightness_mode"]]} / PWM {expected["brightness_pwm"]}'),
     ])
     for index, (name, raw, target) in enumerate(signals):

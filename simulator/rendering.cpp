@@ -32,6 +32,8 @@ static void writeRenderedValue(std::ostream& output, float value)
   }
 }
 
+void writeGForceTelemetry(std::ostream& output) { writeRenderedValue(output, currentGForce); }
+
 template <typename T>
 static void writeMaximum(std::ostream& output, const RecordedMaximum<T>& maximum)
 {

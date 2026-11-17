@@ -36,19 +36,19 @@ class SensorReferenceTest(unittest.TestCase):
         self.assertEqual(self.sensor.temperature(self.sensor.voltage(0)), 200)
         self.assertEqual(self.sensor.temperature(self.sensor.voltage(2047)), 200)
 
-    def test_settling_and_twenty_offsets_precede_adc_reads(self):
-        for tick in range(25):
+    def test_adc_reads_continue_during_imu_calibration(self):
+        for tick in range(24):
             value = self.sensor.step(frame_time_ms(tick), self.raw)
-            self.assertEqual(value['adc_reads'], [0, 0, 0, 0])
-            self.assertEqual(value['oil_c'], 0)
-        value = self.sensor.step(1041, self.raw)
-        self.assertEqual(value['adc_reads'], [2, 2, 2, 0])
+            self.assertEqual(value['adc_reads'][2], (tick + 1) * 2)
+            self.assertIsNone(value['g'])
+        value = self.sensor.step(1000, self.raw)
+        self.assertEqual(value['adc_reads'], [4, 4, 50, 0])
         self.assertEqual(value['g'], 0)
 
     def test_pressure_five_samples_start_with_zeros(self):
-        first = self.settle()
+        first = self.sensor.step(0, self.raw)
         self.assertAlmostEqual(first['pressure_bar'], 3.000996 / 5, places=5)
-        for now in (1083, 1125, 1166, 1208):
+        for now in (17, 34, 51, 68):
             value = self.sensor.step(now, self.raw)
         self.assertAlmostEqual(value['pressure_bar'], 3.000996, places=5)
         self.raw['adc'][2] = 0
@@ -60,7 +60,7 @@ class SensorReferenceTest(unittest.TestCase):
         self.raw['adc'][0] = 168
         held = self.sensor.step(1083, self.raw)
         self.assertEqual(held['oil_c'], first['oil_c'])
-        self.assertEqual(held['adc_reads'][0], 2)
+        self.assertEqual(held['adc_reads'][0], 4)
         changed = self.sensor.step(1541, self.raw)
         self.assertAlmostEqual(changed['oil_c'], (65.37805 + 95.05905) / 2, places=4)
         final = self.sensor.step(2041, self.raw)
@@ -76,11 +76,11 @@ class SensorReferenceTest(unittest.TestCase):
         self.assertAlmostEqual(recovered['oil_c'], 95.05905, places=4)
 
     def test_brief_communication_failure_invalidates_all_channels_immediately(self):
-        self.settle()
+        before = self.settle()
         failed = self.sensor.step(1100, self.raw | {'adc_fault': 1})
         self.assertEqual(failed['status'], [2, 2, 2])
         self.assertEqual((failed['oil_c'], failed['water_c'], failed['pressure_bar']), (200, 200, 0))
-        self.assertEqual(failed['adc_reads'][:2], [2, 2])
+        self.assertEqual(failed['adc_reads'][:2], before['adc_reads'][:2])
         waiting = self.sensor.step(1300, self.raw)
         self.assertEqual(waiting['status'], [2, 2, 2])
         recovered = self.sensor.step(2300, self.raw)
@@ -106,6 +106,29 @@ class SensorReferenceTest(unittest.TestCase):
         result = self.sensor.step(1291, self.raw | {'imu': [0.125, -0.0625, 3]})
         self.assertEqual(result['g'], 0)
         self.assertEqual(result['g_cardinal'], 0)
+
+    def test_imu_failure_and_gyro_only_update_invalidate_g_without_stopping_adc(self):
+        self.settle()
+        high = self.sensor.step(1100, self.raw | {'imu': [1.925, -0.0625, 1]})
+        self.assertAlmostEqual(high['g'], 1.8, places=5)
+        for now, fault in [(1200, {'imu_connected': False}), (1500, {'imu_accel_updated': False})]:
+            failed = self.sensor.step(now, self.raw | fault)
+            self.assertIsNone(failed['g'])
+            self.assertEqual((failed['g_direction'], failed['g_cardinal']), ('---', 0))
+            self.assertEqual(failed['status'], [1, 1, 1])
+            self.assertGreater(failed['adc_reads'][2], high['adc_reads'][2])
+        self.assertEqual(self.sensor.step(1600, self.raw)['g'], 0)
+
+    def test_failed_imu_samples_do_not_complete_startup_calibration(self):
+        for now in range(0, 1000, 20):
+            value = self.sensor.step(now, self.raw | {'imu_connected': False})
+            self.assertIsNone(value['g'])
+        self.assertEqual(self.sensor.offset_count, 0)
+        self.assertEqual(value['status'], [1, 1, 1])
+        self.sensor.step(1000, self.raw)
+        for now in range(1200, 1580, 20):
+            self.assertIsNone(self.sensor.step(now, self.raw)['g'])
+        self.assertEqual(self.sensor.step(1580, self.raw)['g'], 0)
 
     def test_setup_snapshot_does_not_acquire_adc_or_calibrate_imu(self):
         self.sensor.bus.frame(0, 1)

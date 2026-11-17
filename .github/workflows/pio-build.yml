@@ -73,3 +73,6 @@ jobs:
 
       - name: ADC通信異常の回帰テスト
         run: python3 test/adc_reader/run_tests.py
+
+      - name: IMU通信失敗・校正・LOW誤検知・復帰の回帰テスト
+        run: python3 test/imu_sensor/run_tests.py

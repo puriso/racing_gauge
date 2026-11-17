@@ -86,7 +86,7 @@ auto isTsukubaScenario() -> bool { return options().scenario == "tsukuba-lap" ||
 auto isRiskScenario() -> bool
 {
   return isTsukubaScenario() || options().scenario == "risk-window" || options().scenario == "risk-predictive" ||
-         options().scenario == "high-g-review";
+         options().scenario == "high-g-review" || options().scenario == "imu-communication";
 }
 
 auto isWarningReview() -> bool
@@ -107,6 +107,10 @@ auto defaultSeconds() -> unsigned int
 {
   if (isTsukubaScenario()) return simulator::TSUKUBA_SECONDS;
   if (options().scenario == "high-g-review") return 140;
+  if (options().scenario == "imu-communication")
+  {
+    return 24;
+  }
   if (isRiskScenario()) return 160;
   if (options().scenario == "negative-maxima") return 24;
   if (options().scenario == "menu-monitoring") return 28;
@@ -302,6 +306,14 @@ auto sample(double ratio) -> Targets
     return {0.0F, 0.0F, 0.0F, 0.0F, false};
   }
   const float pressure = runningPressure(seconds);
+  if (options().scenario == "imu-communication")
+  {
+    // 校正後の高G→切断＋低油圧、正常復帰後のLOW、ジャイロだけ更新、再復帰を比較する。
+    const bool highG =
+        (seconds >= 2.0F && seconds < 2.05F) || (seconds >= 7 && seconds < 10) || (seconds >= 11 && seconds < 11.05F);
+    const bool lowPressure = (seconds >= 2.05F && seconds < 10) || (seconds >= 11.05F && seconds < 16);
+    return {100, 95, lowPressure ? 1.8F : pressure, highG ? 1.8F : 0.0F, false};
+  }
   if (isWarningReview() || options().scenario == "warning-history")
   {
     return sampleWarningReview(seconds);
@@ -554,6 +566,13 @@ void inject(const Inputs& input)
     simulator::adcFault = simulator::AdcFault::Busy;
   simulator::adcChannels = input.adc;
   simulator::acceleration = input.imu;
+  // シナリオ表の秒数をそのまま使い、異常の開始・復帰を追跡しやすくする。
+  // NOLINTBEGIN(readability-magic-numbers)
+  simulator::imuConnected = options().scenario != "imu-communication" ||
+                            (latestStimulusSeconds >= 1 && (latestStimulusSeconds < 2.05F || latestStimulusSeconds >= 6));
+  simulator::imuAccelUpdated = simulator::imuConnected && (options().scenario != "imu-communication" ||
+                                                           latestStimulusSeconds < 11.05F || latestStimulusSeconds >= 15);
+  // NOLINTEND(readability-magic-numbers)
   simulator::ambientLux = input.lux;
   // 取得周期・起動時補正・リングバッファを含む本番処理をそのまま実行する。
   acquireSensorData();
@@ -572,7 +591,8 @@ void writeInputTrace(std::ostream& trace, const Inputs& input, const Targets& ta
   }
   trace << ',' << static_cast<int>(showingMenu) << ',' << input.lux << ',' << target.oil << ',' << target.water << ','
         << target.pressure << ',' << target.acceleration << ',' << static_cast<int>(simulator::adcFault) << ','
-        << setupError << ',' << static_cast<int>(reviewNavigation.screen()) << '\n';
+        << setupError << ',' << static_cast<int>(reviewNavigation.screen()) << ',' << simulator::imuConnected << ','
+        << simulator::imuAccelUpdated << '\n';
 }
 
 void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs& input, const Targets& target,
@@ -589,7 +609,8 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
     manifest << input.adc[channel];
   }
   manifest << R"(],"imu":[)" << input.imu[0] << ',' << input.imu[1] << ',' << input.imu[2] << R"(],"als":)" << input.lux
-           << R"(,"adc_fault":)" << static_cast<int>(simulator::adcFault) << '}';
+           << R"(,"adc_fault":)" << static_cast<int>(simulator::adcFault) << R"(,"imu_connected":)"
+           << simulator::imuConnected << R"(,"imu_accel_updated":)" << simulator::imuAccelUpdated << '}';
   if (options().scenario != "adc-steps")
   {
     manifest << R"(,"target":{"oil_c":)" << target.oil << R"(,"water_c":)" << target.water << R"(,"pressure_bar":)"
@@ -603,9 +624,11 @@ void writeFrameManifest(std::ostream& manifest, unsigned int tick, const Inputs&
              << lap.lapNumber << R"(,"throttle":)" << lap.throttle << R"(,"longitudinal_g":)" << lap.longitudinal
              << R"(,"lateral_g":)" << lap.lateral << R"(,"synthetic":true})";
   }
-  manifest << R"(,"setup_error":)" << setupError << R"(,"g":)" << currentGForce << R"(,"lux":)" << input.lux
-           << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection << R"(","racing":)" << isRacingMode
-           << R"(,"g_cardinal":)" << static_cast<int>(currentGCardinalDirection) << R"(,"sensor":)";
+  manifest << R"(,"setup_error":)" << setupError << R"(,"g":)";
+  writeGForceTelemetry(manifest);
+  manifest << R"(,"lux":)" << input.lux << R"(,"menu":)" << showingMenu << R"(,"g_direction":")" << currentGDirection
+           << R"(","racing":)" << isRacingMode << R"(,"g_cardinal":)" << static_cast<int>(currentGCardinalDirection)
+           << R"(,"sensor":)";
   writeSensorTelemetry(manifest);
   manifest << R"(,"actual":)";
   writeDisplayTelemetry(manifest);
@@ -738,6 +761,20 @@ auto fixtureScreen(bool menu) -> ReviewScreen
 {
   if (!isRiskScenario()) return menu ? ReviewScreen::Details : ReviewScreen::Gauges;
   const uint32_t now = simulator::nowMs;
+  if (options().scenario == "imu-communication")
+  {
+    // NOLINTBEGIN(readability-magic-numbers)
+    if (now >= 20000 && now < 22000)
+    {
+      return ReviewScreen::Graph;
+    }
+    if (now >= 22000 && now < 23000)
+    {
+      return ReviewScreen::Details;
+    }
+    // NOLINTEND(readability-magic-numbers)
+    return ReviewScreen::Gauges;
+  }
   if (now >= 3000 && now < 5000) return ReviewScreen::Graph;
   if (options().scenario == "high-g-review")
   {
@@ -859,7 +896,7 @@ auto run(bool* running) -> int  // NOLINT(readability-non-const-parameter)
       trace.exceptions(std::ios::failbit | std::ios::badbit);
       trace << std::setprecision(std::numeric_limits<float>::max_digits10);
       trace << "time_ms,adc0,adc1,adc2,adc3,ax,ay,az,menu,lux,target_oil_c,target_water_c,target_pressure_bar,target_g,adc_"
-               "fault,setup_error,screen\n";
+               "fault,setup_error,screen,imu_connected,imu_accel_updated\n";
       manifest << R"({"schema_version":3,"scenario":")" << options().scenario << R"(","fps":)" << TICKS_PER_SECOND
                << R"(,"sample_hz":)" << SENSOR_TICKS_PER_SECOND << R"(,"sensors":{"oil_temp":)" << SENSOR_OIL_TEMP_PRESENT
                << R"(,"water_temp":)" << SENSOR_WATER_TEMP_PRESENT << R"(,"pressure":)" << SENSOR_OIL_PRESSURE_PRESENT
@@ -975,7 +1012,8 @@ auto main(int argc, char** argv) -> int
       if (argument == "--help")
       {
         std::cout << "Usage: program [--scenario "
-                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|adc-communication|adc-"
+                     "ramp|cooldown|pressure-sweep|warnings|circuit|racing|ambient|raw-faults|imu-communication|adc-"
+                     "communication|adc-"
                      "startup|adc-steps|sensor-disconnect|"
                      "temperature-high|temperature-low|warning-history|warning-repeat|warning-pending|warning-brief|"
                      "startup|warm-start|menu|tsukuba-lap|tsukuba-low] "
