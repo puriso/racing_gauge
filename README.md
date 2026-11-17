@@ -13,7 +13,7 @@ A digital oil-pressure and temperature dashboard for M5Stack CoreS3 + ADS1015. [
 PRごとの等速動画で確認できます。[シミュレーターと録画の使い方](simulator/README.md)。
 生ADCカウント・IMU各軸・照度を本番のセンサー処理へ渡し、変換・補正・取得周期・平均化から表示まで確認します。
 シミュレーターは取得60Hz・描画24FPS・1.0倍速です。
-通常27ケースと筑波専用2ケースを、別のCIジョブ・確認ページへ分けています。各PRコメントに両方のURLを掲載します。
+通常28ケースと筑波専用2ケースを、別のCIジョブ・確認ページへ分けています。各PRコメントに両方のURLを掲載します。
 高Gの代表点、筑波想定の連続走行、生ADCの1カウント往復、信号断線、温度境界と正常復帰も確認できます。
 
 ADC通信異常への対応（[#381](https://github.com/puriso/racing_gauge/pull/381)）はmainへ取り込み済みです。
@@ -365,7 +365,7 @@ Library versions in [platformio.ini](platformio.ini) use compatible ranges rathe
 - **Calibration:** Keep the device still during startup IMU calibration. Match the NTC model and voltage-drop correction to your sensor and wiring. Sensor faults display `ERR`; unmeasured readings and maxima display `---`.
 
 The sensor table above describes the firmware's conversion model, not manufacturer calibration data.
-The preview samples at 60 Hz and renders at 24 FPS. The 27 standard cases and two Tsukuba cases have independent CI jobs and pages. With no risk event, review the highest-G band and then its lowest-pressure point.
+The preview samples at 60 Hz and renders at 24 FPS. The 28 standard cases and two Tsukuba cases have independent CI jobs and pages. With no risk event, review the highest-G band and then its lowest-pressure point.
 ADC waits are bounded to 5ms and reconnection is attempted at one-second intervals; temperature recovery starts from the first valid sample.
 Main includes a latched W cleared when leaving the detail screen. Maxima start from the first valid sample, including negative temperatures; unmeasured maxima display `---`. Successful preview publication creates a new PR comment. Simulation FPS is a setting, not a measurement of the device.
 Tap the gauge to review the worst LOW/precursor event, centered in a ±60-second pressure/G/oil-temperature chart with elapsed time. DETAIL opens the previous statistics screen. The fixed RAM log is cleared on reboot; precursor rules are heuristic and do not change LOW alerts.

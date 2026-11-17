@@ -66,6 +66,7 @@ class Reference:
 
     def step(self, sample):
         now = sample['time_ms']
+        g = sample['g'] if sample['g'] is not None else math.nan
         self.risk_enabled = self.risk_enabled or sample.get('risk_scenario', False)
         if not self.initialized:
             self.read_light(sample['lux'])
@@ -84,7 +85,7 @@ class Reference:
                 self.racing = False
                 self.mode = self.previous_mode
                 self.g_since = None
-        elif sample['g'] >= self.settings['racing_g']:
+        elif g >= self.settings['racing_g']:
             if self.g_since is None:
                 self.g_since = now
             elif now - self.g_since >= self.settings['racing_hold_ms']:
@@ -115,12 +116,12 @@ class Reference:
                 self.filtered.pop(key, None)
                 self.monitored[key] = 0.0
         pressure_valid = sample.get('status', [1, 1, 1])[2] == 1 and sample['pressure_bar'] < 11 and not sample.get('pressure_fault', False)
-        low = self.warning.step(now + sample.get('adc_wait_ms', 0), sample['g'] if pressure_valid else 0, self.monitored['pressure_bar'], sample.get('g_direction', 'Right'))
+        low = self.warning.step(now + sample.get('adc_wait_ms', 0), g if pressure_valid else 0, self.monitored['pressure_bar'], sample.get('g_direction', 'Right'))
         self.low_visible = low
         result = self.snapshot(low and not menu)
         if sample.get('risk_scenario'):
             status = sample['status']
-            result['risk'] = self.risk.step(now + sample.get('adc_wait_ms', 0), self.monitored['pressure_bar'], sample['g'], self.monitored['oil_c'],
+            result['risk'] = self.risk.step(now + sample.get('adc_wait_ms', 0), self.monitored['pressure_bar'], g, self.monitored['oil_c'],
                                            pressure_valid, status[0] == 1 and math.isfinite(sample['oil_c']) and sample['oil_c'] < 199,
                                            self.warning.qualified, sample['g_cardinal'])
         return result
@@ -155,7 +156,8 @@ def add_expectations(directory, metadata):
             row = rows[cursor]
             now = int(row['time_ms'])
             raw = {'adc': [int(row[f'adc{channel}']) for channel in range(4)],
-                   'imu': [float(row[axis]) for axis in ('ax', 'ay', 'az')], 'als': int(row['lux']), 'adc_fault': int(row['adc_fault'])}
+                   'imu': [float(row[axis]) for axis in ('ax', 'ay', 'az')], 'als': int(row['lux']), 'adc_fault': int(row['adc_fault']),
+                   'imu_connected': bool(int(row['imu_connected'])), 'imu_accel_updated': bool(int(row['imu_accel_updated']))}
             if (now != sample_time_ms(cursor) or not all(0 <= value <= 2047 for value in raw['adc'])
                     or not all(math.isfinite(value) for value in raw['imu'])):
                 raise ValueError('期待値の計算に使う60Hz入力が欠損・不正です')
@@ -169,7 +171,7 @@ def add_expectations(directory, metadata):
                 raise ValueError('取得時の画面状態が期待値と一致しません')
             sample = {**acquired, 'time_ms': now, 'menu': reference.menu, 'navigation': False,
                       'lux': raw['als'], 'setup_error': setup_error,
-                      'risk_scenario': metadata['scenario'].startswith(('risk-', 'tsukuba-', 'high-g-'))}
+                      'risk_scenario': metadata['scenario'].startswith(('risk-', 'tsukuba-', 'high-g-')) or metadata['scenario'] == 'imu-communication'}
             reference.step(sample)
             cursor += 1
         expected = reference.present(frame['time_ms'], frame['menu'], raw['als'])
@@ -180,11 +182,14 @@ def add_expectations(directory, metadata):
                 frame['sample_time_ms'] != now or frame['setup_error'] != setup_error or
                 frame['raw']['adc'] != raw['adc'] or frame['raw']['als'] != raw['als'] or
                 frame['raw']['adc_fault'] != raw['adc_fault'] or frame['lux'] != raw['als'] or
+                frame['raw']['imu_connected'] != raw['imu_connected'] or frame['raw']['imu_accel_updated'] != raw['imu_accel_updated'] or
                 any(not math.isclose(a, b, abs_tol=0.000001) for a, b in zip(frame['raw']['imu'], raw['imu']))):
             raise ValueError(f'24FPS描画に使った最新の60Hz生入力が一致しません: {tick}')
         frame['expected'] = expected
     if 'risk_window' in metadata and metadata['risk_window'] != reference.risk.window:
-        raise ValueError('危険点の前後1分データが独立モデルと一致しません')
+        mismatches = [(index, actual, expected) for index, (actual, expected) in enumerate(
+            zip(metadata['risk_window'], reference.risk.window)) if actual != expected]
+        raise ValueError(f'危険点の前後1分データが独立モデルと一致しません: {mismatches[:3]}')
     if cursor != len(rows) or cursor != frames[-1]['time_ms'] * SAMPLE_RATE // 1000 + 1:
         raise ValueError('60Hzの全取得値と24FPSの録画が揃っていません')
 
@@ -206,7 +211,9 @@ def check_expectations(frame):
     for key in ('status', 'pressure_fault', 'adc_reads', 'adc_last', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms'):
         if frame['sensor'][key] != expected['sensor'][key]:
             raise RuntimeError(f'取得・異常判定の期待値が一致しません: {key}, {frame}')
-    if (not math.isclose(frame['g'], expected['sensor']['g'], abs_tol=0.00001)
+    g_matches = (frame['g'] is expected['sensor']['g'] if frame['g'] is None or expected['sensor']['g'] is None else
+                 math.isclose(frame['g'], expected['sensor']['g'], abs_tol=0.00001))
+    if (not g_matches
             or frame['g_direction'] != expected['sensor']['g_direction']
             or frame['g_cardinal'] != expected['sensor']['g_cardinal']):
         raise RuntimeError(f'IMUの補正・水平G・方向の期待値が一致しません: {frame}')

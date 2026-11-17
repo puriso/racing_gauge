@@ -54,12 +54,14 @@ def validate_tsukuba(metadata):
         raise RuntimeError('アクセルを開けた区間で油温の上昇が速くなっていません')
 
     for frame in frames:
-        if frame['g'] > 2.001:
+        if frame['g'] is None and frame['time_ms'] >= 1000:
+            raise RuntimeError('正常なIMUの起動時校正後もGが未取得です')
+        if frame['g'] is not None and frame['g'] > 2.001:
             raise RuntimeError('Gが上限2を超えています')
         if not 99.7 <= frame['time_ms'] / 1000 <= 100.85:
             target, track = frame['target'], frame['track']
             t = frame['sample_index'] / SAMPLE_RATE
-            expected = 4 + 2 * track['throttle'] - 0.15 * frame['g'] - 0.003 * (target['oil_c'] - 120) + 0.03 * math.sin(t * 1.4)
+            expected = 4 + 2 * track['throttle'] - 0.15 * target['g'] - 0.003 * (target['oil_c'] - 120) + 0.03 * math.sin(t * 1.4)
             if abs(expected - target['pressure_bar']) > 0.0005:
                 raise RuntimeError('油圧がアクセル主体のモデルと一致しません')
 

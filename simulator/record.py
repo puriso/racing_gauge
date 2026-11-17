@@ -26,6 +26,11 @@ from tsukuba_lap import validate_tsukuba
 
 ROOT = Path(__file__).resolve().parent
 SCENARIOS = {
+    'imu-communication': {
+        'title': 'IMU未接続・古い高Gの除外・正常復帰とLOW', 'group': 'reproduction',
+        'description': '起動時1秒までIMU未接続でもADC取得を継続。2秒の50ms高G直後に切断し油圧を1.8barへ落としてもLOWを誤成立させない。6秒に0Gで復帰、7秒から正常な高G＋低油圧でLOW。11秒の高G直後はジャイロだけ更新し加速度を無効化。20秒のグラフでGの欠損と油圧・油温の継続を確認。',
+        'seconds': 24, 'snapshots': [0, 0.6, 1, 1.5, 2, 2.1, 3, 5.9, 6, 6.5, 7, 7.75, 10.5, 11, 11.1, 12, 15, 16, 20, 22, 23, 24],
+    },
     'high-g-review': {
         'title': '危険点なし・最大Gと同G帯の最低油圧を記録', 'group': 'reproduction',
         'description': '危険点がなくてもPEAK Gを表示。30.05秒には描画の間だけの1.5Gを60Hzで記録。20/40/60/70秒により高いG、42/75秒は同G帯で油圧低下。50秒の低いGでは更新せず、138秒に完成グラフを確認。取得60Hz・描画24FPS。',
@@ -183,7 +188,7 @@ def validate_inputs(metadata):
     validate_communication(metadata)
     if metadata['scenario'].startswith('tsukuba-') or metadata['scenario'] == 'high-g-review':
         return
-    if metadata['scenario'] in ('adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring', 'negative-maxima', 'risk-window', 'risk-predictive'):
+    if metadata['scenario'] in ('imu-communication', 'adc-startup', 'adc-communication', 'menu-monitoring', 'fault-monitoring', 'negative-maxima', 'risk-window', 'risk-predictive'):
         return
     if metadata["scenario"] in CASES:
         validate_fault_inputs(metadata)
@@ -291,6 +296,25 @@ def validate_monitoring(metadata):
     at = lambda seconds: frames[round(seconds * FRAME_RATE)]
     if name.startswith('tsukuba-'):
         validate_tsukuba(metadata)
+    if name == 'imu-communication':
+        for frame in frames:
+            now = frame['sample_time_ms']
+            if now < 1000 or 2050 <= now < 6000 or 11050 <= now < 15000:
+                if frame['g'] is not None or frame['g_cardinal'] != 0 or frame['sensor']['status'][2] != 1:
+                    raise RuntimeError('IMU異常中のG無効化・ADC継続が不正です')
+            if now < 7000 and (frame['actual']['warning_history'] or frame['risk']['kind']):
+                raise RuntimeError('古い高GでLOW・W・危険点を誤記録しています')
+        if at(0.6)['sensor']['status'] != [1, 1, 1] or at(0.6)['sensor']['adc_reads'][2] == 0:
+            raise RuntimeError('起動時IMU未接続でADC取得が止まっています')
+        if at(6.5)['g'] != 0 or not at(8)['low_visible'] or at(8)['risk']['kind'] != 3:
+            raise RuntimeError('IMU復帰後の0G・正常なLOW判定を再開できません')
+        if at(10.5)['actual']['low_event'] != at(16)['actual']['low_event']:
+            raise RuntimeError('加速度が未更新の区間でLOW履歴を書き換えています')
+        if not at(12)['actual']['warning_history'] or at(23)['actual']['warning_history']:
+            raise RuntimeError('成立済みWの保持・詳細画面から戻るときの消去が不正です')
+        if at(20)['screen'] != 1 or not any(
+                bucket[4] & 1 and not bucket[4] & 2 and bucket[4] & 4 for bucket in metadata['risk_window']):
+            raise RuntimeError('グラフでGだけの欠損を表示できません')
     if name == 'high-g-review':
         if any(f['risk']['kind'] or f['actual']['warning_history'] for f in frames):
             raise RuntimeError('正常時の代表点を危険点・LOWとして扱っています')
@@ -337,7 +361,7 @@ def validate_monitoring(metadata):
             if not any(sample[4] & 16 for sample in metadata['risk_window']):
                 raise RuntimeError('通信異常区間が欠損として残っていません')
     if name == 'negative-maxima':
-        if at(0)['actual']['maxima'] != [None, None, None] or at(1.5)['actual']['maxima'][:2] != [None, None]:
+        if at(0)['actual']['maxima'][:2] != [None, None] or at(1.5)['actual']['maxima'][:2] != [None, None]:
             raise RuntimeError('温度の未取得・起動時異常を0度として記録しています')
         if not all(value < 0 for value in at(3)['actual']['maxima'][:2]):
             raise RuntimeError('初回の負温度を最高値へ記録できていません')
@@ -510,7 +534,7 @@ def write_report(output, scenarios, suite='standard'):
                'low_event', 'expected_low_event', 'warning_state', 'adc_fault', 'adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last',
                'case_label', 'input_temperature_c', 'input_temperature_abnormal', 'actual_oil_c', 'actual_water_c',
                'expected_pressure_bar', 'expected_oil_c', 'expected_water_c', 'brightness_mode',
-               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima', 'risk', 'screen', 'track']
+               'brightness_pwm', 'lux_sample', 'lux_median', 'expected_brightness_pwm', 'sensor_status', 'maxima', 'expected_maxima', 'risk', 'screen', 'track', 'imu_connected', 'imu_accel_updated']
     data = []
     for name in scenarios:
         config = SCENARIOS[name]
@@ -520,6 +544,7 @@ def write_report(output, scenarios, suite='standard'):
         for frame in metadata['frames']:
             values = {key: frame[key] for key in ('time_ms', 'sample_time_ms', 'sample_index', 'setup_error', 'g', 'lux', 'low_visible', 'r_visible', 'w_visible')}
             values.update(adc_fault=frame['raw']['adc_fault'], risk=frame.get('risk'), screen=frame['screen'], track=frame.get('track'))
+            values.update({key: frame['raw'][key] for key in ('imu_connected', 'imu_accel_updated')})
             values.update({key: frame['sensor'][key] for key in ('adc_connected', 'adc_begin_calls', 'adc_wait_ms', 'adc_reads', 'adc_last')})
             values.update(adc=frame['raw']['adc'], imu=frame['raw']['imu'],
                           pressure_bar=round(frame['sensor']['pressure_bar'], 4))

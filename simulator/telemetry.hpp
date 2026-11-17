@@ -6,6 +6,7 @@
 void writeDisplayTelemetry(std::ostream& output);
 void writeSensorSettings(std::ostream& output);
 void writeSensorTelemetry(std::ostream& output);
+void writeGForceTelemetry(std::ostream& output);
 
 void writeRiskTelemetry(std::ostream& output);
 void writeRiskWindow(std::ostream& output);
